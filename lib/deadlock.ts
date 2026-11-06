@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/deadlock.ts
+
+import { connection } from "next/server";
 
 export interface HeroAbility {
   id: number;
@@ -50,21 +53,33 @@ export interface MergedHero {
   winRate: number;
 }
 
+let assetsCache: { data: Record<number, HeroAsset>; at: number } | null = null;
+const ASSETS_TTL = 24 * 60 * 60 * 1000;
+
 export async function fetchHeroesAssets(): Promise<Record<number, HeroAsset>> {
+  await connection();
+  if (assetsCache && Date.now() - assetsCache.at < ASSETS_TTL) {
+    return assetsCache.data;
+  }
+
   try {
     const res = await fetch("https://api.deadlock-api.com/v1/assets/heroes", {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) return {};
+    if (!res.ok) return assetsCache?.data ?? {};
+
     const data: HeroAsset[] = await res.json();
-    return data.reduce((acc, hero) => {
+    const map = data.reduce((acc, hero) => {
       acc[hero.id] = hero;
       return acc;
     }, {} as Record<number, HeroAsset>);
+
+    assetsCache = { data: map, at: Date.now() };
+    return map;
   } catch (err) {
     console.error("❌ Falha ao buscar assets:", err);
-    return {};
+    return assetsCache?.data ?? {};
   }
 }
 
@@ -72,7 +87,7 @@ export async function fetchHeroDetails(heroId: number): Promise<HeroAsset | null
   try {
     const res = await fetch(`https://api.deadlock-api.com/v1/assets/heroes/${heroId}`, {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      next: { revalidate: 86400 },
     });
     if (!res.ok) return null;
     return await res.json();
@@ -86,7 +101,7 @@ export async function fetchHeroAbilities(heroId: number): Promise<HeroAbility[]>
   try {
     const res = await fetch(`https://api.deadlock-api.com/v1/assets/items/by-hero-id/${heroId}`, {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      next: { revalidate: 86400 },
     });
     if (!res.ok) return [];
     const items = await res.json();
@@ -110,7 +125,7 @@ export async function fetchHeroesAnalytics(): Promise<HeroAnalytics[]> {
   try {
     const res = await fetch("https://api.deadlock-api.com/v1/analytics/hero-stats", {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -119,3 +134,11 @@ export async function fetchHeroesAnalytics(): Promise<HeroAnalytics[]> {
     return [];
   }
 }
+
+export const TIER_THRESHOLDS = {
+  META: 53.5,
+  A: 51.5,
+  B: 50.0,
+  C: 48.5,
+  D: 47.0,
+} as const;

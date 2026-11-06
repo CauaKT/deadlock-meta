@@ -5,8 +5,8 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LockPro • Deadlock Meta, Builds & Tier List",
-  description: "Estatísticas em tempo real, meta dos profissionais e builds para Deadlock.",
+  title: "LockPro • Tier List de Deadlock",
+  description: "Tier list de heróis de Deadlock baseada em winrate e partidas da Deadlock API.",
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
         {/* WALLPAPER FIXO DE FUNDO */}
         <div
           className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center bg-no-repeat opacity-15 blur-[2px] scale-105"
-          style={{ backgroundImage: "url('/bg.png')" }}
+          style={{ backgroundImage: "url('/bg.webp')" }}
         />
         <div className="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-[#070807]/80 via-[#070807]/60 to-[#070807]/95" />
 
@@ -47,26 +47,10 @@ export default function RootLayout({
               >
                 Tier List
               </Link>
-              <Link
-                href="/builds"
-                className="text-neutral-400 hover:text-amber-400 transition-colors"
-              >
-                Builds
-              </Link>
-              <Link
-                href="/itens"
-                className="text-neutral-400 hover:text-amber-400 transition-colors"
-              >
-                Itens
-              </Link>
             </nav>
 
             {/* Status da API & GitHub */}
             <div className="hidden sm:flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5 text-neutral-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                <span className="text-neutral-400">API Online</span>
-              </div>
               <a
                 href="https://github.com/CauaKT/deadlock-meta"
                 target="_blank"
@@ -97,7 +81,7 @@ export default function RootLayout({
                 <p className="text-sm font-bold text-[#f4efe6]">
                   LOCK<span className="text-amber-500">PRO</span>
                 </p>
-                <p className="text-xs text-neutral-500">Estatísticas e Meta do Deadlock em Tempo Real</p>
+                <p className="text-xs text-neutral-500">Tier List do Deadlock baseada em winrate</p>
               </div>
             </div>
 

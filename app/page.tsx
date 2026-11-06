@@ -1,6 +1,6 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, MergedHero } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, MergedHero, TIER_THRESHOLDS } from "@/lib/deadlock";
 import Link from "next/link";
 import fs from "fs";
 import path from "path";
@@ -26,13 +26,21 @@ const TIERS: TierConfig[] = [
 ];
 
 function calculateTier(winRate: number): TierKey {
-  if (winRate >= 53.5) return "META";
-  if (winRate >= 51.5) return "A";
-  if (winRate >= 50.0) return "B";
-  if (winRate >= 48.5) return "C";
-  if (winRate >= 47.0) return "D";
+  if (winRate >= TIER_THRESHOLDS.META) return "META";
+  if (winRate >= TIER_THRESHOLDS.A) return "A";
+  if (winRate >= TIER_THRESHOLDS.B) return "B";
+  if (winRate >= TIER_THRESHOLDS.C) return "C";
+  if (winRate >= TIER_THRESHOLDS.D) return "D";
   return "F";
 }
+
+const MIN_MATCHES = 1000;
+
+const heroesDir = path.join(process.cwd(), "public", "heroes");
+const localHeroFiles = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
+
+const fmt = (n: number) =>
+  n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
 export default async function Home() {
   const [heroesMap, stats] = await Promise.all([
@@ -80,18 +88,10 @@ export default async function Home() {
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
 
-      const heroesDir = path.join(process.cwd(), "public", "heroes");
-      let bannerImage = defaultImage;
-
-      if (fs.existsSync(heroesDir)) {
-        const files = fs.readdirSync(heroesDir);
-        const matchedFile = files.find((f) =>
-          f.toLowerCase().startsWith(heroSlug)
-        );
-        if (matchedFile) {
-          bannerImage = `/heroes/${matchedFile}`;
-        }
-      }
+      const matchedFile = heroSlug
+        ? localHeroFiles.find((f) => f.toLowerCase().startsWith(heroSlug))
+        : undefined;
+      let bannerImage = matchedFile ? `/heroes/${matchedFile}` : defaultImage;
 
       if (bannerImage === defaultImage && hero?.name) {
         const formattedName = hero.name.trim().replace(/ /g, "_");
@@ -111,7 +111,7 @@ export default async function Home() {
         tier,
       };
     })
-    .filter((h) => h.matches > 0 && !h.name.startsWith("hero_"))
+    .filter((h) => h.matches >= MIN_MATCHES && !h.name.startsWith("hero_"))
     .sort((a, b) => b.winRate - a.winRate);
 
   const heroesByTier = TIERS.reduce((acc, tier) => {
@@ -126,9 +126,15 @@ export default async function Home() {
           Deadlock <span className="text-amber-500">Tier List</span>
         </h1>
         <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-2">
-          A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados diretamente do Game Coordinator da Valve.
+          A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
         </p>
       </header>
+
+      {heroesRanking.length === 0 && (
+        <p className="mb-6 text-sm text-rose-400">
+          Não foi possível carregar os dados da API agora. Tente novamente em alguns minutos.
+        </p>
+      )}
 
       {/* PRANCHA CONTÍNUA TIERMAKER */}
       <div className="rounded-2xl border border-neutral-800/90 bg-neutral-900/50 backdrop-blur-sm divide-y divide-neutral-800/90 shadow-2xl">
@@ -251,7 +257,7 @@ export default async function Home() {
                               Jogos
                             </p>
                             <p className="text-xs font-black text-neutral-100">
-                              {(hero.matches / 1000).toFixed(0)}k
+                              {fmt(hero.matches)}
                             </p>
                           </div>
                           <div className="bg-[#121a16]/85 rounded-lg py-1 px-1 border border-neutral-800/60 backdrop-blur-sm">
@@ -259,7 +265,7 @@ export default async function Home() {
                               Vitórias
                             </p>
                             <p className="text-xs font-black text-emerald-400">
-                              {(hero.wins / 1000).toFixed(0)}k
+                              {fmt(hero.wins)}
                             </p>
                           </div>
                           <div className="bg-[#121a16]/85 rounded-lg py-1 px-1 border border-neutral-800/60 backdrop-blur-sm">
@@ -267,7 +273,7 @@ export default async function Home() {
                               Derrotas
                             </p>
                             <p className="text-xs font-black text-rose-400">
-                              {(hero.losses / 1000).toFixed(0)}k
+                              {fmt(hero.losses)}
                             </p>
                           </div>
                         </div>

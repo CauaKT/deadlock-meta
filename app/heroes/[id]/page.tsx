@@ -1,11 +1,12 @@
 // app/heroes/[id]/page.tsx
-/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element, @typescript-eslint/no-explicit-any */
 import {
   fetchHeroDetails,
   fetchHeroesAssets,
   fetchHeroesAnalytics,
   fetchHeroAbilities,
   HeroAbility,
+  TIER_THRESHOLDS,
 } from "@/lib/deadlock";
 import Link from "next/link";
 import fs from "fs";
@@ -119,11 +120,11 @@ function getDamageProfile(heroName: string) {
 }
 
 function calculateTier(winRate: number) {
-  if (winRate >= 53.5) return { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" };
-  if (winRate >= 51.5) return { label: "TIER A", bg: "bg-green-500 text-black border-green-400" };
-  if (winRate >= 50.0) return { label: "TIER B", bg: "bg-lime-400 text-black border-lime-300" };
-  if (winRate >= 48.5) return { label: "TIER C", bg: "bg-yellow-400 text-black border-yellow-300" };
-  if (winRate >= 47.0) return { label: "TIER D", bg: "bg-orange-500 text-black border-orange-400" };
+  if (winRate >= TIER_THRESHOLDS.META) return { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" };
+  if (winRate >= TIER_THRESHOLDS.A) return { label: "TIER A", bg: "bg-green-500 text-black border-green-400" };
+  if (winRate >= TIER_THRESHOLDS.B) return { label: "TIER B", bg: "bg-lime-400 text-black border-lime-300" };
+  if (winRate >= TIER_THRESHOLDS.C) return { label: "TIER C", bg: "bg-yellow-400 text-black border-yellow-300" };
+  if (winRate >= TIER_THRESHOLDS.D) return { label: "TIER D", bg: "bg-orange-500 text-black border-orange-400" };
   return { label: "TIER F", bg: "bg-red-600 text-white border-red-500" };
 }
 
