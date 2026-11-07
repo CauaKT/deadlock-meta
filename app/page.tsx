@@ -1,7 +1,8 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, MergedHero, TIER_THRESHOLDS } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
 import Link from "next/link";
+import PatchSelect from "./PatchSelect";
 import fs from "fs";
 import path from "path";
 
@@ -42,10 +43,19 @@ const localHeroFiles = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : []
 const fmt = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ patch?: string }>;
+}) {
+  const { patch: patchParam } = await searchParams;
+  const selectedPatch = PATCHES.find((p) => p.id === patchParam) ?? PATCHES[0];
+  const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
+  const patchUntil =
+    selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
   const [heroesMap, stats] = await Promise.all([
     fetchHeroesAssets(),
-    fetchHeroesAnalytics(),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil)
   ]);
 
   const heroesRanking: (MergedHero & { tier: TierKey })[] = stats
@@ -121,15 +131,22 @@ export default async function Home() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10">
-      <header className="mb-8">
-        <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#f4efe6]">
-          Deadlock <span className="text-amber-500">Tier List</span>
-        </h1>
-        <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-2">
-          A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
-        </p>
-      </header>
+      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#f4efe6]">
+            Deadlock <span className="text-amber-500">Tier List</span>
+          </h1>
+          <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-2">
+            A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
+          </p>
+        </div>
 
+        <PatchSelect
+          patches={PATCHES.map(({ id, label }) => ({ id, label }))}
+          selected={selectedPatch.id}
+        />
+      </header>
+      
       {heroesRanking.length === 0 && (
         <p className="mb-6 text-sm text-rose-400">
           Não foi possível carregar os dados da API agora. Tente novamente em alguns minutos.

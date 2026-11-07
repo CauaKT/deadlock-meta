@@ -4,11 +4,11 @@ import {
   fetchHeroDetails,
   fetchHeroesAssets,
   fetchHeroesAnalytics,
-  fetchHeroAbilities,
-  HeroAbility,
+  fetchHeroAbilitiesFull,
   TIER_THRESHOLDS,
 } from "@/lib/deadlock";
 import Link from "next/link";
+import AbilityBar from "./AbilityBar";
 import fs from "fs";
 import path from "path";
 
@@ -74,16 +74,6 @@ const HERO_PLAYSTYLE_DB: Record<string, string> = {
     "Abrams é o lutador da linha de frente por excelência. Aproxime-se com investidas pesadas, alterne seus socos corpo a corpo com tiros de espingarda e sustente-se nas trocas longas com seu roubo de vida passivo.",
 };
 
-// Habilidades oficiais detalhadas caso a API não entregue o JSON completo
-const HERO_ABILITIES_DB: Record<string, HeroAbility[]> = {
-  "rat king": [
-    { id: 1, slot: 1, name: "Infestação de Ratos", description: "Lança um projétil rastejante de pragas que persegue o alvo mais próximo, causando dano ao longo do tempo e revelando a posição do inimigo através das paredes." },
-    { id: 2, slot: 2, name: "Toca Subterrânea", description: "Mergulha no chão tornando-se inalvejável e ganhando velocidade de movimento antes de irromper na superfície derrubando inimigos próximos." },
-    { id: 3, slot: 3, name: "Guarda Real", description: "Invoca roedores de guarda que absorvem projéteis de bala inimigos e concedem bônus de cadência de disparo e armadura." },
-    { id: 4, slot: 4, name: "Reino da Peste", description: "Libera uma tempestade devastadora de pestilência em uma área massiva, aplicando lentidão pesada e dano de espírito acumulativo em todos os heróis apanhados." },
-  ],
-};
-
 function getDamageProfile(heroName: string) {
   const name = heroName.toLowerCase();
   const spiritHeroes = ["sinclair", "lady geist", "seven", "dynamo", "kelvin", "grey talon", "pocket", "paradox"];
@@ -136,11 +126,10 @@ export default async function HeroPage({
   const { id } = await params;
   const heroId = parseInt(id);
 
-  const [heroDetails, heroesMap, stats, apiAbilities] = await Promise.all([
+  const [heroDetails, heroesMap, stats] = await Promise.all([
     fetchHeroDetails(heroId),
     fetchHeroesAssets(),
     fetchHeroesAnalytics(),
-    fetchHeroAbilities(heroId),
   ]);
 
   const hero = heroDetails || heroesMap[heroId];
@@ -191,20 +180,7 @@ export default async function HeroPage({
     if (matched) heroArt = `/heroes/${matched}`;
   }
 
-// 5. Habilidades reais (com proteção contra descrições vazias da API)
-  const abilities = apiAbilities.length > 0
-    ? apiAbilities.map((ab, idx) => ({
-        id: ab.id || idx + 1,
-        slot: ab.slot || idx + 1,
-        name: cleanText(ab.name) || `Habilidade #${idx + 1}`,
-        description: cleanText(ab.description) || HERO_ABILITIES_DB[heroKey]?.[idx]?.description || "Habilidade tática para combate, trocas e controle de mapa.",
-      }))
-    : HERO_ABILITIES_DB[heroKey] || [
-        { id: 1, slot: 1, name: "Disparo Tático", description: "Dispara uma rajada concentrada que causa dano ao alvo e enfraquece suas defesas." },
-        { id: 2, slot: 2, name: "Mobilidade Ágil", description: "Avança rapidamente na direção escolhida ganhando bônus temporário de cadência e esquiva." },
-        { id: 3, slot: 3, name: "Fortificação de Almas", description: "Canaliza essência das almas para criar uma barreira protetora que absorve dano recebido." },
-        { id: 4, slot: 4, name: "Impacto Ritualístico (Ultimate)", description: "Concede poder supremo por breve período, amplificando todo o dano causado e dizimando alvos agrupados." },
-      ];
+  const abilities = await fetchHeroAbilitiesFull(heroId, hero.items);
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
@@ -426,44 +402,10 @@ export default async function HeroPage({
       {/* HABILIDADES REAIS DO HERÓI (SLOTS 1, 2, 3 E ULTIMATE)                     */}
       {/* ========================================================================= */}
       <section className="space-y-4">
-        <h2 className="text-xl md:text-2xl font-black text-[#f4efe6]">
-          Habilidades & Feitiços
+        <h2 className="text-center text-xl md:text-2xl font-black text-[#f4efe6]">
+          Habilidades
         </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {abilities.map((ability, idx) => (
-            <div
-              key={ability.id || idx}
-              className="rounded-2xl border border-neutral-800/80 bg-neutral-900/40 p-5 space-y-3 hover:border-amber-500/40 transition-colors backdrop-blur-sm shadow-md"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#121c17] border border-[#23352c] flex items-center justify-center font-black text-amber-400 text-sm shadow">
-                    {idx === 3 ? "ULT" : idx + 1}
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-[#f4efe6]">
-                      {ability.name}
-                    </h3>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-500">
-                      Slot {idx === 3 ? "Supremo" : `#${idx + 1}`}
-                    </span>
-                  </div>
-                </div>
-
-                {idx === 3 && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-500/20 border border-rose-500/40 text-rose-400">
-                    Ultimate
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs text-neutral-400 leading-relaxed font-normal">
-                {ability.description}
-              </p>
-            </div>
-          ))}
-        </div>
+        <AbilityBar key={heroId} abilities={abilities} />
       </section>
 
       {/* ========================================================================= */}
