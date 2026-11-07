@@ -155,14 +155,24 @@ export const TIER_THRESHOLDS = {
   D: 47.0,
 } as const;
 
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number.parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+export type ScaleType = "spirit" | "weapon" | "vitality" | "other" | null;
+
 export interface AbilityStat {
   key: string;
   label: string;
+  postLabel: string;
   base: number | null;
   prefix: string;
   unit: string;
   icon: string;
   scale: number | null;
+  scaleType: ScaleType;
   important: boolean;
 }
 
@@ -172,20 +182,39 @@ export interface AbilityUpgradeBonus {
   additive: boolean;
 }
 
+export interface AbilityPropRef {
+  key: string;
+  valueKey: string; // propriedade com o valor, quando é efeito de status (ex.: StunDuration)
+  statusName: string; // nome do efeito (ex.: "Atordoa")
+  icon: string;
+}
+
+export interface AbilityGroup {
+  label: string; // ex.: "Ao atingir inimigos:"
+  props: AbilityPropRef[];
+}
+
 export interface HeroAbilityFull {
   slot: number;
   className: string;
   name: string;
   image: string;
   description: string;
+  descriptionHtml: string;
   stats: AbilityStat[];
   upgrades: AbilityUpgradeBonus[][]; // índice 0 = T1, 1 = T2, 2 = T3
   tiers: string[];
+  tiersHtml: string[];
+  importantKeys: string[];
+  headerKeys: string[];
+  basicKeys: string[];
+  groups: AbilityGroup[];
 }
 
 function stripHtml(text: unknown): string {
   if (typeof text !== "string") return "";
   return text
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
     .replace(/<br\s*\/?>/gi, " ")
     .replace(/<[^>]*>/g, "")
     .replace(/&nbsp;/g, " ")
@@ -193,10 +222,95 @@ function stripHtml(text: unknown): string {
     .trim();
 }
 
-function toNum(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number.parseFloat(String(v));
-  return Number.isFinite(n) ? n : null;
+const ALLOWED_IMG_PREFIX = "https://assets-bucket.deadlock-api.com/";
+const SVG_FILL = /^(#[0-9a-fA-F]{3,8}|white|none|currentColor)$/i;
+
+// Deixa passar só o HTML que a API usa nas descrições (negrito, itálico, spans
+// coloridos, ícones <img> e ícones <svg> inline). Todo o resto é descartado.
+function sanitizeHtml(html: unknown): string {
+  if (typeof html !== "string") return "";
+
+  // Os "\n" soltos vêm só de dentro/ao redor dos <svg>; as quebras reais são <br>.
+  const cleaned = html.replace(/<svg[\s\S]*?<\/svg>\s*/gi, (m) =>
+    m.replace(/\s*\n\s*/g, "")
+  );
+
+  const safeClass = (attrs: string) =>
+    (attrs.match(/class\s*=\s*"([^"]*)"/i)?.[1] ?? "").replace(/[^\w\- ]/g, "");
+  const attr = (attrs: string, name: string) =>
+    attrs.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`, "i"))?.[1] ?? "";
+
+  return cleaned
+    .split(/(<[^>]*>)/)
+    .map((part) => {
+      if (!part.startsWith("<") || !part.endsWith(">")) {
+        return part.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      const m = part.match(/^<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)([^>]*)>$/);
+      if (!m) return "";
+      const closing = m[1] === "/";
+      const tag = m[2].toLowerCase();
+      const attrs = m[3];
+
+      if (["b", "i", "em", "strong"].includes(tag)) {
+        return closing ? `</${tag}>` : `<${tag}>`;
+      }
+      if (tag === "br") return closing ? "" : "<br/>";
+      if (tag === "span") {
+        if (closing) return "</span>";
+        const cls = safeClass(attrs);
+        const color = attrs.match(
+          /style\s*=\s*"[^"]*?color\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\))/i
+        )?.[1];
+        return `<span${cls ? ` class="${cls}"` : ""}${color ? ` style="color:${color}"` : ""}>`;
+      }
+      if (tag === "svg") {
+        if (closing) return "</svg>";
+        const fill = attr(attrs, "fill");
+        const viewBox = attr(attrs, "viewBox");
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${
+          /^[\d\s.\-]+$/.test(viewBox) ? viewBox : "0 0 128 128"
+        }" fill="${SVG_FILL.test(fill) ? fill : "white"}" style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-0.25em;margin:0 0.1em">`;
+      }
+      if (tag === "path" && !closing) {
+        const d = attr(attrs, "d");
+        if (!/^[\dMmLlHhVvCcSsQqTtAaZz.,\-\s]+$/.test(d)) return "";
+        const fill = attr(attrs, "fill");
+        const rule = attr(attrs, "fill-rule");
+        const clip = attr(attrs, "clip-rule");
+        return `<path d="${d}"${SVG_FILL.test(fill) ? ` fill="${fill}"` : ""}${
+          /^(evenodd|nonzero)$/.test(rule) ? ` fill-rule="${rule}"` : ""
+        }${/^(evenodd|nonzero)$/.test(clip) ? ` clip-rule="${clip}"` : ""}/>`;
+      }
+      if ((tag === "img" || tag === "object") && !closing) {
+        const src = attrs.match(/(?:src|data)\s*=\s*"([^"]*)"/i)?.[1] ?? "";
+        if (!src.startsWith(ALLOWED_IMG_PREFIX) || /["<>\s]/.test(src)) return "";
+        const alt = (attrs.match(/alt\s*=\s*"([^"]*)"/i)?.[1] ?? "").replace(/[<>"&]/g, "");
+        return `<img src="${src}" class="${safeClass(attrs)}" alt="${alt}" style="display:inline-block;height:1.15em;width:auto;max-width:3em;vertical-align:-0.25em;margin:0 0.1em" onerror="this.style.display='none'"/>`;
+      }
+      return "";
+    })
+    .join("");
+}
+
+function scaleTypeOf(sf: any): ScaleType {
+  if (!sf) return null;
+  const scale = toNum(sf.stat_scale);
+  if (!scale || scale <= 0) return null;
+
+  const names = [
+    sf.specific_stat_scale_type,
+    ...(Array.isArray(sf.scaling_stats) ? sf.scaling_stats : []),
+  ]
+    .filter(Boolean)
+    .map(String);
+  if (names.some((n) => /WeaponPower|BulletDamage/i.test(n))) return "weapon";
+  if (names.some((n) => /MaxHealth/i.test(n))) return "vitality";
+
+  // dano, cura e barreira com escala de espírito: às vezes a API manda só o nome da função
+  const cls = String(sf.class_name ?? "");
+  if (names.some((n) => /TechPower/i.test(n)) || /tech|spirit/i.test(cls)) return "spirit";
+  return "other";
 }
 
 export async function fetchHeroAbilitiesFull(
@@ -230,14 +344,36 @@ export async function fetchHeroAbilitiesFull(
         );
       const upgradedKeys = new Set(upgrades.flat().map((u) => u.key));
 
-      const importantKeys = new Set<string>();
+      // Grupos de caixas ("Ao atingir inimigos:", etc.) e linha de propriedades básicas
+      const groups: AbilityGroup[] = [];
+      const basicKeys: string[] = [];
       for (const section of item.tooltip_details?.info_sections ?? []) {
         for (const block of section.properties_block ?? []) {
+          const props: AbilityPropRef[] = [];
           for (const prop of block.properties ?? []) {
-            if (prop.important_property) importantKeys.add(String(prop.important_property));
+            const key = prop.important_property ? String(prop.important_property) : "";
+            if (!key) continue;
+            const valueKey = prop.status_effect_value ? String(prop.status_effect_value) : "";
+            props.push({
+              key,
+              valueKey,
+              statusName: valueKey ? stripHtml(prop.status_effect_name) : "",
+              icon:
+                valueKey && typeof prop.important_property_icon === "string"
+                  ? prop.important_property_icon
+                  : "",
+            });
           }
+          if (props.length > 0) groups.push({ label: stripHtml(block.loc_string), props });
+        }
+        for (const k of section.basic_properties ?? []) {
+          if (k && !basicKeys.includes(String(k))) basicKeys.push(String(k));
         }
       }
+      const importantKeys = groups.flatMap((g) => g.props.map((p) => p.valueKey || p.key));
+      const headerKeys: string[] = (item.tooltip_details?.additional_header_properties ?? []).map(
+        String
+      );
 
       const stats: AbilityStat[] = Object.entries(item.properties ?? {})
         .map(([key, p]: [string, any]) => {
@@ -252,26 +388,35 @@ export async function fetchHeroAbilitiesFull(
           return {
             key,
             label,
+            postLabel: stripHtml(p.postvalue_label),
             base,
             prefix: String(p.prefix ?? ""),
             unit,
             icon: typeof p.icon === "string" ? p.icon : "",
             scale: toNum(p.scale_function?.stat_scale),
-            important: importantKeys.has(key),
+            scaleType: scaleTypeOf(p.scale_function),
+            important: importantKeys.includes(key),
           };
         })
         .filter((s): s is NonNullable<typeof s> => s !== null);
 
       const d = item.description ?? {};
+      const tierDescs = [d.t1_desc, d.t2_desc, d.t3_desc];
       result.push({
         slot,
         className: item.class_name,
         name: item.name ?? item.class_name,
         image: item.image_webp || item.image || "",
         description: stripHtml(d.desc),
+        descriptionHtml: sanitizeHtml(d.desc),
         stats,
         upgrades,
-        tiers: [d.t1_desc, d.t2_desc, d.t3_desc].map(stripHtml),
+        tiers: tierDescs.map(stripHtml),
+        tiersHtml: tierDescs.map(sanitizeHtml),
+        importantKeys,
+        headerKeys,
+        basicKeys,
+        groups,
       });
     }
     return result;
