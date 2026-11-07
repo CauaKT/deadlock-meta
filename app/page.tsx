@@ -113,7 +113,6 @@ export default async function Home({
         name: hero?.name || `Herói #${stat.hero_id}`,
         image,
         bannerImage,
-        defaultImage,
         matches,
         wins,
         losses,

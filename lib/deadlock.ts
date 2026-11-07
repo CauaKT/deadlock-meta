@@ -46,7 +46,6 @@ export interface MergedHero {
   name: string;
   image: string;
   bannerImage: string;
-  defaultImage?: string;
   matches: number;
   wins: number;
   losses: number;
@@ -85,7 +84,7 @@ export async function fetchHeroesAssets(): Promise<Record<number, HeroAsset>> {
 
 export async function fetchHeroDetails(heroId: number): Promise<HeroAsset | null> {
   try {
-    const res = await fetch(`https://api.deadlock-api.com/v1/assets/heroes/${heroId}`, {
+    const res = await fetch(`https://api.deadlock-api.com/v1/assets/heroes/${heroId}?language=brazilian`, {
       headers: { Accept: "application/json" },
       next: { revalidate: 86400 },
     });
@@ -93,31 +92,6 @@ export async function fetchHeroDetails(heroId: number): Promise<HeroAsset | null
     return await res.json();
   } catch {
     return null;
-  }
-}
-
-// Busca as habilidades reais vinculadas ao ID do herói
-export async function fetchHeroAbilities(heroId: number): Promise<HeroAbility[]> {
-  try {
-    const res = await fetch(`https://api.deadlock-api.com/v1/assets/items/by-hero-id/${heroId}`, {
-      headers: { Accept: "application/json" },
-      next: { revalidate: 86400 },
-    });
-    if (!res.ok) return [];
-    const items = await res.json();
-    if (!Array.isArray(items)) return [];
-
-    return items
-      .filter((item: any) => item.type === "ability" || (item.slot >= 1 && item.slot <= 4))
-      .map((item: any, idx: number) => ({
-        id: item.id || idx + 1,
-        slot: item.slot || idx + 1,
-        name: item.name || `Habilidade #${idx + 1}`,
-        description: item.description?.en || item.description || "",
-        image: item.image || item.icon || "",
-      }));
-  } catch {
-    return [];
   }
 }
 
@@ -241,6 +215,7 @@ export async function fetchHeroAbilitiesFull(
     const result: HeroAbilityFull[] = [];
     for (let slot = 1; slot <= 4; slot++) {
       const className = heroItems?.[`signature${slot}`];
+      if (!className) continue;
       const item = items.find((it: any) => it.class_name === className);
       if (!item) continue;
 
@@ -285,7 +260,7 @@ export async function fetchHeroAbilitiesFull(
             important: importantKeys.has(key),
           };
         })
-        .filter((s): s is AbilityStat => s !== null);
+        .filter((s): s is NonNullable<typeof s> => s !== null);
 
       const d = item.description ?? {};
       result.push({

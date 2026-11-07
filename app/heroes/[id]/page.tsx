@@ -9,6 +9,7 @@ import {
 } from "@/lib/deadlock";
 import Link from "next/link";
 import AbilityBar from "./AbilityBar";
+import LoreText from "./LoreText";
 import fs from "fs";
 import path from "path";
 
@@ -31,48 +32,37 @@ function cleanText(text: any): string {
     .trim();
 }
 
-// Títulos oficiais dos heróis (3 títulos por herói no padrão da imagem de referência)
-const HERO_TRAITS_DB: Record<string, string[]> = {
-  "rat king": ["SCRAPPY", "REGAL", "TENACIOUS"],
-  "abrams": ["BRAWLER", "MELEE", "SUSTAIN"],
-  "infernus": ["SKIRMISHER", "DOT", "FAST"],
-  "seven": ["AOE", "PUSHER", "LIGHTNING"],
-  "haze": ["STEALTH", "GANKER", "BULLET"],
-  "vindicta": ["SNIPER", "FLIGHT", "EXECUTE"],
-  "yamato": ["ASSASSIN", "INVULNERABLE", "MELEE"],
-  "bebop": ["DISPLACEMENT", "HOOK", "BURST"],
-  "ivy": ["SUPPORT", "HEALER", "TETHER"],
-  "lady geist": ["DRAIN", "BLOOD", "SUSTAIN"],
-  "kelvin": ["FROST", "SLOW", "TERRAIN"],
-  "mcginnis": ["TURRETS", "SIEGE", "HEALER"],
-  "lash": ["MOBILITY", "ENGAGE", "BURST"],
-  "pocket": ["ELUSIVE", "BURST", "AOE"],
-  "paradox": ["SWAP", "TIME", "UTILITY"],
-  "dynamo": ["BLACK HOLE", "HEALER", "INITIATOR"],
-  "warden": ["LOCKDOWN", "BRAWLER", "SHIELD"],
-  "wraith": ["DUELIST", "TELEPORT", "CARDS"],
-  "shiv": ["BLEED", "RAGE", "FINISHER"],
-  "viscous": ["GOO", "INVULNERABLE", "BOUNCE"],
-  "grey talon": ["SNIPER", "TRAPS", "SPIRIT"],
-  "mirage": ["TELEPORT", "TORNADO", "SUSTAINED"],
-  "sinclair": ["ILLUSION", "MISDIRECTION", "HEX"],
-};
+// Lê as tags oficiais do herói direto da API (tenta os nomes de campo mais prováveis)
+function extractTags(h: any): string[] {
+  if (!h) return [];
+  const candidates = [
+    h.tags,
+    h.hero_tags,
+    h.heroTags,
+    h.traits,
+    h.description?.tags,
+    h.description?.hero_tags,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length > 0) {
+      return c
+        .map((x: any) => (typeof x === "string" ? x : x?.name ?? x?.en ?? ""))
+        .filter(Boolean)
+        .slice(0, 3);
+    }
+  }
+  return [];
+}
 
-// Lore oficial traduzida
-const HERO_LORE_DB: Record<string, string> = {
-  "rat king":
-    "O enigmático soberano dos esgotos de Nova York, o Rei Rato (Rat King) ergue-se sobre seus súditos em tamanho, força e ambição imperial. Não mais contente em viver isolado na escuridão subterrânea, o monarca revelou sua visão ousada para um futuro onde seus irmãos possam caminhar livremente pela superfície sem o terror das vans de extermínio humano. Com a promessa de liderar sua horda e reivindicar o território da cidade de volta, ele marcha para o ritual das almas com determinação inabalável.",
-  "abrams":
-    "Detetive experiente nas noites sombrias da Cidade Amaldiçoada, Abrams carrega consigo o lendário Tomo dos Patrões. Ele investiga os mistérios ocultos e assassinatos ritualísticos sem recuar diante das ameaças mais brutais do submundo.",
-};
-
-// Gameplay / Playstyle oficial traduzido
-const HERO_PLAYSTYLE_DB: Record<string, string> = {
-  "rat king":
-    "Rat King domina o combate através de enxames e controle de território. Use suas habilidades de infestação para causar dano contínuo e pressionar oponentes para fora de suas coberturas. Aproveite sua mobilidade subterrânea para emboscar atiradores frágeis na retaguarda e utilize sua Suprema para instaurar o caos absoluto em lutas de equipe em volta dos objetivos centrais.",
-  "abrams":
-    "Abrams é o lutador da linha de frente por excelência. Aproxime-se com investidas pesadas, alterne seus socos corpo a corpo com tiros de espingarda e sustente-se nas trocas longas com seu roubo de vida passivo.",
-};
+// Lê a cor de interface do herói (RGB) direto da API
+function extractColor(h: any): [number, number, number] | null {
+  const c = h?.colors?.ui ?? h?.colors?.glow_team;
+  if (Array.isArray(c) && c.length >= 3) {
+    const [r, g, b] = c.map(Number);
+    if ([r, g, b].every(Number.isFinite)) return [r, g, b];
+  }
+  return null;
+}
 
 function getDamageProfile(heroName: string) {
   const name = heroName.toLowerCase();
@@ -153,25 +143,31 @@ export default async function HeroPage({
   const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
   const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
   const tier = calculateTier(winRate);
-  const damageProfile = getDamageProfile(hero.name);
+  const enName = heroesMap[heroId]?.name ?? hero.name; // nome em inglês, para buscas e imagem
+  const damageProfile = getDamageProfile(enName);
 
-  const heroKey = hero.name.toLowerCase();
+  const heroKey = enName.toLowerCase();
 
   // 1. Títulos do herói (3 títulos oficiais)
-  const heroTraits = HERO_TRAITS_DB[heroKey] || ["VERSÁTIL", "COMBATENTE", "TATICO"];
+  const apiTags = extractTags(heroesMap[heroId]);
+  const heroTraits = apiTags;
+  const rgb = extractColor(heroesMap[heroId]) ?? extractColor(hero);
+  const tagBg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
+  const luminance = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
+  const tagText = luminance > 150 ? "#1a1608" : "#ffffff";
 
   // 2. Lore tratada e traduzida
   const rawLore = typeof hero.description === "object" ? hero.description?.lore : hero.description;
-  const heroLore = HERO_LORE_DB[heroKey] || cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";
+  const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";
 
   // 3. Playstyle real e tático
   const rawPlaystyle = typeof hero.description === "object" ? hero.description?.playstyle : "";
-  const heroPlaystyle = HERO_PLAYSTYLE_DB[heroKey] || cleanText(rawPlaystyle) || `Foque no controle de rotas no início do jogo, utilize as tirolesas para emboscadas e monte seus itens essenciais antes das disputas da Urna no centro do mapa.`;
+  const heroPlaystyle = cleanText(rawPlaystyle) || `Foque no controle de rotas no início do jogo, utilize as tirolesas para emboscadas e monte seus itens essenciais antes das disputas da Urna no centro do mapa.`;
 
-  // 4. Imagem de Corpo Inteiro
-  const heroSlug = hero.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+ // 4. Imagem de Corpo Inteiro
+  const heroSlug = enName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const heroesDir = path.join(process.cwd(), "public", "heroes");
-  const formattedName = hero.name.trim().replace(/ /g, "_");
+  const formattedName = enName.trim().replace(/ /g, "_");
   let heroArt = `https://cdn.deadlock.wiki/thumb/${formattedName}_Render.png/800px-${formattedName}_Render.png`;
 
   if (fs.existsSync(heroesDir)) {
@@ -212,7 +208,8 @@ export default async function HeroPage({
             {heroTraits.map((trait, i) => (
               <span
                 key={i}
-                className="px-2.5 py-0.5 rounded-full bg-rose-600/90 border border-rose-500/40 text-white font-black text-[10px] tracking-wider uppercase shadow"
+                style={{ backgroundColor: tagBg, color: tagText }}
+                className="md:hidden px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
               >
                 {trait}
               </span>
@@ -220,28 +217,11 @@ export default async function HeroPage({
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-[#f4efe6]">
-            {hero.name}
+            {enName}
           </h1>
 
-          {/* Lore com resumo e botão 'Ler mais' expansível */}
-          <div className="bg-[#0a0f0d]/60 rounded-2xl p-4 border border-neutral-800/60 backdrop-blur-sm">
-            <details className="group cursor-pointer">
-              <summary className="list-none text-sm text-neutral-300 leading-relaxed font-normal">
-                <p className="line-clamp-3 group-open:hidden">
-                  {heroLore}
-                </p>
-                <div className="text-amber-400 font-extrabold text-xs uppercase tracking-wider mt-2 group-open:hidden">
-                  + Ler mais da história
-                </div>
-              </summary>
-              <div className="text-sm text-neutral-300 leading-relaxed font-normal space-y-2 pt-1 border-t border-neutral-800/60 mt-2">
-                <p>{heroLore}</p>
-                <div className="text-amber-400/80 font-bold text-xs uppercase tracking-wider pt-2">
-                  - Recolher texto ↑
-                </div>
-              </div>
-            </details>
-          </div>
+          {/* Lore do herói (altura inicial fixa, expande com animação) */}
+          <LoreText text={heroLore} />
 
           {/* Barra de Desempenho Geral + Apenas o Total de Partidas abaixo */}
           <div className="pt-2 space-y-2 border-t border-neutral-800/60">
@@ -269,19 +249,29 @@ export default async function HeroPage({
           </div>
         </div>
 
-        {/* Lado Direito: A Arte Oficial com Moldura e Fundo Integrado (Sem bug de corte) */}
-        <div className="relative w-full md:w-1/2 h-[380px] md:h-[460px] flex items-center justify-center md:justify-end z-10 select-none">
-          <div className="absolute w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-          
-          <div className="relative w-full h-full flex items-center justify-center md:justify-end overflow-hidden">
-            <img
-              src={heroArt}
-              alt={hero.name}
-              className="h-full w-auto max-h-[460px] object-contain object-bottom drop-shadow-[0_15px_30px_rgba(0,0,0,0.95)] pointer-events-none"
-            />
-            {/* Fusão na base para acabamento perfeito */}
-            <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#0e1613] to-transparent pointer-events-none" />
-          </div>
+        {/* Lado Direito: arte preenchendo toda a metade direita do card */}
+        <div className="pointer-events-none select-none absolute inset-y-0 right-0 w-full md:w-1/2 z-0">
+          <img
+            src={heroArt}
+            alt={enName}
+            className="h-full w-full object-cover object-top"
+          />
+          {/* Fusão com o fundo do card (esquerda e embaixo no mobile) */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0e1613] via-[#0e1613]/40 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#121c17] to-transparent md:hidden" />
+        </div>
+
+        {/* Tags oficiais no canto inferior direito (só em telas grandes) */}
+        <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[45%] flex-wrap justify-end gap-2">
+          {heroTraits.map((trait, i) => (
+            <span
+              key={i}
+              style={{ backgroundColor: tagBg, color: tagText }}
+              className="px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
+            >
+              {trait}
+            </span>
+          ))}
         </div>
       </section>
 
@@ -405,7 +395,7 @@ export default async function HeroPage({
         <h2 className="text-center text-xl md:text-2xl font-black text-[#f4efe6]">
           Habilidades
         </h2>
-        <AbilityBar key={heroId} abilities={abilities} />
+        <AbilityBar key={heroId} abilities={abilities} heroKey={heroKey} />
       </section>
 
       {/* ========================================================================= */}
@@ -413,7 +403,7 @@ export default async function HeroPage({
       {/* ========================================================================= */}
       <section className="rounded-3xl border border-neutral-800/80 bg-[#0c120f]/80 p-6 md:p-8 space-y-4">
         <h3 className="text-lg font-black text-[#f4efe6] uppercase tracking-wider flex items-center gap-2">
-          <span className="text-amber-500">✦</span> Como Jogar de {hero.name} (Playstyle)
+          <span className="text-amber-500">✦</span> Como Jogar de {enName} (Playstyle)
         </h3>
         <p className="text-xs md:text-sm text-neutral-300 leading-relaxed">
           {heroPlaystyle}

@@ -1,6 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
+import { useState } from "react";
 import type { HeroAbilityFull } from "@/lib/deadlock";
+import { ABILITY_NOTES } from "@/lib/abilityNotes";
 const TIER_COSTS = [1, 2, 5];
 const HEADER_KEYS = ["AbilityCooldown", "AbilityCastRange"];
 
@@ -8,7 +10,22 @@ function fmt(n: number) {
   return String(Math.round(n * 100) / 100);
 }
 
-export default function AbilityBar({ abilities }: { abilities: HeroAbilityFull[] }) {
+export default function AbilityBar({
+  abilities: rawAbilities,
+  heroKey,
+}: {
+  abilities?: HeroAbilityFull[];
+  heroKey?: string;
+}) {
+  const abilities: HeroAbilityFull[] = (rawAbilities ?? [])
+    .filter(Boolean)
+    .map((a) => ({
+      ...a,
+      stats: a.stats ?? [],
+      upgrades: a.upgrades ?? [],
+      tiers: a.tiers ?? [],
+    }));
+
   const [selectedSlot, setSelectedSlot] = useState(abilities[0]?.slot ?? 1);
   const [levels, setLevels] = useState<Record<number, number>>({});
 
@@ -22,6 +39,7 @@ export default function AbilityBar({ abilities }: { abilities: HeroAbilityFull[]
 
   const selected = abilities.find((a) => a.slot === selectedSlot) ?? abilities[0];
   const level = levels[selected.slot] ?? 0;
+  const notes = (heroKey && ABILITY_NOTES[heroKey]?.[selected.slot]) || [];
   const setLevel = (value: number) =>
     setLevels((prev) => ({ ...prev, [selected.slot]: value }));
 
@@ -41,8 +59,12 @@ export default function AbilityBar({ abilities }: { abilities: HeroAbilityFull[]
   const mainRows = bodyRows.filter((r) => r.important);
   const otherRows = bodyRows.filter((r) => !r.important);
 
-  const show = (r: { prefix: string; value: number; unit: string }) =>
-    `${r.prefix}${fmt(r.value)}${r.unit}`;
+  const show = (r: { prefix: string; value: number; unit: string }) => {
+    const prefix = r.prefix
+      .replace(/\{s:sign\}/g, r.value > 0 ? "+" : "")
+      .replace(/\{[^}]*\}/g, "");
+    return `${prefix}${fmt(r.value)}${r.unit}`;
+  };
 
   const tierText = (i: number) => {
     if (selected.tiers[i]) return selected.tiers[i];
@@ -63,7 +85,7 @@ export default function AbilityBar({ abilities }: { abilities: HeroAbilityFull[]
           const active = ab.slot === selected.slot;
           return (
             <button
-              key={ab.className}
+              key={`${ab.slot}-${ab.className}`}
               type="button"
               onClick={() => setSelectedSlot(ab.slot)}
               aria-pressed={active}
@@ -203,6 +225,30 @@ export default function AbilityBar({ abilities }: { abilities: HeroAbilityFull[]
             );
           })}
         </div>
+                {notes.length > 0 && (
+          <div className="mt-4 border-t border-neutral-800/80 pt-4">
+            <h4 className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-400">
+              Notas
+            </h4>
+            <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-neutral-300">
+              {notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[10px] text-neutral-500">
+              Fonte:{" "}
+              <a
+                href="https://deadlock.wiki"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-neutral-300"
+              >
+                The Deadlock Wiki
+              </a>{" "}
+              (CC BY-SA)
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
