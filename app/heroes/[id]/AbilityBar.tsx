@@ -138,7 +138,7 @@ export default function AbilityBar({
                   r.bonus ? "border-emerald-400/60" : "border-neutral-700"
                 } bg-[#121a16]/85`}
               >
-                <p className="text-sm font-black text-neutral-100">{show(r)}</p>
+                <p className="font-deadlock text-sm font-black text-neutral-100">{show(r)}</p>
                 <p className="text-[9px] font-bold uppercase text-neutral-400">{r.label}</p>
               </div>
             ))}
@@ -163,7 +163,7 @@ export default function AbilityBar({
                 ) : null}
                 {r.icon && <img src={r.icon} alt="" className="mx-auto mb-1 h-4 w-4" />}
                 <p
-                  className={`text-xl font-black ${r.bonus ? "text-emerald-300" : "text-white"}`}
+                  className={`font-deadlock text-xl font-black ${r.bonus ? "text-emerald-300" : "text-white"}`}
                 >
                   {show(r)}
                 </p>

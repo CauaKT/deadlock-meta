@@ -34,7 +34,7 @@ export default function RootLayout({
                 alt="LockPro"
                 className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(244,239,230,0.15)] group-hover:scale-105 transition-transform"
               />
-              <span className="text-xl font-black tracking-tight text-[#f4efe6]">
+              <span className="font-deadlock font-deadlock text-xl font-black tracking-tight text-[#f4efe6]">
                 LOCK<span className="text-amber-500">PRO</span>
               </span>
             </Link>

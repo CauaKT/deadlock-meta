@@ -5,11 +5,14 @@ import {
   fetchHeroesAssets,
   fetchHeroesAnalytics,
   fetchHeroAbilitiesFull,
+  fetchHeroWeapon,
   TIER_THRESHOLDS,
+  PATCHES,
 } from "@/lib/deadlock";
 import Link from "next/link";
 import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
+import HeroStats from "./HeroStats";
 import fs from "fs";
 import path from "path";
 
@@ -110,16 +113,25 @@ function calculateTier(winRate: number) {
 
 export default async function HeroPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ patch?: string }>;
 }) {
   const { id } = await params;
+  const { patch: patchParam } = await searchParams;
   const heroId = parseInt(id);
+
+  // Mesmo recorte de datas da tier list
+  const selectedPatch = PATCHES.find((p) => p.id === patchParam) ?? PATCHES[0];
+  const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
+  const patchUntil =
+    selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
 
   const [heroDetails, heroesMap, stats] = await Promise.all([
     fetchHeroDetails(heroId),
     fetchHeroesAssets(),
-    fetchHeroesAnalytics(),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil),
   ]);
 
   const hero = heroDetails || heroesMap[heroId];
@@ -177,13 +189,15 @@ export default async function HeroPage({
   }
 
   const abilities = await fetchHeroAbilitiesFull(heroId, hero.items);
+  const weapon = await fetchHeroWeapon(hero.items?.weapon_primary);
+  const weaponImage = hero.shop_stat_display?.weapon_stats_display?.weapon_image_webp;
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
       {/* Botão de Voltar */}
       <div>
         <Link
-          href="/"
+          href={`/?patch=${selectedPatch.id}`}
           className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-neutral-900/80 border border-neutral-800 text-xs font-bold uppercase tracking-wider text-neutral-300 hover:text-amber-400 hover:border-amber-500/50 transition-all shadow-md group"
         >
           <span className="text-amber-500 group-hover:-translate-x-0.5 transition-transform">←</span>
@@ -200,7 +214,7 @@ export default async function HeroPage({
         <div className="flex-1 z-20 space-y-4 max-w-xl">
           <div className="flex flex-wrap items-center gap-2">
             {/* Tag do Tier */}
-            <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${tier.bg}`}>
+            <span className={`font-deadlock px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${tier.bg}`}>
               {tier.label}
             </span>
 
@@ -209,7 +223,7 @@ export default async function HeroPage({
               <span
                 key={i}
                 style={{ backgroundColor: tagBg, color: tagText }}
-                className="md:hidden px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
+                className="md:hidden font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
               >
                 {trait}
               </span>
@@ -227,7 +241,7 @@ export default async function HeroPage({
           <div className="pt-2 space-y-2 border-t border-neutral-800/60">
             <div className="flex justify-between items-end">
               <span className="text-xs font-extrabold uppercase text-neutral-400">Desempenho Geral</span>
-              <span className={`text-xl font-black ${winRate >= 50 ? "text-emerald-400" : "text-rose-400"}`}>
+              <span className={`font-deadlock text-xl font-black ${winRate >= 50 ? "text-emerald-400" : "text-rose-400"}`}>
                 {winRate.toFixed(1)}% <span className="text-xs text-neutral-500 font-semibold">Win Rate</span>
               </span>
             </div>
@@ -267,7 +281,7 @@ export default async function HeroPage({
             <span
               key={i}
               style={{ backgroundColor: tagBg, color: tagText }}
-              className="px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
+              className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
             >
               {trait}
             </span>
@@ -284,85 +298,13 @@ export default async function HeroPage({
           Atributos de Combate
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* 1. Armamento */}
-          <div className="rounded-2xl border border-amber-900/40 bg-neutral-900/40 p-5 space-y-4 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2.5 text-amber-400 border-b border-amber-900/30 pb-3">
-              <span className="w-3 h-3 rounded-sm bg-amber-500" />
-              <h3 className="text-sm font-black uppercase tracking-wider">Armamento</h3>
-            </div>
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between text-neutral-400">
-                <span>Dano por Tiro:</span>
-                <span className="font-black text-neutral-200">Alto</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Cadência de Disparo:</span>
-                <span className="font-black text-neutral-200">Média / Automática</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Capacidade do Pente:</span>
-                <span className="font-black text-neutral-200">Padrão</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Velocidade de Projétil:</span>
-                <span className="font-black text-neutral-200">Rápida</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Vitalidade */}
-          <div className="rounded-2xl border border-emerald-900/40 bg-neutral-900/40 p-5 space-y-4 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2.5 text-emerald-400 border-b border-emerald-900/30 pb-3">
-              <span className="w-3 h-3 rounded-sm bg-emerald-500" />
-              <h3 className="text-sm font-black uppercase tracking-wider">Vitalidade</h3>
-            </div>
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between text-neutral-400">
-                <span>Vida Máxima Base:</span>
-                <span className="font-black text-emerald-400">600 HP</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Regeneração por Seg:</span>
-                <span className="font-black text-neutral-200">2.0 HP/s</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Armadura de Bala:</span>
-                <span className="font-black text-neutral-200">0%</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Resistência a Espírito:</span>
-                <span className="font-black text-neutral-200">0%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Espírito */}
-          <div className="rounded-2xl border border-purple-900/40 bg-neutral-900/40 p-5 space-y-4 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2.5 text-purple-400 border-b border-purple-900/30 pb-3">
-              <span className="w-3 h-3 rounded-sm bg-purple-500" />
-              <h3 className="text-sm font-black uppercase tracking-wider">Espírito</h3>
-            </div>
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between text-neutral-400">
-                <span>Poder de Espírito Base:</span>
-                <span className="font-black text-purple-400">0</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Velocidade de Movimento:</span>
-                <span className="font-black text-neutral-200">7.2 m/s</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Barras de Estamina (Dash):</span>
-                <span className="font-black text-neutral-200">3 Barras</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Dano Corpo a Corpo:</span>
-                <span className="font-black text-neutral-200">50 / 116 Forte</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <HeroStats
+          stats={hero.starting_stats ?? {}}
+          levelUp={hero.standard_level_up_upgrades ?? {}}
+          weapon={weapon}
+          weaponImage={weaponImage}
+          accent={tagBg}
+        />
 
         {/* Barra de Escalonamento com Fusão de Cores */}
         <div className="rounded-2xl border border-neutral-800/80 bg-[#0e1512]/90 p-5 space-y-2.5 backdrop-blur-sm shadow-md">

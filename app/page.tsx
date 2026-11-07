@@ -172,7 +172,7 @@ export default async function Home({
                   isFirst ? "rounded-tl-2xl" : ""
                 } ${isLast ? "rounded-bl-2xl" : ""}`}
               >
-                <span className="text-base sm:text-lg md:text-xl font-black tracking-wider leading-none">
+                <span className="font-deadlock text-base sm:text-lg md:text-xl font-black tracking-wider leading-none">
                   {tier.label}
                 </span>
               </div>
@@ -191,7 +191,7 @@ export default async function Home({
                   heroesInTier.map((hero) => (
                     <Link
                       key={hero.id}
-                      href={`/heroes/${hero.id}`}
+                      href={`/heroes/${hero.id}?patch=${selectedPatch.id}`}
                       className="group relative flex flex-col items-center bg-neutral-900/40 border border-neutral-800/70 rounded-xl w-[76px] sm:w-[84px] hover:border-amber-500/80 hover:scale-105 hover:z-30 transition-all duration-150 shadow-md cursor-pointer"
                     >
                       {/* Imagem do Herói (QUADRADA) */}
@@ -253,7 +253,7 @@ export default async function Home({
 
                           <div className="text-right">
                             <span
-                              className={`text-base sm:text-lg font-black ${
+                              className={`font-deadlock font-deadlock text-xs font-black text-neutral-100
                                 hero.winRate >= 50
                                   ? "text-emerald-400"
                                   : "text-rose-400"
@@ -272,7 +272,7 @@ export default async function Home({
                             <p className="text-[9px] text-neutral-400 uppercase font-bold">
                               Jogos
                             </p>
-                            <p className="text-xs font-black text-neutral-100">
+                            <p className="font-deadlock text-xs font-black text-neutral-100">
                               {fmt(hero.matches)}
                             </p>
                           </div>
@@ -280,7 +280,7 @@ export default async function Home({
                             <p className="text-[9px] text-emerald-400/80 uppercase font-bold">
                               Vitórias
                             </p>
-                            <p className="text-xs font-black text-emerald-400">
+                            <p className="font-deadlock text-xs font-black text-emerald-400">
                               {fmt(hero.wins)}
                             </p>
                           </div>
@@ -288,7 +288,7 @@ export default async function Home({
                             <p className="text-[9px] text-rose-400/80 uppercase font-bold">
                               Derrotas
                             </p>
-                            <p className="text-xs font-black text-rose-400">
+                            <p className="font-deadlock text-xs font-black text-rose-400">
                               {fmt(hero.losses)}
                             </p>
                           </div>

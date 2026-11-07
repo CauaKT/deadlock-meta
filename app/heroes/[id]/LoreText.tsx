@@ -47,7 +47,7 @@ export default function LoreText({ text }: { text: string }) {
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="mt-2 text-xs font-extrabold uppercase tracking-wider text-amber-400 hover:text-amber-300 transition-colors"
+          className="mt-2 font-deadlock text-xs font-extrabold uppercase tracking-wider text-amber-400 hover:text-amber-300 transition-colors"
         >
           {open ? "- Recolher texto ↑" : "+ Ler mais da história"}
         </button>

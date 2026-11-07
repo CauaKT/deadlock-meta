@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+@font-face {
+  font-family: "Valve Occult";
+  src: url("/fonts/ValveOccult-SemiBold.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Valve Pulp";
+  src: url("/fonts/ValvePulp-Bold.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fonte principal dos títulos e números (usada pelo HeroStats) */
+.font-deadlock {
+  font-family: "Valve Occult", Arial, Helvetica, sans-serif;
+}
+
+/* Fonte alternativa */
+.font-pulp {
+  font-family: "Valve Pulp", Arial, Helvetica, sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Valve Occult", Arial, Helvetica, sans-serif;
+}

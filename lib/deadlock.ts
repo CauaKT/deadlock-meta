@@ -279,3 +279,58 @@ export async function fetchHeroAbilitiesFull(
     return [];
   }
 }
+
+export interface HeroWeapon {
+  name: string;
+  bulletDamage: number;
+  bullets: number;
+  clipSize: number;
+  reloadDuration: number;
+  bulletsPerSecond: number;
+  damagePerSecond: number;
+}
+
+// Busca os dados da arma principal (a lista de armas é a mesma para todos os heróis)
+export async function fetchHeroWeapon(className?: string): Promise<HeroWeapon | null> {
+  if (!className) return null;
+  try {
+    const res = await fetch("https://api.deadlock-api.com/v1/assets/items/by-type/weapon", {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const list = await res.json();
+    if (!Array.isArray(list)) return null;
+
+    const w = list.find((x: any) => x.class_name === className);
+    const i = w?.weapon_info;
+    if (!i) return null;
+
+    const bulletDamage = toNum(i.bullet_damage);
+    const clipSize = toNum(i.clip_size);
+    const reloadDuration = toNum(i.reload_duration);
+    const bulletsPerSecond = toNum(i.bullets_per_second);
+    const damagePerSecond = toNum(i.damage_per_second);
+    if (
+      bulletDamage === null ||
+      clipSize === null ||
+      reloadDuration === null ||
+      bulletsPerSecond === null ||
+      damagePerSecond === null
+    ) {
+      return null;
+    }
+
+    return {
+      name: typeof w.name === "string" && !w.name.startsWith("citadel_weapon") ? w.name : "",
+      bulletDamage,
+      bullets: toNum(i.bullets) ?? 1,
+      clipSize,
+      reloadDuration,
+      bulletsPerSecond,
+      damagePerSecond,
+    };
+  } catch {
+    return null;
+  }
+}
