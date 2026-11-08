@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HeroWeapon } from "@/lib/deadlock";
 
 const MAX_BOONS = 35;
@@ -9,7 +9,7 @@ const n1 = (n: number) => n.toFixed(1);
 const n2 = (n: number) => n.toFixed(2);
 
 // Ícones ficam em public/icons/stats/<nome>.<extensão>.
-// Por padrão são .svg; os que forem de outro tipo entram aqui.
+// Por padrão são .webp; os que forem de outro tipo entram aqui (ex.: dps: "svg").
 const ICON_EXT: Record<string, string> = {
   weapon: "webp",
   vitality: "webp",
@@ -29,12 +29,17 @@ function FileIcon({
   color?: string;
   fallback?: ReactNode;
 }) {
-  const [ok, setOk] = useState(true);
+  const [ok, setOk] = useState(false);
+  const url = `/icons/stats/${name}.${ICON_EXT[name] ?? "webp"}`;
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setOk(true);
+    img.onerror = () => setOk(false);
+    img.src = url;
+  }, [url]);
   if (!ok) return <>{fallback}</>;
-  const url = `/icons/stats/${name}.${ICON_EXT[name] ?? "svg"}`;
   return (
     <>
-      <img src={url} alt="" hidden onError={() => setOk(false)} />
       <span
         aria-hidden
         className={`${className} inline-block shrink-0`}
@@ -171,49 +176,92 @@ function Icon({
   );
 }
 
-function Row({
-  icon,
-  label,
-  value,
-  sub,
+const THEMES = {
+  weapon: {
+    border: "rgba(236, 152, 26, 0.4)",
+    bg: "linear-gradient(135deg, rgba(236, 152, 26, 0.16), #0e1512 68%)",
+    color: "#e2a23f",
+  },
+  vitality: {
+    border: "rgba(124, 187, 30, 0.4)",
+    bg: "linear-gradient(135deg, rgba(124, 187, 30, 0.15), #0e1512 68%)",
+    color: "#8fc43a",
+  },
+  spirit: {
+    border: "rgba(206, 145, 255, 0.4)",
+    bg: "linear-gradient(135deg, rgba(206, 145, 255, 0.15), #0e1512 68%)",
+    color: "#c79af0",
+  },
+} as const;
+type Theme = keyof typeof THEMES;
+
+const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
+
+function StatIcon({
+  name,
+  className = "h-5 w-5",
+  color = "#efe7da",
 }: {
-  icon: string;
-  label: string;
-  value: string;
-  sub?: string;
+  name: string;
+  className?: string;
+  color?: string;
 }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-black/30 px-3 py-2.5">
-      <Icon name={icon} />
-      <span className="font-deadlock text-lg font-black leading-none text-[#f4efe6]">{value}</span>
-      <span className="text-[11px] font-semibold text-neutral-400">{label}</span>
-      {sub && <span className="text-[10px] font-bold text-emerald-400">{sub}</span>}
+    <FileIcon
+      name={name}
+      className={className}
+      color={color}
+      fallback={<Icon name={name} className={className} color={color} />}
+    />
+  );
+}
+
+function Panel({ theme, className = "", children }: { theme: Theme; className?: string; children: ReactNode }) {
+  const t = THEMES[theme];
+  return (
+    <div
+      className={`dl-noise dl-halftone relative overflow-hidden rounded-[3px_8px_3px_6px] border-2 p-5 ${className}`}
+      style={{
+        borderColor: t.border,
+        background: t.bg,
+        boxShadow: "inset 0 0 40px rgba(0,0,0,0.55), 0 10px 28px rgba(0,0,0,0.7)",
+      }}
+    >
+      {children}
     </div>
   );
 }
 
-function Header({
-  icon,
-  label,
-  colorClass,
-  iconColor,
-}: {
-  icon: string;
-  label: string;
-  colorClass: string;
-  iconColor: string;
-}) {
+function Header({ icon, label, theme }: { icon: string; label: string; theme: Theme }) {
+  const color = THEMES[theme].color;
   return (
     <div className="flex items-center gap-2.5">
-      <FileIcon
-        name={icon}
-        className="h-6 w-6"
-        color={iconColor}
-        fallback={<Icon name={icon} className="h-6 w-6" color={iconColor} />}
-      />
-      <div className={`font-deadlock text-sm font-black uppercase tracking-wider ${colorClass}`}>
+      <StatIcon name={icon} className="h-7 w-7" color={color} />
+      <div className="font-deadlock text-base font-black uppercase tracking-wider" style={{ color }}>
         {label}
       </div>
+    </div>
+  );
+}
+
+function Row({ icon, label, value, sub }: { icon: string; label: string; value: string; sub?: string }) {
+  return (
+    <div className={`flex items-center gap-2.5 px-3 py-2.5 ${PLATE}`}>
+      <StatIcon name={icon} />
+      <span className="font-deadlock text-lg font-black leading-none text-[#f4efe6]">{value}</span>
+      <span className="text-[11px] font-semibold text-[#d6c9b4]/80">{label}</span>
+      {sub && <span className="text-[10px] font-bold text-[#99f051]">{sub}</span>}
+    </div>
+  );
+}
+
+function BigStat({ icon, value, label, sub }: { icon: string; value: string; label: string; sub?: string }) {
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 ${PLATE}`}>
+      <StatIcon name={icon} className="h-8 w-8" />
+      <span className="font-deadlock text-4xl font-black leading-none text-[#f4efe6]">{value}</span>
+      <span className="text-[11px] font-semibold text-[#d6c9b4]/80">{label}</span>
+      {sub && <span className="text-[10px] font-bold text-[#99f051]">{sub}</span>}
     </div>
   );
 }
@@ -262,51 +310,65 @@ export default function HeroStats({
 
   return (
     <div className="space-y-4">
-      {/* Cabeçalho + slider de boons */}
       <div
-        className="rounded-2xl border border-neutral-800/80 p-5"
-        style={{ background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 22%, transparent), #0e1512 70%)` }}
+        className="dl-noise dl-halftone relative overflow-hidden rounded-[3px_8px_3px_6px] border-2 p-5 shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
+        style={{
+          borderColor: `color-mix(in srgb, ${accent} 45%, #1b2621)`,
+          background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 30%, #0e1512), #0e1512 75%)`,
+        }}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="font-deadlock text-2xl font-black uppercase tracking-wide text-[#f4efe6]">Stats Base</h3>
-            <p className="text-xs text-neutral-400">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <h3
+              className="font-deadlock text-4xl font-black uppercase leading-none tracking-wide"
+              style={{ color: "#f4efe6", textShadow: "2px 2px 0 rgba(0,0,0,0.4)" }}
+            >
+              Stats Base
+            </h3>
+            <p className="inline-block -skew-x-6 bg-[#120c0c] px-3 py-1 text-xs font-semibold text-[#f4efe6]">
               Sem itens. O slider adiciona os boons: os ganhos de nível que você recebe com as almas.
             </p>
           </div>
           <div className="flex items-center gap-3 sm:min-w-[320px]">
-            <span className="text-[11px] font-black uppercase tracking-wider text-neutral-300">Boons</span>
+            <span className="text-[11px] font-black uppercase tracking-wider text-neutral-300">
+              Boons
+            </span>
             <input
               type="range"
               min={0}
               max={MAX_BOONS}
               value={boons}
               onChange={(e) => setBoons(Number(e.target.value))}
-              style={{ accentColor: accent }}
-              className="h-2 flex-1 cursor-pointer"
+              style={{ "--p": `${(boons / MAX_BOONS) * 100}%`, "--c": accent } as CSSProperties}
+              className="dl-range flex-1 cursor-pointer"
               aria-label="Boons"
             />
-            <span className="font-deadlock w-8 text-right text-3xl font-black text-[#f4efe6]">{boons}</span>
+            <span className="font-deadlock w-9 text-right text-4xl font-black text-[#f4efe6]">
+              {boons}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Arma */}
-      <div className="rounded-2xl border border-amber-700/40 bg-gradient-to-br from-amber-950/40 to-[#0e1512] p-5 space-y-4">
+      <Panel theme="weapon" className="space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <Header icon="weapon" label="Arma" colorClass="text-amber-400" iconColor="#fbbf24" />
-            <div className="font-deadlock text-xl font-black text-[#f4efe6]">{weaponTitle}</div>
+          <div className="space-y-1.5">
+            <Header icon="weapon" label="Arma" theme="weapon" />
+            <div className="font-deadlock text-2xl font-black text-[#f4efe6]">{weaponTitle}</div>
           </div>
           <div className="flex items-center gap-4">
             {weaponImage && (
-              <img src={weaponImage} alt="" className="hidden h-12 w-auto opacity-90 sm:block" />
+              <img
+                src={weaponImage}
+                alt=""
+                className="hidden h-20 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] sm:block"
+              />
             )}
             {weapon && (
               <div className="flex flex-col items-end">
-                <Icon name="dps" className="mb-1 h-5 w-5" />
+                <StatIcon name="dps" className="mb-1 h-5 w-5" />
                 <div className="font-deadlock text-5xl font-black leading-none text-[#f4efe6]">{n1(dps)}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#d6c9b4]/80">
                   Dano por segundo
                 </div>
               </div>
@@ -341,20 +403,17 @@ export default function HeroStats({
             sub={heavyPer > 0 ? `+${n2(heavyPer)}/boon` : undefined}
           />
         </div>
-      </div>
+      </Panel>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Vitalidade */}
-        <div className="rounded-2xl border border-emerald-700/40 bg-gradient-to-br from-emerald-950/40 to-[#0e1512] p-5 space-y-4">
-          <Header icon="vitality" label="Vitalidade" colorClass="text-emerald-400" iconColor="#34d399" />
-          <div className="flex items-center gap-3 rounded-lg bg-black/30 px-4 py-3">
-            <Icon name="health" className="h-7 w-7" />
-            <span className="font-deadlock text-4xl font-black leading-none text-[#f4efe6]">{Math.round(health)}</span>
-            <span className="text-[11px] font-semibold text-neutral-400">Vida</span>
-            {healthPer > 0 && (
-              <span className="text-[10px] font-bold text-emerald-400">+{n2(healthPer)}/boon</span>
-            )}
-          </div>
+        <Panel theme="vitality" className="space-y-4">
+          <Header icon="vitality" label="Vitalidade" theme="vitality" />
+          <BigStat
+            icon="health"
+            value={String(Math.round(health))}
+            label="Vida"
+            sub={healthPer > 0 ? `+${n2(healthPer)}/boon` : undefined}
+          />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Row icon="regeneration" label="Regeneração" value={`${n1(get("base_health_regen"))}/s`} />
             <Row icon="move-speed" label="Velocidade" value={`${n1(get("max_move_speed"))} m/s`} />
@@ -362,23 +421,20 @@ export default function HeroStats({
             <Row icon="stamina" label="Stamina" value={String(get("stamina"))} />
             <Row icon="dash" label="Dash" value={`${n1(get("ground_dash_distance_in_meters"))} m`} />
           </div>
-        </div>
+        </Panel>
 
-        {/* Espírito */}
-        <div className="rounded-2xl border border-purple-700/40 bg-gradient-to-br from-purple-950/40 to-[#0e1512] p-5 space-y-4">
-          <Header icon="spirit" label="Espírito" colorClass="text-purple-400" iconColor="#c084fc" />
-          <div className="flex items-center gap-3 rounded-lg bg-black/30 px-4 py-3">
-            <Icon name="spirit-power" className="h-7 w-7" />
-            <span className="font-deadlock text-4xl font-black leading-none text-[#f4efe6]">{n1(spirit)}</span>
-            <span className="text-[11px] font-semibold text-neutral-400">Poder de espírito</span>
-            {spiritPer > 0 && (
-              <span className="text-[10px] font-bold text-emerald-400">+{n2(spiritPer)}/boon</span>
-            )}
-          </div>
-          <p className="text-xs leading-relaxed text-neutral-400">
+        <Panel theme="spirit" className="space-y-4">
+          <Header icon="spirit" label="Espírito" theme="spirit" />
+          <BigStat
+            icon="spirit-power"
+            value={n1(spirit)}
+            label="Poder de espírito"
+            sub={spiritPer > 0 ? `+${n2(spiritPer)}/boon` : undefined}
+          />
+          <p className="text-xs leading-relaxed text-[#d9c8ea]/80">
             O poder de espírito vem dos boons e dos itens. Cada ponto fortalece as habilidades que escalam com ele.
           </p>
-        </div>
+        </Panel>
       </div>
     </div>
   );

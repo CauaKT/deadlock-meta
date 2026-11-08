@@ -208,7 +208,7 @@ export default async function HeroPage({
       {/* ========================================================================= */}
       {/* HERO BANNER PRINCIPAL COM 3 TÍTULOS E LORE EXPANSÍVEL                     */}
       {/* ========================================================================= */}
-      <section className="relative rounded-3xl border border-[#23352c] bg-gradient-to-r from-[#0c120f] via-[#0e1613] to-[#121c17] overflow-hidden p-6 md:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col md:flex-row items-center justify-between gap-8 min-h-[460px]">
+      <section className="relative rounded-3xl border border-[#23352c] bg-gradient-to-r from-[#0c120f] via-[#0e1613] to-[#121c17] overflow-hidden p-6 md:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col md:flex-row items-center md:items-stretch justify-between gap-8 min-h-[460px]">
         
         {/* Badge do Tier fixado no canto superior direito */}
         <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-20">
@@ -217,7 +217,7 @@ export default async function HeroPage({
           </span>
         </div>
 
-        <div className="flex-1 z-20 space-y-4 max-w-xl">
+        <div className="flex-1 z-20 space-y-4 max-w-xl md:max-w-[min(50%,36rem)] md:flex md:flex-col md:justify-between">
           {heroTraits.length > 0 && (
             <div className="flex md:hidden flex-wrap items-center gap-2">
               {heroTraits.map((trait, i) => (
@@ -279,11 +279,11 @@ export default async function HeroPage({
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#121c17] to-transparent md:hidden" />
         </div>
 
-        <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[48%] flex-col items-end gap-3 pointer-events-none">
+        <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[44%] flex-col items-end gap-3 pointer-events-none">
           <img
             src={heroNameSvg}
             alt={enName}
-            className="h-20 sm:h-24 lg:h-28 w-auto max-w-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)]"
+            className="h-24 w-52 sm:h-28 sm:w-64 lg:h-32 lg:w-72 max-w-full object-contain object-right drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)]"
           />
           <div className="flex flex-wrap justify-end gap-2">
             {heroTraits.map((trait, i) => (
@@ -317,7 +317,7 @@ export default async function HeroPage({
         />
 
         {/* Barra de Escalonamento com Fusão de Cores */}
-        <div className="rounded-2xl border border-neutral-800/80 bg-[#0e1512]/90 p-5 space-y-2.5 backdrop-blur-sm shadow-md">
+        <div className="dl-noise relative overflow-hidden rounded-[3px_8px_3px_6px] border-[3px] border-[#2a2a2a] bg-[#0c0c0c]/90 p-5 space-y-2.5 shadow-[inset_0_0_36px_rgba(0,0,0,0.65),0_10px_28px_rgba(0,0,0,0.75)]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <span className="text-xs font-black uppercase tracking-wider text-neutral-400">
               Escalonamento de Dano Principal
@@ -347,7 +347,7 @@ export default async function HeroPage({
         <h2 className="text-center text-xl md:text-2xl font-black text-[#f4efe6]">
           Habilidades
         </h2>
-        <AbilityBar key={heroId} abilities={abilities} />
+        <AbilityBar key={heroId} abilities={abilities} accent={tagBg} accentText={tagText} />
       </section>
 
       {/* ========================================================================= */}

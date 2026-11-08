@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-// 6 linhas (text-sm + leading-relaxed = 22.75px por linha). Para mudar, troque o 6.
-const COLLAPSED_PX = 140;
+// text-sm + leading-relaxed = 22.75px por linha; a 7ª linha aparece pela metade sob o fade
+const LINE_PX = 22.75;
+const COLLAPSED_PX = Math.round(LINE_PX * 10.5);
 
 export default function LoreText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -26,7 +27,8 @@ export default function LoreText({ text }: { text: string }) {
   return (
     <div>
       <div
-        className="relative overflow-hidden transition-[height] duration-500 ease-in-out"
+        className={`relative overflow-hidden ${needsToggle ? "lore-mask" : ""}`}
+        data-open={open}
         style={{ height }}
       >
         <div ref={innerRef} className="space-y-3 text-sm leading-relaxed text-neutral-300">
@@ -34,13 +36,6 @@ export default function LoreText({ text }: { text: string }) {
             <p key={i}>{p}</p>
           ))}
         </div>
-        {needsToggle && (
-          <div
-            className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[#0c120f] to-transparent transition-opacity duration-300 ${
-              open ? "opacity-0" : "opacity-100"
-            }`}
-          />
-        )}
       </div>
 
       {needsToggle && (

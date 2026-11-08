@@ -103,8 +103,12 @@ function DiamondIcon() {
 
 export default function AbilityBar({
   abilities: rawAbilities,
+  accent = "#f1d36b",
+  accentText = "#1a1608",
 }: {
   abilities?: HeroAbilityFull[];
+  accent?: string;
+  accentText?: string;
 }) {
   const abilities: HeroAbilityFull[] = (rawAbilities ?? [])
     .filter(Boolean)
@@ -211,22 +215,34 @@ export default function AbilityBar({
               className="group flex flex-col items-center gap-2 outline-none"
             >
               <div
-                className={`flex h-20 w-20 items-center justify-center rounded-full border-4 bg-[#1b1722] shadow-lg transition-all group-hover:scale-105 ${
-                  active
-                    ? "border-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.35)]"
-                    : "border-neutral-500"
-                }`}
+                className="dl-noise relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 shadow-lg transition-all group-hover:scale-105"
+                style={{
+                  borderColor: active ? accent : `color-mix(in srgb, ${accent} 30%, #4a4a4a)`,
+                  background: `radial-gradient(circle at 50% 35%, color-mix(in srgb, ${accent} ${active ? 38 : 16}%, #0d0d12) 20%, #08080b 100%)`,
+                  boxShadow: active
+                    ? `0 0 20px color-mix(in srgb, ${accent} 55%, transparent), inset 0 0 18px rgba(0,0,0,0.7)`
+                    : "inset 0 0 18px rgba(0,0,0,0.7)",
+                }}
               >
                 {ab.image ? (
-                  <img src={ab.image} alt={ab.name} className="h-14 w-14 object-contain" />
+                  <img
+                    src={ab.image}
+                    alt={ab.name}
+                    className={`h-14 w-14 object-contain drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] transition-opacity ${
+                      active ? "" : "opacity-70 group-hover:opacity-100"
+                    }`}
+                  />
                 ) : (
                   <span className="text-xs font-black text-neutral-500">{ab.slot}</span>
                 )}
               </div>
               <span
-                className={`rounded px-2 text-xs font-black ${
-                  active ? "bg-amber-400 text-black" : "bg-neutral-800 text-neutral-200"
-                }`}
+                className="font-deadlock -skew-x-6 rounded-[2px] px-2.5 py-0.5 text-xs font-black transition-colors"
+                style={
+                  active
+                    ? { backgroundColor: accent, color: accentText }
+                    : { backgroundColor: "#1c1c20", color: "#a3a3a3" }
+                }
               >
                 {ab.slot}
               </span>

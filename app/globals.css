@@ -190,6 +190,62 @@ h1, h2, h3, h4 {
   fill: #ec981a;
 }
 
+@property --lore-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.lore-mask {
+  --lore-fade: 56px;
+  transition: height 0.5s ease-in-out, --lore-fade 0.5s ease-in-out;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--lore-fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--lore-fade)), transparent);
+}
+
+.lore-mask[data-open="true"] {
+  --lore-fade: 0px;
+}
+
+.dl-halftone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.09) 0.9px, transparent 1.2px),
+    radial-gradient(rgba(255, 255, 255, 0.09) 0.9px, transparent 1.2px);
+  background-size: 4px 4px;
+  background-position: 0 0, 2px 2px;
+}
+
+.dl-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(to right, var(--c) var(--p), rgba(255, 255, 255, 0.12) var(--p));
+}
+.dl-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 3px solid #120c0c;
+  background: #f4efe6;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+.dl-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #120c0c;
+  background: #f4efe6;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
 /* rótulo dos grupos ("Ao atingir inimigos:") */
 .dl-label {
   font-size: 0.68rem;
