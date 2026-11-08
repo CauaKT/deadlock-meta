@@ -194,6 +194,12 @@ export interface AbilityGroup {
   props: AbilityPropRef[];
 }
 
+export interface AbilitySection {
+  descriptionHtml?: string;
+  groups: AbilityGroup[];
+  basicKeys: string[];
+}
+
 export interface HeroAbilityFull {
   slot: number;
   className: string;
@@ -202,13 +208,14 @@ export interface HeroAbilityFull {
   description: string;
   descriptionHtml: string;
   stats: AbilityStat[];
-  upgrades: AbilityUpgradeBonus[][]; // índice 0 = T1, 1 = T2, 2 = T3
+  upgrades: AbilityUpgradeBonus[][];
   tiers: string[];
   tiersHtml: string[];
   importantKeys: string[];
   headerKeys: string[];
   basicKeys: string[];
   groups: AbilityGroup[];
+  sections: AbilitySection[];
 }
 
 function stripHtml(text: unknown): string {
@@ -225,22 +232,19 @@ function stripHtml(text: unknown): string {
 const ALLOWED_IMG_PREFIX = "https://assets-bucket.deadlock-api.com/";
 const SVG_FILL = /^(#[0-9a-fA-F]{3,8}|white|none|currentColor)$/i;
 
-// Deixa passar só o HTML que a API usa nas descrições (negrito, itálico, spans
-// coloridos, ícones <img> e ícones <svg> inline). Todo o resto é descartado.
 function sanitizeHtml(html: unknown): string {
   if (typeof html !== "string") return "";
 
-  // Os "\n" soltos vêm só de dentro/ao redor dos <svg>; as quebras reais são <br>.
-  const cleaned = html.replace(/<svg[\s\S]*?<\/svg>\s*/gi, (m) =>
-    m.replace(/\s*\n\s*/g, "")
-  );
+  const cleaned = html
+    .replace(/<svg[\s\S]*?<\/svg>\s*/gi, (m) => m.replace(/\s*\n\s*/g, ""))
+    .replace(/<(?:key|binding|action|bound_key)[^>]*?(?:attack|fire|in_attack)[^>]*?\/?>|<\/(?:key|binding|action)>/gi, "<strong>Disparo</strong>");
 
   const safeClass = (attrs: string) =>
     (attrs.match(/class\s*=\s*"([^"]*)"/i)?.[1] ?? "").replace(/[^\w\- ]/g, "");
   const attr = (attrs: string, name: string) =>
     attrs.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`, "i"))?.[1] ?? "";
 
-  return cleaned
+  const parsed = cleaned
     .split(/(<[^>]*>)/)
     .map((part) => {
       if (!part.startsWith("<") || !part.endsWith(">")) {
@@ -263,6 +267,9 @@ function sanitizeHtml(html: unknown): string {
           /style\s*=\s*"[^"]*?color\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\))/i
         )?.[1];
         return `<span${cls ? ` class="${cls}"` : ""}${color ? ` style="color:${color}"` : ""}>`;
+      }
+      if (["key", "kbd", "binding"].includes(tag)) {
+        return closing ? "</strong>" : "<strong>";
       }
       if (tag === "svg") {
         if (closing) return "</svg>";
@@ -291,6 +298,13 @@ function sanitizeHtml(html: unknown): string {
       return "";
     })
     .join("");
+
+  // Pós-processamento após todas as tags terem sido limpas: preenche o buraco da ação omitida
+  return parsed
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\{s:[^}]+\}|%s\d*%|\[key_[^\]]+\]/gi, "<strong>Disparo</strong>")
+    .replace(/(pressione|press)\b(?:\s*<[^>]*>|[^a-zA-Z0-9À-ÿ]|attack|fire|\+attack){1,200}?\b(para|to)\b/gi, "$1 <strong>Disparo</strong> $2")
+    .replace(/\s{2,}/g, " ");
 }
 
 function scaleTypeOf(sf: any): ScaleType {
@@ -344,14 +358,19 @@ export async function fetchHeroAbilitiesFull(
         );
       const upgradedKeys = new Set(upgrades.flat().map((u) => u.key));
 
-      // Grupos de caixas ("Ao atingir inimigos:", etc.) e linha de propriedades básicas
+      // Processa seções detalhadas da habilidade (preservando textos secundários e caixas agrupadas)
+      const sections: AbilitySection[] = [];
       const groups: AbilityGroup[] = [];
       const basicKeys: string[] = [];
+
       for (const section of item.tooltip_details?.info_sections ?? []) {
+        const secGroups: AbilityGroup[] = [];
+        const secBasicKeys: string[] = [];
+
         for (const block of section.properties_block ?? []) {
           const props: AbilityPropRef[] = [];
           for (const prop of block.properties ?? []) {
-            const key = prop.important_property ? String(prop.important_property) : "";
+            const key = String(prop.important_property || prop.key || prop.name || "");
             if (!key) continue;
             const valueKey = prop.status_effect_value ? String(prop.status_effect_value) : "";
             props.push({
@@ -364,12 +383,48 @@ export async function fetchHeroAbilitiesFull(
                   : "",
             });
           }
-          if (props.length > 0) groups.push({ label: stripHtml(block.loc_string), props });
+          if (props.length > 0) {
+            const grp = { label: stripHtml(block.loc_string), props };
+            secGroups.push(grp);
+            groups.push(grp);
+          }
         }
+
+        // Se uma propriedade listada em basic_properties tiver escalonamento numérico (ex.: Dano do Raio com x0.5),
+        // promove para caixa destacada da seção com estilo e badge de espírito/arma
+        const promotedProps: AbilityPropRef[] = [];
         for (const k of section.basic_properties ?? []) {
-          if (k && !basicKeys.includes(String(k))) basicKeys.push(String(k));
+          const keyStr = String(k);
+          const propData = item.properties?.[keyStr];
+          const hasScale = propData?.scale_function && toNum(propData.scale_function.stat_scale) !== null;
+
+          if (hasScale) {
+            promotedProps.push({
+              key: keyStr,
+              valueKey: "",
+              statusName: "",
+              icon: typeof propData?.icon === "string" ? propData.icon : "",
+            });
+          } else {
+            if (keyStr && !basicKeys.includes(keyStr)) basicKeys.push(keyStr);
+            if (keyStr && !secBasicKeys.includes(keyStr)) secBasicKeys.push(keyStr);
+          }
         }
+
+        if (promotedProps.length > 0) {
+          const grp = { label: "", props: promotedProps };
+          secGroups.push(grp);
+          groups.push(grp);
+        }
+
+        const secDescHtml = sanitizeHtml(section.loc_string);
+        sections.push({
+          descriptionHtml: secDescHtml,
+          groups: secGroups,
+          basicKeys: secBasicKeys,
+        });
       }
+
       const importantKeys = groups.flatMap((g) => g.props.map((p) => p.valueKey || p.key));
       const headerKeys: string[] = (item.tooltip_details?.additional_header_properties ?? []).map(
         String
@@ -417,6 +472,7 @@ export async function fetchHeroAbilitiesFull(
         headerKeys,
         basicKeys,
         groups,
+        sections,
       });
     }
     return result;

@@ -24,14 +24,14 @@ function cleanText(text: any): string {
   if (typeof text === "string") {
     str = text;
   } else if (typeof text === "object") {
-    str = text.en || text.desc || text.description || text.lore || text.value || "";
+    str = text.lore || text.en || text.desc || text.description || text.value || "";
   } else {
     str = String(text);
   }
   return str
-    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/?[^>]+(>|$)/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[^\S\r\n]+/g, " ")
     .trim();
 }
 
@@ -168,7 +168,6 @@ export default async function HeroPage({
   const luminance = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
   const tagText = luminance > 150 ? "#1a1608" : "#ffffff";
 
-  // 2. Lore tratada e traduzida
   const rawLore = typeof hero.description === "object" ? hero.description?.lore : hero.description;
   const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";
 
@@ -180,6 +179,7 @@ export default async function HeroPage({
   const heroSlug = enName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const heroesDir = path.join(process.cwd(), "public", "heroes");
   const formattedName = enName.trim().replace(/ /g, "_");
+  const heroNameSvg = `https://cdn.deadlock.wiki/${formattedName}_name.svg`;
   let heroArt = `https://cdn.deadlock.wiki/thumb/${formattedName}_Render.png/800px-${formattedName}_Render.png`;
 
   if (fs.existsSync(heroesDir)) {
@@ -210,35 +210,39 @@ export default async function HeroPage({
       {/* ========================================================================= */}
       <section className="relative rounded-3xl border border-[#23352c] bg-gradient-to-r from-[#0c120f] via-[#0e1613] to-[#121c17] overflow-hidden p-6 md:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col md:flex-row items-center justify-between gap-8 min-h-[460px]">
         
-        {/* Lado Esquerdo: Identidade do Herói */}
-        <div className="flex-1 z-20 space-y-4 max-w-xl">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Tag do Tier */}
-            <span className={`font-deadlock px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${tier.bg}`}>
-              {tier.label}
-            </span>
+        {/* Badge do Tier fixado no canto superior direito */}
+        <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-20">
+          <span className={`font-deadlock px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border shadow-xl ${tier.bg}`}>
+            {tier.label}
+          </span>
+        </div>
 
-            {/* Os 3 Títulos Oficiais do Herói (Estilo da imagem de referência) */}
-            {heroTraits.map((trait, i) => (
-              <span
-                key={i}
-                style={{ backgroundColor: tagBg, color: tagText }}
-                className="md:hidden font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
-              >
-                {trait}
-              </span>
-            ))}
+        <div className="flex-1 z-20 space-y-4 max-w-xl">
+          {heroTraits.length > 0 && (
+            <div className="flex md:hidden flex-wrap items-center gap-2">
+              {heroTraits.map((trait, i) => (
+                <span
+                  key={i}
+                  style={{ backgroundColor: tagBg, color: tagText }}
+                  className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
+                >
+                  {trait}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="md:hidden pt-1">
+            <img
+              src={heroNameSvg}
+              alt={enName}
+              className="h-14 w-auto max-w-[240px] object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]"
+            />
           </div>
 
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-[#f4efe6]">
-            {enName}
-          </h1>
-
-          {/* Lore do herói (altura inicial fixa, expande com animação) */}
           <LoreText text={heroLore} />
 
-          {/* Barra de Desempenho Geral + Apenas o Total de Partidas abaixo */}
-          <div className="pt-2 space-y-2 border-t border-neutral-800/60">
+          <div className="pt-3 space-y-2 border-t border-neutral-800/60">
             <div className="flex justify-between items-end">
               <span className="text-xs font-extrabold uppercase text-neutral-400">Desempenho Geral</span>
               <span className={`font-deadlock text-xl font-black ${winRate >= 50 ? "text-emerald-400" : "text-rose-400"}`}>
@@ -275,17 +279,23 @@ export default async function HeroPage({
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#121c17] to-transparent md:hidden" />
         </div>
 
-        {/* Tags oficiais no canto inferior direito (só em telas grandes) */}
-        <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[45%] flex-wrap justify-end gap-2">
-          {heroTraits.map((trait, i) => (
-            <span
-              key={i}
-              style={{ backgroundColor: tagBg, color: tagText }}
-              className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
-            >
-              {trait}
-            </span>
-          ))}
+        <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[48%] flex-col items-end gap-3 pointer-events-none">
+          <img
+            src={heroNameSvg}
+            alt={enName}
+            className="h-20 sm:h-24 lg:h-28 w-auto max-w-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)]"
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            {heroTraits.map((trait, i) => (
+              <span
+                key={i}
+                style={{ backgroundColor: tagBg, color: tagText }}
+                className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
+              >
+                {trait}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -337,7 +347,7 @@ export default async function HeroPage({
         <h2 className="text-center text-xl md:text-2xl font-black text-[#f4efe6]">
           Habilidades
         </h2>
-        <AbilityBar key={heroId} abilities={abilities} heroKey={heroKey} />
+        <AbilityBar key={heroId} abilities={abilities} />
       </section>
 
       {/* ========================================================================= */}

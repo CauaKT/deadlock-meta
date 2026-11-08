@@ -25,4 +25,5 @@ npm install
 # Iniciar servidor local
 npm run dev
 
-Acesse http://localhost:3000 no navegador.
+# Entrar no Servidor local
+http://localhost:3000

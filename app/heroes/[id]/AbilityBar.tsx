@@ -2,11 +2,19 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 import type { HeroAbilityFull } from "@/lib/deadlock";
-import { ABILITY_NOTES } from "@/lib/abilityNotes";
 const TIER_COSTS = [1, 2, 5];
 const COOLDOWN_KEY = "AbilityCooldown";
 // Chips do cabeçalho, na ordem da wiki: alcance, raio, duração
-const CHIP_KEYS = ["AbilityCastDelay", "AbilityCastRange", "Radius", "AbilityDuration"];
+const CHIP_KEYS = [
+  "ChannelDuration",
+  "AbilityChannelDuration",
+  "ChannelTime",
+  "AbilityChannelTime",
+  "AbilityCastDelay",
+  "AbilityCastRange",
+  "Radius",
+  "AbilityDuration",
+];
 
 const nf = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 function fmt(n: number) {
@@ -45,9 +53,10 @@ const BOX_STYLES: Record<string, { box: string; badge: string; glyph: string }> 
 function iconColor(key: string): string {
   if (/heal/i.test(key)) return "#00ff99";
   if (/speed/i.test(key)) return "#00ff99";
+  if (/channel/i.test(key)) return "#ffeb3b";
   if (/distance|range|radius/i.test(key)) return "#b57edc";
   if (/amp/i.test(key)) return "#f0553d";
-  if (/damage|dps/i.test(key)) return "#ff5a47";
+  if (/damage|dps|strike/i.test(key)) return "#ff5a47";
   return "#cdcdcd";
 }
 
@@ -94,10 +103,8 @@ function DiamondIcon() {
 
 export default function AbilityBar({
   abilities: rawAbilities,
-  heroKey,
 }: {
   abilities?: HeroAbilityFull[];
-  heroKey?: string;
 }) {
   const abilities: HeroAbilityFull[] = (rawAbilities ?? [])
     .filter(Boolean)
@@ -112,6 +119,7 @@ export default function AbilityBar({
       headerKeys: a.headerKeys ?? [],
       basicKeys: a.basicKeys ?? [],
       groups: a.groups ?? [],
+      sections: a.sections ?? [],
     }));
 
   const [selectedSlot, setSelectedSlot] = useState(abilities[0]?.slot ?? 1);
@@ -127,7 +135,6 @@ export default function AbilityBar({
 
   const selected = abilities.find((a) => a.slot === selectedSlot) ?? abilities[0];
   const level = levels[selected.slot] ?? 0;
-  const notes = (heroKey && ABILITY_NOTES[heroKey]?.[selected.slot]) || [];
   const setLevel = (value: number) =>
     setLevels((prev) => ({ ...prev, [selected.slot]: value }));
 
@@ -289,100 +296,238 @@ export default function AbilityBar({
               <p className="mt-3 text-[0.95rem]">{selected.description}</p>
             ) : null}
 
-            {groups.map((g, gi) => (
-              <div key={gi} className="mt-3">
-                {g.label && <p className="dl-label mb-1">{g.label}</p>}
-                <div className="grid auto-cols-fr grid-flow-col gap-1">
-                  {g.boxes.map(({ prop, row: r }) => {
-                    // Efeito de status (Atordoa, Imobiliza...): caixa cinza com nome + duração
-                    if (prop.valueKey) {
-                      return (
-                        <div
-                          key={r.key}
-                          className={`dl-stat dl-noise flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${BOX_STYLES.none.box}`}
-                        >
-                          <div className="flex items-center justify-center gap-1.5 font-bold text-[#ffefd7]">
-                            {prop.icon && <TintIcon src={prop.icon} color="#b58cff" className="h-5 w-5" />}
-                            <span className="text-[1.25rem] leading-none">{prop.statusName}</span>
-                          </div>
-                          <p
-                            className={`mt-1 text-[0.8rem] font-semibold leading-tight ${
+            {/* Renderiza seções estruturadas (ex.: ativação primária + texto intermediário + ativação secundária) */}
+            {selected.sections && selected.sections.length > 0 ? (
+              selected.sections.map((sec, sIdx) => {
+                const secGroups = sec.groups
+                  .map((g) => {
+                    const boxes = g.props
+                      .map((p) => {
+                        const row = rows.find((r) => r.key === (p.valueKey || p.key));
+                        if (!row) return null;
+                        return { prop: p, row };
+                      })
+                      .filter((b): b is NonNullable<typeof b> => b !== null);
+                    return { label: g.label, boxes };
+                  })
+                  .filter((g) => g.boxes.length > 0);
+
+                const secBasic = sec.basicKeys
+                  .map((k) => rows.find((r) => r.key === k))
+                  .filter((r): r is NonNullable<typeof r> => Boolean(r));
+
+                // Evita duplicar a descrição principal na seção 0 (pois ela já é renderizada no topo do card)
+                const shouldShowDesc = sIdx > 0 && Boolean(sec.descriptionHtml);
+                const formattedDesc = sec.descriptionHtml
+                  ? sec.descriptionHtml
+                      .replace(/(pressione|press)\b(?:\s*<[^>]*>|[^a-zA-Z0-9À-ÿ]|attack|fire|\+attack){1,200}?\b(para|to)\b/gi, "$1 <strong>Disparo</strong> $2")
+                      .replace(/&nbsp;/gi, " ")
+                      .replace(/\s{2,}/g, " ")
+                  : "";
+
+                return (
+                  <div key={sIdx} className="mt-3 space-y-3">
+                    {shouldShowDesc && (
+                      <div
+                        className="dl-rich text-[0.92rem] leading-relaxed text-[#dedede]"
+                        dangerouslySetInnerHTML={{ __html: formattedDesc }}
+                      />
+                    )}
+
+                    {secGroups.map((g, gi) => (
+                      <div key={gi} className="mt-2">
+                        {g.label && <p className="dl-label mb-1">{g.label}</p>}
+                        <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+                          {g.boxes.map(({ prop, row: r }) => {
+                            if (prop.valueKey) {
+                              return (
+                                <div
+                                  key={r.key}
+                                  className={`dl-stat dl-noise flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${BOX_STYLES.none.box}`}
+                                >
+                                  <div className="flex items-center justify-center gap-1.5 font-bold text-[#ffefd7]">
+                                    {prop.icon && <TintIcon src={prop.icon} color="#b58cff" className="h-5 w-5" />}
+                                    <span className="text-[1.25rem] leading-none">{prop.statusName}</span>
+                                  </div>
+                                  <p
+                                    className={`mt-1 text-[0.8rem] font-semibold leading-tight ${
+                                      r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
+                                    }`}
+                                  >
+                                    {show(r)}
+                                    {r.unit}{" "}
+                                    <span className="font-medium text-[#cdcdcd]">
+                                      {r.postLabel || r.label}
+                                    </span>
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            const st = BOX_STYLES[r.scaleType ?? "none"];
+                            return (
+                              <div
+                                key={r.key}
+                                className={`dl-stat dl-noise relative flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${st.box}`}
+                              >
+                                {r.scale ? (
+                                  <span
+                                    className={`absolute -top-2.5 right-1 z-10 flex items-center gap-0.5 rounded-[3px] border border-black/40 bg-[#181124] px-1 py-0.5 text-[0.72rem] font-black shadow-md ${st.badge}`}
+                                  >
+                                    {st.glyph} x{fmt(r.scale)}
+                                  </span>
+                                ) : null}
+                                <div
+                                  className={`flex items-center justify-center gap-1.5 font-bold ${
+                                    r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
+                                  }`}
+                                >
+                                  {r.icon && (
+                                    <TintIcon src={r.icon} color={iconColor(r.key)} className="h-[1.1rem] w-[1.1rem]" />
+                                  )}
+                                  <span className="text-[1.55rem] leading-none">{show(r)}</span>
+                                  <span className="text-[0.85rem]">{r.unit}</span>
+                                </div>
+                                <p className="mt-1 text-[0.8rem] font-semibold leading-tight text-[#ffefd7]">
+                                  {r.postLabel || r.label}
+                                </p>
+                                {r.bonus ? (
+                                  <p className="text-[0.65rem] font-bold text-[#99f051]">
+                                    ({r.bonus > 0 ? "+" : ""}
+                                    {fmt(r.bonus)}
+                                    {r.unit})
+                                  </p>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {secBasic.length > 0 && (
+                      <div className="flex flex-wrap justify-around gap-x-6 gap-y-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5">
+                        {secBasic.map((r) => (
+                          <div
+                            key={r.key}
+                            className={`flex items-baseline gap-1.5 ${
                               r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
                             }`}
                           >
-                            {show(r)}
-                            {r.unit}{" "}
-                            <span className="font-medium text-[#cdcdcd]">
+                            {r.icon && (
+                              <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 self-center" />
+                            )}
+                            <span className="text-[1.05rem] font-bold leading-none">
+                              {show(r)}
+                              <span className="text-[0.75rem]">{r.unit}</span>
+                            </span>
+                            <span className="text-[0.8rem] font-medium text-[#cdcdcd]">
                               {r.postLabel || r.label}
                             </span>
-                          </p>
-                        </div>
-                      );
-                    }
-
-                    const st = BOX_STYLES[r.scaleType ?? "none"];
-                    return (
-                      <div
-                        key={r.key}
-                        className={`dl-stat dl-noise flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${st.box}`}
-                      >
-                        {r.scale ? (
-                          <span
-                            className={`absolute -right-2 -top-3 z-10 rotate-6 text-[0.8rem] font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] ${st.badge}`}
-                          >
-                            {st.glyph} x {fmt(r.scale)}
-                          </span>
-                        ) : null}
-                        <div
-                          className={`flex items-center justify-center gap-1.5 font-bold ${
-                            r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                          }`}
-                        >
-                          {r.icon && (
-                            <TintIcon src={r.icon} color={iconColor(r.key)} className="h-[1.1rem] w-[1.1rem]" />
-                          )}
-                          <span className="text-[1.55rem] leading-none">{show(r)}</span>
-                          <span className="text-[0.85rem]">{r.unit}</span>
-                        </div>
-                        <p className="mt-1 text-[0.8rem] font-semibold leading-tight text-[#ffefd7]">
-                          {r.postLabel || r.label}
-                        </p>
-                        {r.bonus ? (
-                          <p className="text-[0.65rem] font-bold text-[#99f051]">
-                            ({r.bonus > 0 ? "+" : ""}
-                            {fmt(r.bonus)}
-                            {r.unit})
-                          </p>
-                        ) : null}
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            {basicRows.length > 0 && (
-              <div className="mt-1 flex flex-wrap justify-around gap-x-6 gap-y-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5">
-                {basicRows.map((r) => (
-                  <div
-                    key={r.key}
-                    className={`flex items-baseline gap-1.5 ${
-                      r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                    }`}
-                  >
-                    {r.icon && (
-                      <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 self-center" />
                     )}
-                    <span className="text-[1.05rem] font-bold leading-none">
-                      {show(r)}
-                      <span className="text-[0.75rem]">{r.unit}</span>
-                    </span>
-                    <span className="text-[0.8rem] font-medium text-[#cdcdcd]">
-                      {r.postLabel || r.label}
-                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <>
+                {groups.map((g, gi) => (
+                  <div key={gi} className="mt-3">
+                    {g.label && <p className="dl-label mb-1">{g.label}</p>}
+                    <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+                      {g.boxes.map(({ prop, row: r }) => {
+                        if (prop.valueKey) {
+                          return (
+                            <div
+                              key={r.key}
+                              className={`dl-stat dl-noise flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${BOX_STYLES.none.box}`}
+                            >
+                              <div className="flex items-center justify-center gap-1.5 font-bold text-[#ffefd7]">
+                                {prop.icon && <TintIcon src={prop.icon} color="#b58cff" className="h-5 w-5" />}
+                                <span className="text-[1.25rem] leading-none">{prop.statusName}</span>
+                              </div>
+                              <p
+                                className={`mt-1 text-[0.8rem] font-semibold leading-tight ${
+                                  r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
+                                }`}
+                              >
+                                {show(r)}
+                                {r.unit}{" "}
+                                <span className="font-medium text-[#cdcdcd]">
+                                  {r.postLabel || r.label}
+                                </span>
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        const st = BOX_STYLES[r.scaleType ?? "none"];
+                        return (
+                          <div
+                            key={r.key}
+                            className={`dl-stat dl-noise relative flex min-h-[72px] flex-col items-center justify-center rounded-[3px] border px-2 py-2 text-center ${st.box}`}
+                          >
+                            {r.scale ? (
+                              <span
+                                className={`absolute -right-1 -top-2.5 z-10 rounded px-1 text-[0.75rem] font-black drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] ${st.badge}`}
+                              >
+                                {st.glyph} x{fmt(r.scale)}
+                              </span>
+                            ) : null}
+                            <div
+                              className={`flex items-center justify-center gap-1.5 font-bold ${
+                                r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
+                              }`}
+                            >
+                              {r.icon && (
+                                <TintIcon src={r.icon} color={iconColor(r.key)} className="h-[1.1rem] w-[1.1rem]" />
+                              )}
+                              <span className="text-[1.55rem] leading-none">{show(r)}</span>
+                              <span className="text-[0.85rem]">{r.unit}</span>
+                            </div>
+                            <p className="mt-1 text-[0.8rem] font-semibold leading-tight text-[#ffefd7]">
+                              {r.postLabel || r.label}
+                            </p>
+                            {r.bonus ? (
+                              <p className="text-[0.65rem] font-bold text-[#99f051]">
+                                ({r.bonus > 0 ? "+" : ""}
+                                {fmt(r.bonus)}
+                                {r.unit})
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
-              </div>
+
+                {basicRows.length > 0 && (
+                  <div className="mt-1 flex flex-wrap justify-around gap-x-6 gap-y-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5">
+                    {basicRows.map((r) => (
+                      <div
+                        key={r.key}
+                        className={`flex items-baseline gap-1.5 ${
+                          r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
+                        }`}
+                      >
+                        {r.icon && (
+                          <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 self-center" />
+                        )}
+                        <span className="text-[1.05rem] font-bold leading-none">
+                          {show(r)}
+                          <span className="text-[0.75rem]">{r.unit}</span>
+                        </span>
+                        <span className="text-[0.8rem] font-medium text-[#cdcdcd]">
+                          {r.postLabel || r.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -423,31 +568,6 @@ export default function AbilityBar({
           </div>
         </div>
       </div>
-
-      {notes.length > 0 && (
-        <div className="w-full max-w-[520px] border-t border-neutral-800/80 pt-4 text-left">
-          <h4 className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-400">
-            Notas
-          </h4>
-          <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-neutral-300">
-            {notes.map((n, i) => (
-              <li key={i}>{n}</li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[10px] text-neutral-500">
-            Fonte:{" "}
-            <a
-              href="https://deadlock.wiki"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-neutral-300"
-            >
-              The Deadlock Wiki
-            </a>{" "}
-            (CC BY-SA)
-          </p>
-        </div>
-      )}
     </div>
   );
 }
