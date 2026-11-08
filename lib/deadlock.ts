@@ -489,8 +489,16 @@ export interface HeroWeapon {
   reloadDuration: number;
   bulletsPerSecond: number;
   damagePerSecond: number;
+  falloffStart: number | null;
+  falloffEnd: number | null;
 }
 
+const UNITS_PER_METER = 39.37;
+
+function unitsToMeters(v: unknown): number | null {
+  const n = toNum(v);
+  return n === null ? null : n / UNITS_PER_METER;
+}
 // Busca os dados da arma principal (a lista de armas é a mesma para todos os heróis)
 export async function fetchHeroWeapon(className?: string): Promise<HeroWeapon | null> {
   if (!className) return null;
@@ -530,6 +538,8 @@ export async function fetchHeroWeapon(className?: string): Promise<HeroWeapon | 
       reloadDuration,
       bulletsPerSecond,
       damagePerSecond,
+      falloffStart: unitsToMeters(i.damage_falloff_start_range),
+      falloffEnd: unitsToMeters(i.damage_falloff_end_range),
     };
   } catch {
     return null;

@@ -16,6 +16,19 @@ const ICON_EXT: Record<string, string> = {
   spirit: "webp",
 };
 
+// Ícones da Deadlock API. A máscara exige CORS: se o bucket bloquear, cai no SVG de reserva.
+const ICON_BASE = "https://assets-bucket.deadlock-api.com/assets-api-res/icons/icons/properties/";
+const ASSET_ROOT = "https://assets-bucket.deadlock-api.com/assets-api-res/";
+const REMOTE_ICONS: Record<string, string> = {
+  reload: "ammo_reload",
+  magazine: "ammo_clip_size",
+  "light-melee": "melee",
+  "heavy-melee": "melee",
+  regeneration: "heal",
+  stamina: "move_stamina_recharge",
+  sprint: "icons/hud/icons/icon_speed.svg",
+  dash: "images/upgrades/mods_utility/sprint_booster.webp",
+};
 // Os ícones são formas de uma cor só: pintamos com a cor desejada usando máscara.
 // Se o arquivo não existir, o ícone simplesmente não aparece (ou usa o fallback).
 function FileIcon({
@@ -30,9 +43,15 @@ function FileIcon({
   fallback?: ReactNode;
 }) {
   const [ok, setOk] = useState(false);
-  const url = `/icons/stats/${name}.${ICON_EXT[name] ?? "webp"}`;
+  const remote = REMOTE_ICONS[name];
+    const url = !remote
+    ? `/icons/stats/${name}.${ICON_EXT[name] ?? "webp"}`
+    : remote.includes("/")
+      ? `${ASSET_ROOT}${remote}`
+      : `${ICON_BASE}${remote}.svg`;
   useEffect(() => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => setOk(true);
     img.onerror = () => setOk(false);
     img.src = url;
@@ -197,6 +216,19 @@ type Theme = keyof typeof THEMES;
 
 const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
 
+const GAME_ICON_BASE = "https://assets-bucket.deadlock-api.com/assets-api-res/icons";
+const GAME_ICONS: Record<string, string> = {
+  health: "health.svg",
+  regeneration: "heal.svg",
+  "move-speed": "move_speed.svg",
+  "bullets-per-second": "fire_rate.svg",
+  "damage-per-bullet": "damage_bullet_color.svg",
+  "spirit-power": "spirit.svg",
+};
+// brightness(0) + invert deixa qualquer ícone do jogo numa cor só (creme)
+const CREAM_FILTER =
+  "brightness(0) saturate(100%) invert(93%) sepia(12%) saturate(500%) hue-rotate(0deg) brightness(105%)";
+
 function StatIcon({
   name,
   className = "h-5 w-5",
@@ -206,12 +238,31 @@ function StatIcon({
   className?: string;
   color?: string;
 }) {
+  const [failed, setFailed] = useState(false);
+  const file = GAME_ICONS[name];
+
+  if (!file || failed) {
+    return (
+      <FileIcon
+        name={name}
+        className={className}
+        color={color}
+        fallback={<Icon name={name} className={className} color={color} />}
+      />
+    );
+  }
+
   return (
-    <FileIcon
-      name={name}
-      className={className}
-      color={color}
-      fallback={<Icon name={name} className={className} color={color} />}
+    <img
+      src={`${GAME_ICON_BASE}/${file}`}
+      alt=""
+      aria-hidden
+      className={`${className} shrink-0 object-contain`}
+      style={{ filter: CREAM_FILTER }}
+      onError={() => setFailed(true)}
+      ref={(el) => {
+        if (el && el.complete && el.naturalWidth === 0) setFailed(true);
+      }}
     />
   );
 }
@@ -326,12 +377,12 @@ export default function HeroStats({
               Stats Base
             </h3>
             <p className="inline-block -skew-x-6 bg-[#120c0c] px-3 py-1 text-xs font-semibold text-[#f4efe6]">
-              Sem itens. O slider adiciona os boons: os ganhos de nível que você recebe com as almas.
+              Sem itens. O slider adiciona as bênçãos: os ganhos de nível que você recebe com as almas.
             </p>
           </div>
           <div className="flex items-center gap-3 sm:min-w-[320px]">
             <span className="text-[11px] font-black uppercase tracking-wider text-neutral-300">
-              Boons
+              Bênçãos
             </span>
             <input
               type="range"
@@ -341,7 +392,7 @@ export default function HeroStats({
               onChange={(e) => setBoons(Number(e.target.value))}
               style={{ "--p": `${(boons / MAX_BOONS) * 100}%`, "--c": accent } as CSSProperties}
               className="dl-range flex-1 cursor-pointer"
-              aria-label="Boons"
+              aria-label="Bênçãos"
             />
             <span className="font-deadlock w-9 text-right text-4xl font-black text-[#f4efe6]">
               {boons}
@@ -351,22 +402,22 @@ export default function HeroStats({
       </div>
 
       <Panel theme="weapon" className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1.5">
+        <div className="relative min-h-[11rem]">
+          <div className="relative z-10 space-y-1.5 pr-36">
             <Header icon="weapon" label="Arma" theme="weapon" />
             <div className="font-deadlock text-2xl font-black text-[#f4efe6]">{weaponTitle}</div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="contents">
             {weaponImage && (
               <img
                 src={weaponImage}
                 alt=""
-                className="hidden h-20 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] sm:block"
+                className="pointer-events-none absolute right-24 top-1/2 hidden h-48 max-w-[62%] -translate-y-1/2 object-contain object-right drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] sm:block"
               />
             )}
             {weapon && (
-              <div className="flex flex-col items-end">
-                <StatIcon name="dps" className="mb-1 h-5 w-5" />
+              <div className="absolute right-0 top-0 z-10 flex flex-col items-end">
+                <StatIcon name="damage-per-bullet" className="mb-1 h-5 w-5" />
                 <div className="font-deadlock text-5xl font-black leading-none text-[#f4efe6]">{n1(dps)}</div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-[#d6c9b4]/80">
                   Dano por segundo
@@ -376,6 +427,22 @@ export default function HeroStats({
           </div>
         </div>
 
+        {weapon && weapon.falloffStart !== null && weapon.falloffEnd !== null && (
+          <div className="relative z-10 -mt-12 flex justify-end">
+            <div className={`flex items-center gap-2 px-3 py-1.5 ${PLATE}`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#d6c9b4]/80">
+                Queda de dano
+              </span>
+              <span className="font-deadlock text-sm font-black text-[#f4efe6]">
+                {Math.round(weapon.falloffStart)} m
+              </span>
+              <span aria-hidden className="text-[#d6c9b4]/80">→</span>
+              <span className="font-deadlock text-sm font-black text-[#f4efe6]">
+                {Math.round(weapon.falloffEnd)} m
+              </span>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {weapon && (
             <>
@@ -383,7 +450,7 @@ export default function HeroStats({
                 icon="damage-per-bullet"
                 label="Dano por bala"
                 value={n2(bulletDamage)}
-                sub={dmgPer > 0 ? `+${n2(dmgPer)}/boon` : undefined}
+                sub={dmgPer > 0 ? `+${n2(dmgPer)}/bênção` : undefined}
               />
               <Row icon="bullets-per-second" label="Balas por segundo" value={n2(weapon.bulletsPerSecond)} />
               <Row icon="magazine" label="Pente" value={String(weapon.clipSize)} />
@@ -392,15 +459,15 @@ export default function HeroStats({
           )}
           <Row
             icon="light-melee"
-            label="Melee leve"
+            label="Golpe leve"
             value={String(Math.round(lightBase + lightPer * boons))}
-            sub={lightPer > 0 ? `+${n2(lightPer)}/boon` : undefined}
+            sub={lightPer > 0 ? `+${n2(lightPer)}/bênção` : undefined}
           />
           <Row
             icon="heavy-melee"
-            label="Melee pesado"
+            label="Golpe pesado"
             value={String(Math.round(heavyBase + heavyPer * boons))}
-            sub={heavyPer > 0 ? `+${n2(heavyPer)}/boon` : undefined}
+            sub={heavyPer > 0 ? `+${n2(heavyPer)}/bênção` : undefined}
           />
         </div>
       </Panel>
@@ -412,14 +479,14 @@ export default function HeroStats({
             icon="health"
             value={String(Math.round(health))}
             label="Vida"
-            sub={healthPer > 0 ? `+${n2(healthPer)}/boon` : undefined}
+            sub={healthPer > 0 ? `+${n2(healthPer)}/bênção` : undefined}
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Row icon="regeneration" label="Regeneração" value={`${n1(get("base_health_regen"))}/s`} />
             <Row icon="move-speed" label="Velocidade" value={`${n1(get("max_move_speed"))} m/s`} />
-            <Row icon="sprint" label="Sprint" value={`+${n1(get("sprint_speed"))} m/s`} />
+            <Row icon="sprint" label="Corrida" value={`+${n1(get("sprint_speed"))} m/s`} />
             <Row icon="stamina" label="Stamina" value={String(get("stamina"))} />
-            <Row icon="dash" label="Dash" value={`${n1(get("ground_dash_distance_in_meters"))} m`} />
+            <Row icon="dash" label="Investida" value={`${n1(get("ground_dash_distance_in_meters"))} m`} />
           </div>
         </Panel>
 
@@ -429,11 +496,8 @@ export default function HeroStats({
             icon="spirit-power"
             value={n1(spirit)}
             label="Poder de espírito"
-            sub={spiritPer > 0 ? `+${n2(spiritPer)}/boon` : undefined}
+            sub={spiritPer > 0 ? `+${n2(spiritPer)}/bênção` : undefined}
           />
-          <p className="text-xs leading-relaxed text-[#d9c8ea]/80">
-            O poder de espírito vem dos boons e dos itens. Cada ponto fortalece as habilidades que escalam com ele.
-          </p>
         </Panel>
       </div>
     </div>
