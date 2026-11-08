@@ -6,6 +6,7 @@ import {
   fetchHeroesAnalytics,
   fetchHeroAbilitiesFull,
   fetchHeroWeapon,
+  fetchHeroBuild,
   TIER_THRESHOLDS,
   PATCHES,
 } from "@/lib/deadlock";
@@ -13,6 +14,7 @@ import Link from "next/link";
 import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
+import HeroGuide from "./HeroGuide";
 import fs from "fs";
 import path from "path";
 
@@ -59,7 +61,7 @@ function extractTags(h: any): string[] {
 
 // Lê a cor de interface do herói (RGB) direto da API
 function extractColor(h: any): [number, number, number] | null {
-  const c = h?.colors?.ui ?? h?.colors?.glow_team;
+  const c = h?.colors?.style ?? h?.colors?.ui ?? h?.colors?.glow_team;
   if (Array.isArray(c) && c.length >= 3) {
     const [r, g, b] = c.map(Number);
     if ([r, g, b].every(Number.isFinite)) return [r, g, b];
@@ -67,40 +69,7 @@ function extractColor(h: any): [number, number, number] | null {
   return null;
 }
 
-function getDamageProfile(heroName: string) {
-  const name = heroName.toLowerCase();
-  const spiritHeroes = ["sinclair", "lady geist", "seven", "dynamo", "kelvin", "grey talon", "pocket", "paradox"];
-  const weaponHeroes = ["haze", "wraith", "infernus", "vindicta", "mcginnis", "mirage", "ivy"];
 
-  if (spiritHeroes.some((h) => name.includes(h))) {
-    return {
-      type: "Dano de Espírito (Spirit)",
-      desc: "A maior parte do impacto deste herói escala com Poder de Espírito (Itens Roxos). Suas habilidades causam dano massivo e debuffs contínuos.",
-      badge: "text-purple-400 bg-purple-950/60 border border-purple-800/60",
-      barStyle: "bg-purple-500",
-      percent: 85,
-    };
-  }
-
-  if (weaponHeroes.some((h) => name.includes(h))) {
-    return {
-      type: "Dano de Armamento (Weapon)",
-      desc: "O dano principal vem de sua arma de fogo (Itens Laranjas). Focado em cadência de tiro, acertos críticos e velocidade de projétil.",
-      badge: "text-amber-400 bg-amber-950/60 border border-amber-800/60",
-      barStyle: "bg-amber-500",
-      percent: 85,
-    };
-  }
-
-  // Híbrido: FUSÃO EXATA DE LARANJA (ARMA) COM ROXO (ESPÍRITO)
-  return {
-    type: "Dano Híbrido (Armamento & Espírito)",
-    desc: "Combina trocas com arma e dano de feitiços. Escala de forma balanceada tanto com itens de Armamento (Laranja) quanto de Espírito (Roxo).",
-    badge: "text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-pink-400 to-purple-400 border border-pink-500/40 bg-[#161219]",
-    barStyle: "bg-gradient-to-r from-amber-500 via-pink-500 to-purple-600",
-    percent: 65,
-  };
-}
 
 function calculateTier(winRate: number) {
   if (winRate >= TIER_THRESHOLDS.META) return { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" };
@@ -156,7 +125,6 @@ export default async function HeroPage({
   const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
   const tier = calculateTier(winRate);
   const enName = heroesMap[heroId]?.name ?? hero.name; // nome em inglês, para buscas e imagem
-  const damageProfile = getDamageProfile(enName);
 
   const heroKey = enName.toLowerCase();
 
@@ -170,10 +138,6 @@ export default async function HeroPage({
 
   const rawLore = typeof hero.description === "object" ? hero.description?.lore : hero.description;
   const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";
-
-  // 3. Playstyle real e tático
-  const rawPlaystyle = typeof hero.description === "object" ? hero.description?.playstyle : "";
-  const heroPlaystyle = cleanText(rawPlaystyle) || `Foque no controle de rotas no início do jogo, utilize as tirolesas para emboscadas e monte seus itens essenciais antes das disputas da Urna no centro do mapa.`;
 
  // 4. Imagem de Corpo Inteiro
   const heroSlug = enName.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -190,7 +154,12 @@ export default async function HeroPage({
 
   const abilities = await fetchHeroAbilitiesFull(heroId, hero.items);
   const weapon = await fetchHeroWeapon(hero.items?.weapon_primary);
+  const build = await fetchHeroBuild(heroesMap[heroId]?.popular_items);
   const weaponImage = hero.shop_stat_display?.weapon_stats_display?.weapon_image_webp;
+  const weaponAttributes = hero.shop_stat_display?.weapon_stats_display?.weapon_attributes;
+  const weaponTags: string[] = Array.isArray(weaponAttributes)
+    ? weaponAttributes.filter((a: unknown): a is string => typeof a === "string")
+    : [];
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
@@ -208,7 +177,13 @@ export default async function HeroPage({
       {/* ========================================================================= */}
       {/* HERO BANNER PRINCIPAL COM 3 TÍTULOS E LORE EXPANSÍVEL                     */}
       {/* ========================================================================= */}
-      <section className="relative rounded-3xl border border-[#23352c] bg-gradient-to-r from-[#0c120f] via-[#0e1613] to-[#121c17] overflow-hidden p-6 md:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col md:flex-row items-center md:items-stretch justify-between gap-8 min-h-[460px]">
+         <section
+        className="dl-noise relative rounded-[3px_8px_3px_6px] border-2 overflow-hidden p-6 md:p-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col md:flex-row items-center md:items-stretch justify-between gap-8 min-h-[460px]"
+        style={{
+          borderColor: `color-mix(in srgb, ${tagBg} 45%, #1b2621)`,
+          background: `radial-gradient(ellipse at 80% 45%, color-mix(in srgb, ${tagBg} 35%, transparent), transparent 60%), linear-gradient(135deg, color-mix(in srgb, ${tagBg} 18%, #0c1110), #0c1110 70%)`,
+        }}
+      >
         
         {/* Badge do Tier fixado no canto superior direito */}
         <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-20">
@@ -273,10 +248,14 @@ export default async function HeroPage({
             src={heroArt}
             alt={enName}
             className="h-full w-full object-cover object-top"
+            style={{
+              maskImage: "linear-gradient(to right, transparent, #000 40%)",
+              WebkitMaskImage: "linear-gradient(to right, transparent, #000 40%)",
+            }}
           />
-          {/* Fusão com o fundo do card (esquerda e embaixo no mobile) */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0e1613] via-[#0e1613]/40 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#121c17] to-transparent md:hidden" />
+          {/* No mobile, escurece a esquerda da arte para o texto continuar legível */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0c1110] via-[#0c1110]/40 to-transparent md:hidden" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0c1110] to-transparent md:hidden" />
         </div>
 
         <div className="hidden md:flex absolute bottom-6 right-6 z-20 max-w-[44%] flex-col items-end gap-3 pointer-events-none">
@@ -313,31 +292,10 @@ export default async function HeroPage({
           levelUp={hero.standard_level_up_upgrades ?? {}}
           weapon={weapon}
           weaponImage={weaponImage}
+          weaponTags={weaponTags}
           accent={tagBg}
         />
 
-        {/* Barra de Escalonamento com Fusão de Cores */}
-        <div className="dl-noise relative overflow-hidden rounded-[3px_8px_3px_6px] border-[3px] border-[#2a2a2a] bg-[#0c0c0c]/90 p-5 space-y-2.5 shadow-[inset_0_0_36px_rgba(0,0,0,0.65),0_10px_28px_rgba(0,0,0,0.75)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-            <span className="text-xs font-black uppercase tracking-wider text-neutral-400">
-              Escalonamento de Dano Principal
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wide ${damageProfile.badge}`}>
-              {damageProfile.type}
-            </span>
-          </div>
-
-          <div className="w-full h-3 bg-neutral-950/80 rounded-full overflow-hidden border border-neutral-800">
-            <div
-              className={`h-full rounded-full ${damageProfile.barStyle}`}
-              style={{ width: `${damageProfile.percent}%` }}
-            />
-          </div>
-
-          <p className="text-xs text-neutral-400 leading-relaxed pt-0.5">
-            {damageProfile.desc}
-          </p>
-        </div>
       </section>
 
       {/* ========================================================================= */}
@@ -350,16 +308,15 @@ export default async function HeroPage({
         <AbilityBar key={heroId} abilities={abilities} accent={tagBg} accentText={tagText} />
       </section>
 
-      {/* ========================================================================= */}
-      {/* GUIA DE ESTILO DE JOGO REAL DO PERSONAGEM (PLAYSTYLE)                     */}
-      {/* ========================================================================= */}
-      <section className="rounded-3xl border border-neutral-800/80 bg-[#0c120f]/80 p-6 md:p-8 space-y-4">
-        <h3 className="text-lg font-black text-[#f4efe6] uppercase tracking-wider flex items-center gap-2">
-          <span className="text-amber-500">✦</span> Como Jogar de {enName} (Playstyle)
-        </h3>
-        <p className="text-xs md:text-sm text-neutral-300 leading-relaxed">
-          {heroPlaystyle}
-        </p>
+      {/* Como jogar: classe, complexidade e itens mais escolhidos */}
+      <section className="space-y-4">
+        <h2 className="text-xl md:text-2xl font-black text-[#f4efe6]">Como Jogar de {enName}</h2>
+        <HeroGuide
+          heroType={heroesMap[heroId]?.hero_type}
+          complexity={heroesMap[heroId]?.complexity}
+          build={build}
+          accent={tagBg}
+        />
       </section>
     </div>
   );

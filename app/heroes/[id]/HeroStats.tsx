@@ -2,11 +2,28 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HeroWeapon } from "@/lib/deadlock";
+import SlantFrame, { type Slant } from "./SlantFrame";
 
 const MAX_BOONS = 35;
 
 const n1 = (n: number) => n.toFixed(1);
 const n2 = (n: number) => n.toFixed(2);
+
+const WEAPON_TAG_LABELS: Record<string, string> = {
+  EWeaponAttribute_MediumRange: "Alcance médio",
+  EWeaponAttribute_BurstFire: "Rajada",
+  EWeaponAttribute_BeamWeapon: "Arma de feixe",
+  EWeaponAttribute_Bouncy: "Ricochete",
+  EWeaponAttribute_CloseRange: "Alcance curto",
+  EWeaponAttribute_HeavyHitter: "Golpe pesado",
+  EWeaponAttribute_LongRange: "Alcance longo",
+  EWeaponAttribute_RapidFire: "Tiro rápido",
+  EWeaponAttribute_Spreadshot: "Tiro espalhado",
+};
+// Atributo sem tradução cadastrada cai no nome do enum separado em palavras
+const weaponTagLabel = (raw: string) =>
+  WEAPON_TAG_LABELS[raw] ??
+  raw.replace(/^EWeaponAttribute_/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
 
 // Ícones ficam em public/icons/stats/<nome>.<extensão>.
 // Por padrão são .webp; os que forem de outro tipo entram aqui (ex.: dps: "svg").
@@ -267,8 +284,25 @@ function StatIcon({
   );
 }
 
-function Panel({ theme, className = "", children }: { theme: Theme; className?: string; children: ReactNode }) {
+function Panel({
+  theme,
+  slant,
+  className = "",
+  children,
+}: {
+  theme: Theme;
+  slant?: Slant;
+  className?: string;
+  children: ReactNode;
+}) {
   const t = THEMES[theme];
+    if (slant) {
+    return (
+      <SlantFrame shape={slant} border={t.border} background={`${t.bg}, #0e1512`} className={className}>
+        {children}
+      </SlantFrame>
+    );
+  }
   return (
     <div
       className={`dl-noise dl-halftone relative overflow-hidden rounded-[3px_8px_3px_6px] border-2 p-5 ${className}`}
@@ -322,12 +356,14 @@ export default function HeroStats({
   levelUp,
   weapon,
   weaponImage,
+  weaponTags,
   accent,
 }: {
   stats: Record<string, { value?: number | string }>;
   levelUp: Record<string, number>;
   weapon: HeroWeapon | null;
   weaponImage?: string;
+  weaponTags: string[];
   accent: string;
 }) {
   const [boons, setBoons] = useState(0);
@@ -361,12 +397,10 @@ export default function HeroStats({
 
   return (
     <div className="space-y-4">
-      <div
-        className="dl-noise dl-halftone relative overflow-hidden rounded-[3px_8px_3px_6px] border-2 p-5 shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
-        style={{
-          borderColor: `color-mix(in srgb, ${accent} 45%, #1b2621)`,
-          background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 30%, #0e1512), #0e1512 75%)`,
-        }}
+      <SlantFrame
+        shape="narrowTop"
+        border={`color-mix(in srgb, ${accent} 45%, #1b2621)`}
+        background={`linear-gradient(135deg, color-mix(in srgb, ${accent} 30%, #0e1512), #0e1512 75%)`}
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
@@ -399,13 +433,25 @@ export default function HeroStats({
             </span>
           </div>
         </div>
-      </div>
+      </SlantFrame>
 
       <Panel theme="weapon" className="space-y-4">
         <div className="relative min-h-[11rem]">
           <div className="relative z-10 space-y-1.5 pr-36">
             <Header icon="weapon" label="Arma" theme="weapon" />
-            <div className="font-deadlock text-2xl font-black text-[#f4efe6]">{weaponTitle}</div>
+            <div className="font-deadlock text-4xl font-black text-[#f4efe6]">{weaponTitle}</div>
+            {weaponTags.length > 0 && (
+              <div className="flex flex-wrap gap-2.5 pt-2">
+                {weaponTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className={`px-3.5 py-1.5 text-sm font-semibold text-[#f4efe6] ${PLATE}`}
+                  >
+                    {weaponTagLabel(tag)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="contents">
             {weaponImage && (
@@ -417,8 +463,10 @@ export default function HeroStats({
             )}
             {weapon && (
               <div className="absolute right-0 top-0 z-10 flex flex-col items-end">
-                <StatIcon name="damage-per-bullet" className="mb-1 h-5 w-5" />
-                <div className="font-deadlock text-5xl font-black leading-none text-[#f4efe6]">{n1(dps)}</div>
+                <div className="flex items-center gap-2">
+                  <StatIcon name="damage-per-bullet" className="h-8 w-8" />
+                  <div className="font-deadlock text-5xl font-black leading-none text-[#f4efe6]">{n1(dps)}</div>
+                </div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-[#d6c9b4]/80">
                   Dano por segundo
                 </div>
@@ -473,7 +521,7 @@ export default function HeroStats({
       </Panel>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Panel theme="vitality" className="space-y-4">
+        <Panel theme="vitality" slant="slantLeft" className="space-y-4">
           <Header icon="vitality" label="Vitalidade" theme="vitality" />
           <BigStat
             icon="health"
@@ -490,7 +538,7 @@ export default function HeroStats({
           </div>
         </Panel>
 
-        <Panel theme="spirit" className="space-y-4">
+        <Panel theme="spirit" slant="slantRight" className="space-y-4">
           <Header icon="spirit" label="Espírito" theme="spirit" />
           <BigStat
             icon="spirit-power"

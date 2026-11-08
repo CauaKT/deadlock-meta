@@ -545,3 +545,78 @@ export async function fetchHeroWeapon(className?: string): Promise<HeroWeapon | 
     return null;
   }
 }
+
+export interface PopularItem {
+  className: string;
+  name: string;
+  image: string | null;
+  pickPct: number;
+}
+
+export interface HeroBuild {
+  updatedAt: number | null;
+  early: PopularItem[];
+  mid: PopularItem[];
+  late: PopularItem[];
+}
+
+const ITEMS_PER_PHASE = 4;
+
+// A lista de heróis só traz o class_name dos itens; nome e ícone vêm de /items/{class_name}
+export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
+  if (!popular || typeof popular !== "object") return null;
+
+  const top = (list: unknown) =>
+    (Array.isArray(list) ? list : [])
+      .map((i: any) => ({ className: i?.class_name, pickPct: toNum(i?.pick_pct) }))
+      .filter(
+        (i): i is { className: string; pickPct: number } =>
+          typeof i.className === "string" && i.pickPct !== null,
+      )
+      .sort((a, b) => b.pickPct - a.pickPct)
+      .slice(0, ITEMS_PER_PHASE);
+
+  const picks = {
+    early: top(popular.early_game),
+    mid: top(popular.mid_game),
+    late: top(popular.late_game),
+  };
+  const classNames = Array.from(
+    new Set([...picks.early, ...picks.mid, ...picks.late].map((p) => p.className)),
+  );
+  if (classNames.length === 0) return null;
+
+  const details = new Map<string, { name: string; image: string | null }>();
+  await Promise.all(
+    classNames.map(async (className) => {
+      try {
+        const res = await fetch(
+          `https://api.deadlock-api.com/v1/assets/items/${encodeURIComponent(className)}?language=brazilian`,
+          { headers: { Accept: "application/json" }, next: { revalidate: 86400 } },
+        );
+        if (!res.ok) return;
+        const item = await res.json();
+        if (typeof item?.name !== "string") return;
+        details.set(className, {
+          name: item.name,
+          image: typeof item.shop_image_webp === "string" ? item.shop_image_webp : null,
+        });
+      } catch {
+        return;
+      }
+    }),
+  );
+
+  const resolve = (list: { className: string; pickPct: number }[]): PopularItem[] =>
+    list.flatMap((p) => {
+      const d = details.get(p.className);
+      return d ? [{ className: p.className, pickPct: p.pickPct, ...d }] : [];
+    });
+
+  return {
+    updatedAt: toNum(popular.timestamp),
+    early: resolve(picks.early),
+    mid: resolve(picks.mid),
+    late: resolve(picks.late),
+  };
+}
