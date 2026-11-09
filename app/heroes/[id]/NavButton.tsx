@@ -25,7 +25,7 @@ export default function NavButton({
           style={{ clipPath: clip, backgroundColor: `color-mix(in srgb, ${tagBg} 45%, #1b2621)` }}
         >
           <span
-            className={`dl-noise dl-halftone relative flex items-center gap-2.5 overflow-hidden py-2.5 font-deadlock text-xs font-black uppercase tracking-wider ${flip ? "pl-7 pr-5" : "pl-5 pr-7"}`}
+            className={`dl-noise dl-halftone relative flex items-center gap-2.5 overflow-hidden py-2.5 font-deadlock text-xs font-black uppercase tracking-wider ${flip ? "pl-7 pr-5" : "pl-5 pr-7"} ${icon === "grid" ? "flex-row-reverse" : ""}`}
             style={{
               clipPath: clip,
               background: `linear-gradient(135deg, color-mix(in srgb, ${tagBg} 30%, #0e1512), #0e1512 75%)`,
