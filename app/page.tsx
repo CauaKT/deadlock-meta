@@ -259,23 +259,33 @@ export default async function Home({
 
                         <div className="relative z-20 flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${TIER_BY_KEY[hero.tier].badgeBg} ${TIER_BY_KEY[hero.tier].badgeText}`}>
+                            <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${TIER_BY_KEY[hero.tier].badgeBg} ${TIER_BY_KEY[hero.tier].badgeText} ${hero.tier === "META" ? "tier-meta-glow" : ""}`}>
                               Tier {hero.tier}
                             </span>
                             <h4 className="font-deadlock text-2xl text-[#f4efe6] tracking-wide leading-none mt-1.5 truncate">
                               {hero.name}
                             </h4>
                             {hero.tags && hero.tags.length > 0 && (
-                              <div className="mt-2 flex gap-1 overflow-hidden">
-                                {hero.tags.map((tag) => (
-                                  <span
-                                    key={tag}
-                                    style={tagColors(hero.rgb)}
-                                    className="font-deadlock shrink-0 px-2 py-0.5 font-black text-[10px] tracking-wider uppercase shadow -skew-x-6"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
+                              <div className="mt-2 flex w-fit flex-col items-center gap-1">
+                                {[
+                                  hero.tags.slice(0, Math.ceil(hero.tags.length / 2)),
+                                  hero.tags.slice(Math.ceil(hero.tags.length / 2)),
+                                ].map(
+                                  (row, rowIndex) =>
+                                    row.length > 0 && (
+                                      <div key={rowIndex} className="flex gap-1">
+                                        {row.map((tag) => (
+                                          <span
+                                            key={tag}
+                                            style={tagColors(hero.rgb)}
+                                            className="font-deadlock shrink-0 px-2 py-0.5 font-black text-[10px] tracking-wider uppercase shadow -skew-x-6"
+                                          >
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ),
+                                )}
                               </div>
                             )}
                           </div>
@@ -293,30 +303,13 @@ export default async function Home({
                             </p>
                           </div>
                         </div>
-
-                        <div className="relative z-20 grid grid-cols-3 gap-1.5 text-center max-w-[260px]">
-                          <div className="hero-tip-stat py-1 px-1">
-                            <p className="text-[9px] text-neutral-400 uppercase font-bold">
+                        <div className="relative z-20 w-24 text-center">
+                          <div className="hero-tip-stat hero-tip-stat-hero py-1 px-1">
+                            <p className="text-[9px] text-[rgb(var(--hc)/0.8)] uppercase font-bold">
                               Jogos
                             </p>
-                            <p className="font-deadlock text-sm leading-tight font-black text-neutral-100">
+                            <p className="font-deadlock text-sm leading-tight font-black text-[rgb(var(--hc))]">
                               {fmt(hero.matches)}
-                            </p>
-                          </div>
-                          <div className="hero-tip-stat hero-tip-stat-win py-1 px-1">
-                            <p className="text-[9px] text-emerald-400/80 uppercase font-bold">
-                              Vitórias
-                            </p>
-                            <p className="font-deadlock text-sm leading-tight font-black text-emerald-400">
-                              {fmt(hero.wins)}
-                            </p>
-                          </div>
-                          <div className="hero-tip-stat hero-tip-stat-loss py-1 px-1">
-                            <p className="text-[9px] text-rose-400/80 uppercase font-bold">
-                              Derrotas
-                            </p>
-                            <p className="font-deadlock text-sm leading-tight font-black text-rose-400">
-                              {fmt(hero.losses)}
                             </p>
                           </div>
                         </div>

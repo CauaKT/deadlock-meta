@@ -283,6 +283,16 @@ h1, h2, h3, h4 {
 @media (prefers-reduced-motion: reduce) {
   .group:hover .hero-tip-puff { animation: none; }
 }
+
+.group:hover .tier-meta-glow { animation: tier-meta-glow 2.2s ease-in-out infinite; }
+@keyframes tier-meta-glow {
+  0%, 100% { box-shadow: 0 0 0 rgb(34 211 238 / 0); filter: brightness(1); }
+  50% { box-shadow: 0 0 10px rgb(34 211 238 / 0.65); filter: brightness(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .tier-meta-glow { animation: none; }
+}
+
 .hero-tip-stat {
   --sc: 244 239 230;
   clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
@@ -294,6 +304,16 @@ h1, h2, h3, h4 {
 }
 .hero-tip-stat-win { --sc: 52 211 153; }
 .hero-tip-stat-loss { --sc: 251 113 133; }
+.hero-tip-stat-hero { --sc: var(--hc); }
+
+.tier-meta-glow-strong { animation: tier-meta-glow-strong 2s ease-in-out infinite; }
+@keyframes tier-meta-glow-strong {
+  0%, 100% { box-shadow: 0 0 4px rgb(34 211 238 / 0.25); filter: brightness(1); }
+  50% { box-shadow: 0 0 18px 2px rgb(34 211 238 / 0.8); filter: brightness(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tier-meta-glow-strong { animation: none; }
+}
 
 .hero-card-art {
   background:
@@ -305,8 +325,8 @@ h1, h2, h3, h4 {
 .hero-glow {
   background: radial-gradient(
     ellipse 75% 100% at 50% 0%,
-    rgb(var(--atm) / 0.34),
-    rgb(var(--atm) / 0.1) 45%,
+    rgb(var(--atm) / 0.22),
+    rgb(var(--atm) / 0.06) 45%,
     transparent 75%
   );
 }
@@ -315,8 +335,8 @@ h1, h2, h3, h4 {
   border-radius: 9999px;
   background: radial-gradient(
     closest-side,
-    rgb(var(--atm) / 0.2),
-    rgb(var(--atm) / 0.07) 55%,
+    rgb(var(--atm) / 0.12),
+    rgb(var(--atm) / 0.04) 55%,
     transparent 100%
   );
   will-change: transform;

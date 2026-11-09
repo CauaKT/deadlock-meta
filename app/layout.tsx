@@ -47,6 +47,12 @@ export default function RootLayout({
               >
                 Tier List
               </Link>
+              <Link
+                href="/items"
+                className="text-[#f4efe6] hover:text-amber-400 transition-colors"
+              >
+                Itens
+              </Link>
             </nav>
 
             {/* Status da API & GitHub */}

@@ -12,6 +12,7 @@ import {
   PATCHES,
 } from "@/lib/deadlock";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
@@ -158,10 +159,45 @@ export default async function HeroPage({
       <div>
         <Link
           href={`/?patch=${selectedPatch.id}`}
-          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-neutral-900/80 border border-neutral-800 text-xs font-bold uppercase tracking-wider text-neutral-300 hover:text-amber-400 hover:border-amber-500/50 transition-all shadow-md group"
+          className="group inline-flex transition-[filter] hover:brightness-110"
         >
-          <span className="text-amber-500 group-hover:-translate-x-0.5 transition-transform">←</span>
-          <span>Voltar para a Tier List</span>
+          <span
+            className="flex"
+            style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.65))" }}
+          >
+            <span
+              className="flex p-0.5"
+              style={{
+                clipPath: "polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)",
+                backgroundColor: `color-mix(in srgb, ${tagBg} 45%, #1b2621)`,
+              }}
+            >
+              <span
+                className="dl-noise dl-halftone relative flex items-center gap-2.5 overflow-hidden px-5 py-2.5 pr-7 font-deadlock text-xs font-black uppercase tracking-wider"
+                style={{
+                  clipPath: "polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)",
+                  background: `linear-gradient(135deg, color-mix(in srgb, ${tagBg} 30%, #0e1512), #0e1512 75%)`,
+                  boxShadow: "inset 0 0 14px rgba(0,0,0,0.5)",
+                  color: "#f4efe6",
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 transition-transform group-hover:-translate-x-1"
+                  style={{ color: tagBg }}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="square"
+                  strokeLinejoin="miter"
+                  aria-hidden
+                >
+                  <path d="M20 12H5M11 5l-7 7 7 7" />
+                </svg>
+                <span>Voltar para a Tier List</span>
+              </span>
+            </span>
+          </span>
         </Link>
       </div>
 
@@ -178,7 +214,7 @@ export default async function HeroPage({
         
         {/* Badge do Tier fixado no canto superior direito */}
         <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-20">
-          <span className={`font-deadlock px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border shadow-xl ${tier.bg}`}>
+          <span className={`font-deadlock px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border shadow-xl ${tier.bg} ${tier.label === "META" ? "tier-meta-glow-strong" : ""}`}>
             {tier.label}
           </span>
         </div>

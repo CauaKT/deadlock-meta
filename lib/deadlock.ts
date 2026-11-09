@@ -664,4 +664,64 @@ export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
     mid: resolve(picks.mid),
     late: resolve(picks.late),
   };
+}export type ItemSlot = "weapon" | "vitality" | "spirit";
+
+export interface ShopItem {
+  className: string;
+  name: string;
+  image: string | null;
+  slot: ItemSlot;
+  tier: number;
+  cost: number;
+  isActive: boolean;
+}
+
+const ITEM_SLOTS: ItemSlot[] = ["weapon", "vitality", "spirit"];
+let shopItemsCache: { data: ShopItem[]; at: number } | null = null;
+
+// Resposta grande (>2 MB): fica fora do cache de fetch do Next, como a lista de heróis
+export async function fetchShopItems(): Promise<ShopItem[]> {
+  await connection();
+  if (shopItemsCache && Date.now() - shopItemsCache.at < ASSETS_TTL) {
+    return shopItemsCache.data;
+  }
+
+  try {
+    const res = await fetch("https://api.deadlock-api.com/v1/assets/items?language=brazilian", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return shopItemsCache?.data ?? [];
+
+    const raw: any[] = await res.json();
+    const items = raw.flatMap((i): ShopItem[] => {
+      const slot = ITEM_SLOTS.find((s) => s === i?.item_slot_type);
+      const tier = toNum(i?.item_tier);
+      const cost = toNum(i?.cost);
+      if (
+        i?.type !== "upgrade" ||
+        i?.shopable === false ||
+        !slot ||
+        tier === null ||
+        cost === null ||
+        typeof i?.name !== "string" ||
+        typeof i?.class_name !== "string"
+      ) {
+        return [];
+      }
+      const image =
+        typeof i.shop_image_webp === "string"
+          ? i.shop_image_webp
+          : typeof i.image_webp === "string"
+            ? i.image_webp
+            : null;
+      return [{ className: i.class_name, name: i.name, image, slot, tier, cost, isActive: i.is_active_item === true }];
+    });
+
+    shopItemsCache = { data: items, at: Date.now() };
+    return items;
+  } catch (err) {
+    console.error("❌ Falha ao buscar itens:", err);
+    return shopItemsCache?.data ?? [];
+  }
 }
