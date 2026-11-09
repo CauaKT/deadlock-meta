@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   cacheComponents: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "assets-bucket.deadlock-api.com",
+        pathname: "/assets-api-res/images/heroes/backgrounds/**",
+      },
+    ],
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {

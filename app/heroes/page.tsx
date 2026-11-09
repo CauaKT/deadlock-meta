@@ -32,6 +32,7 @@ export default async function HeroesPage() {
       name: h.name,
       rgb: extractColor(h) ?? [245, 158, 11],
       card: h.images?.icon_hero_card || h.images?.icon_image_small || h.images?.minimap_image || "",
+      bg: h.images?.background_image_webp || h.images?.background_image || "",
       art: local ? `/heroes/${local}` : `https://cdn.deadlock.wiki/thumb/${file}_Render.png/800px-${file}_Render.png`,
       nameSvgs: [h.images?.name_image, `https://cdn.deadlock.wiki/${file}_name.svg`].filter(
        (u): u is string => typeof u === "string" && u.startsWith("http"),

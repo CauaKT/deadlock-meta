@@ -1,20 +1,21 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import Image from "next/image";
+import { useState } from "react";
 
 export interface SelectHero {
   id: number;
   name: string;
   rgb: [number, number, number];
   card: string;
+  bg: string;
   art: string;
   nameSvgs: string[];
   tags: string[];
   abilities: { name: string; image: string }[];
 }
 
-const BTN_CLIP = "polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%)";
 const TAG_ROTATIONS = ["-rotate-3", "rotate-2", "-rotate-1"];
 
 const TICKS = Array.from({ length: 120 }, (_, i) => {
@@ -61,10 +62,20 @@ function GameTexture() {
   );
 }
 
-function Chevron({ dir }: { dir: "left" | "right" }) {
+// Setas duplas das pontas do botão, como no JOGAR do jogo (a da direita é a da esquerda espelhada)
+function FrameEdge({ side }: { side: "left" | "right" }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#5f7a76]" fill="none" stroke="currentColor" strokeWidth={3} aria-hidden>
-      <path d={dir === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} />
+    <svg
+      aria-hidden
+      viewBox="0 0 90 100"
+      preserveAspectRatio="none"
+      className={`pointer-events-none absolute inset-y-0 h-full w-[90px] ${side === "left" ? "left-0" : "right-0 -scale-x-100"}`}
+      fill="none"
+      stroke="#465353"
+      strokeWidth={2}
+    >
+      <path vectorEffect="non-scaling-stroke" d="M71 0L36 50L71 100" />
+      <path vectorEffect="non-scaling-stroke" d="M79 0L43 50L79 100" />
     </svg>
   );
 }
@@ -92,36 +103,39 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
         </div>
 
         <div className="min-h-0 flex-1 lg:overflow-y-auto lg:[scrollbar-width:thin]">
-          <div className="grid grid-cols-5 gap-2 p-2 sm:grid-cols-7 lg:grid-cols-9 lg:gap-3">
+          <div className="grid grid-cols-5 gap-2 p-4 sm:grid-cols-7 lg:grid-cols-9 lg:gap-3 lg:p-8">
             {heroes.map((hero) => {
               const isActive = hero.id === active.id;
               const heroColor = `rgb(${hero.rgb.join(", ")})`;
               return (
-                <button
-                  type="button"
-                  key={hero.id}
-                  onClick={() => setActiveId(hero.id)}
-                  aria-label={hero.name}
-                  aria-pressed={isActive}
-                  className={`relative block aspect-[2/3] cursor-pointer overflow-hidden bg-[#0c0f0e] outline-none transition-all duration-150 focus-visible:ring-2 focus-visible:ring-white/70 ${
-                    isActive
-                      ? "z-10 scale-[1.15] border-2"
-                      : "border border-neutral-800/70 brightness-[.6] saturate-[.6] hover:brightness-90"
-                  }`}
-                  style={
-                    isActive
-                      ? { borderColor: heroColor, boxShadow: `0 0 18px rgba(92,225,182,0.6), 0 8px 18px rgba(0,0,0,0.8)` }
-                      : undefined
-                  }
-                >
-                  {hero.card ? (
-                    <img src={hero.card} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover object-top" />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-neutral-500">
-                      {hero.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                </button>
+                <div key={hero.id} className="relative aspect-[2/3]">
+                  <span aria-hidden className="absolute -inset-4 -z-10 bg-[radial-gradient(closest-side,rgba(10,13,12,0.8)_0%,rgba(10,13,12,0.6)_65%,transparent_100%)]" />
+                  <button
+                    type="button"
+                    onClick={() => setActiveId(hero.id)}
+                    aria-label={hero.name}
+                    aria-pressed={isActive}
+                    className={`absolute inset-0 block cursor-pointer overflow-hidden bg-[#0c0f0e] outline-none transition-all duration-150 focus-visible:ring-2 focus-visible:ring-white/70 ${
+                      isActive
+                        ? `z-10 scale-[1.15] border-2 ${hero.id % 2 === 0 ? "-rotate-3" : "rotate-3"}`
+                        : "border border-neutral-800/70 brightness-[.6] saturate-[.6] hover:brightness-90"
+                    }`}
+                    style={
+                      isActive
+                        ? { borderColor: heroColor, boxShadow: `0 0 18px color-mix(in srgb, ${heroColor} 60%, transparent), 0 8px 18px rgba(0,0,0,0.8)` }
+                        : undefined
+                    }
+                  >
+                    {hero.bg && <Image src={hero.bg} alt="" fill sizes="96px" className="object-cover" />}
+                    {hero.card ? (
+                      <img src={hero.card} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover object-top" />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-neutral-500">
+                        {hero.name.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -129,32 +143,20 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
 
         <Link
           href={`/heroes/${active.id}`}
-          className="group mt-4 inline-flex shrink-0 self-center transition-[filter] hover:brightness-125 lg:ml-[8%] lg:self-start"
+          className="relative mt-4 inline-flex shrink-0 self-center border-2 border-[#465353] bg-[#070707] px-24 py-4 font-deadlock text-3xl font-black uppercase tracking-wider text-[#f0e1cb] transition-[filter] hover:brightness-125"
         >
-          <span className="flex" style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.65))" }}>
-            <span className="flex p-0.5" style={{ clipPath: BTN_CLIP, backgroundColor: "#5f7a76" }}>
-              <span
-                className="dl-noise dl-halftone relative flex items-center gap-4 bg-[#0e1512] px-10 py-3 font-deadlock text-2xl font-black uppercase tracking-wider text-[#f4efe6]"
-                style={{ clipPath: BTN_CLIP }}
-              >
-                <Chevron dir="left" />
-                <span>Ver herói</span>
-                <Chevron dir="right" />
-              </span>
-            </span>
-          </span>
+          <FrameEdge side="left" />
+          <FrameEdge side="right" />
+          <span className="relative">Ver herói</span>
         </Link>
       </div>
 
-      <div
-        className="relative aspect-square w-full lg:absolute lg:inset-y-0 lg:right-0 lg:aspect-auto lg:w-[var(--artw)]"
-        style={{ "--artw": "min(100%, max(100svh - 57px, 56vw))" } as CSSProperties}
-      >
+      <div className="relative aspect-square w-full lg:absolute lg:inset-0 lg:aspect-auto">
         <img
           key={active.id}
           src={active.art}
           alt={active.name}
-          className="absolute inset-0 h-full w-full object-cover object-top"
+          className="absolute inset-0 h-full w-full object-contain object-right-top"
         />
 
         <div className="pointer-events-none absolute inset-x-4 bottom-4 flex flex-col items-end gap-3 md:inset-x-6 md:bottom-6">
