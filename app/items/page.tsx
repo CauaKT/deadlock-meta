@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { fetchShopItems } from "@/lib/deadlock";
 import ItemsCatalog from "./ItemsCatalog";
 
-export const metadata = {
+export const instant = false;
+export const metadata: Metadata = {
   title: "LockPro • Itens de Deadlock",
   description: "Catálogo dos itens da loja de Deadlock, carregado da Deadlock API.",
 };

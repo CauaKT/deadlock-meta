@@ -18,6 +18,7 @@ import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
 import HeroAtmosphere from "./HeroAtmosphere";
+import NavButton from "./NavButton";
 import fs from "fs";
 import path from "path";
 
@@ -156,49 +157,9 @@ export default async function HeroPage({
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
       <HeroAtmosphere rgb={rgb} />
       {/* Botão de Voltar */}
-      <div>
-        <Link
-          href={`/?patch=${selectedPatch.id}`}
-          className="group inline-flex transition-[filter] hover:brightness-110"
-        >
-          <span
-            className="flex"
-            style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.65))" }}
-          >
-            <span
-              className="flex p-0.5"
-              style={{
-                clipPath: "polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)",
-                backgroundColor: `color-mix(in srgb, ${tagBg} 45%, #1b2621)`,
-              }}
-            >
-              <span
-                className="dl-noise dl-halftone relative flex items-center gap-2.5 overflow-hidden px-5 py-2.5 pr-7 font-deadlock text-xs font-black uppercase tracking-wider"
-                style={{
-                  clipPath: "polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)",
-                  background: `linear-gradient(135deg, color-mix(in srgb, ${tagBg} 30%, #0e1512), #0e1512 75%)`,
-                  boxShadow: "inset 0 0 14px rgba(0,0,0,0.5)",
-                  color: "#f4efe6",
-                }}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4 transition-transform group-hover:-translate-x-1"
-                  style={{ color: tagBg }}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={3}
-                  strokeLinecap="square"
-                  strokeLinejoin="miter"
-                  aria-hidden
-                >
-                  <path d="M20 12H5M11 5l-7 7 7 7" />
-                </svg>
-                <span>Voltar para a Tier List</span>
-              </span>
-            </span>
-          </span>
-        </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <NavButton href={`/?patch=${selectedPatch.id}`} label="Voltar para a Tier List" tagBg={tagBg} icon="back" />
+        <NavButton href="/heroes" label="Todos os Heróis" tagBg={tagBg} icon="grid" flip />
       </div>
 
       {/* ========================================================================= */}

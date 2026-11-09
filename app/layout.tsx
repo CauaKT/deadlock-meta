@@ -48,6 +48,12 @@ export default function RootLayout({
                 Tier List
               </Link>
               <Link
+                href="/heroes"
+                className="text-[#f4efe6] hover:text-amber-400 transition-colors"
+              >
+                Heróis
+              </Link>
+              <Link
                 href="/items"
                 className="text-[#f4efe6] hover:text-amber-400 transition-colors"
               >

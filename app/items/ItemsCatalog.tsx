@@ -1,7 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
+import ItemTooltip, { TIP_WIDTH } from "./ItemTooltip";
 
 // Cores aproximadas, medidas em prints da loja do jogo; ajuste aqui se algo destoar
 interface Vendor {
@@ -71,8 +72,9 @@ function tierCost(items: ShopItem[]) {
 const EXPERT_TIER = 4;
 
 const byName = (a: ShopItem, b: ShopItem) => a.name.localeCompare(b.name, "pt-BR");
-type SortKey = "cost-asc" | "cost-desc" | "name-asc" | "name-desc" | "active";
+type SortKey = "game" | "cost-asc" | "cost-desc" | "name-asc" | "name-desc" | "active";
 const SORTS: { key: SortKey; label: string; fn: (a: ShopItem, b: ShopItem) => number }[] = [
+  { key: "game", label: "Ordem do jogo", fn: (a, b) => a.sortName.localeCompare(b.sortName, "en") },
   { key: "cost-asc", label: "Custo (menor primeiro)", fn: (a, b) => a.cost - b.cost || byName(a, b) },
   { key: "cost-desc", label: "Custo (maior primeiro)", fn: (a, b) => b.cost - a.cost || byName(a, b) },
   { key: "name-asc", label: "Nome (A-Z)", fn: byName },
@@ -87,10 +89,15 @@ const chipClass = (active: boolean) =>
       : "border-neutral-800 bg-black/40 text-neutral-400 hover:text-neutral-200"
   }`;
 
-function Tile({ item, vendor, tierIndex, last, dim }: { item: ShopItem; vendor: Vendor; tierIndex: number; last: boolean; dim: boolean }) {
+function Tile({ item, vendor, tierIndex, last, dim, onTip }: { item: ShopItem; vendor: Vendor; tierIndex: number; last: boolean; dim: boolean; onTip: (item: ShopItem | null, el?: HTMLElement) => void }) {
   return (
     <div
-      title={item.name}
+      tabIndex={0}
+      aria-label={item.name}
+      onMouseEnter={(e) => onTip(item, e.currentTarget)}
+      onMouseLeave={() => onTip(null)}
+      onFocus={(e) => onTip(item, e.currentTarget)}
+      onBlur={() => onTip(null)}
       className={`overflow-hidden rounded-[3px] shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-opacity ${dim ? "opacity-20" : ""}`}
       style={{ background: last ? "rgba(0,0,0,0.55)" : "#e2d2b9" }}
     >
@@ -101,8 +108,17 @@ function Tile({ item, vendor, tierIndex, last, dim }: { item: ShopItem; vendor: 
         {item.image ? (
           <img src={item.image} alt="" loading="lazy" className="h-full w-full object-contain drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]" />
         ) : null}
+        {item.isImbue && (
+          <span className="absolute inset-x-0 bottom-0 bg-[#7b3f8f] py-px text-center text-[8px] font-black uppercase tracking-wider text-white">
+            Imbue
+          </span>
+        )}
         {item.isActive && (
-          <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-[2px] bg-black/80 px-1 text-[8px] font-black uppercase tracking-wider text-white">
+          <span
+            className={`absolute left-1/2 -translate-x-1/2 rounded-[2px] bg-black/85 px-1 text-[8px] font-black uppercase tracking-wider text-white ${
+              item.isImbue ? "bottom-3.5" : "bottom-0.5"
+            }`}
+          >
             Ativo
           </span>
         )}
@@ -121,9 +137,29 @@ function Tile({ item, vendor, tierIndex, last, dim }: { item: ShopItem; vendor: 
 export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
   const [slot, setSlot] = useState<ItemSlot | null>("weapon");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("cost-asc");
+  const [sort, setSort] = useState<SortKey>("game");
   const [filterOpen, setFilterOpen] = useState(false);
   const [onlyActive, setOnlyActive] = useState(false);
+  const [tip, setTip] = useState<{ item: ShopItem; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener("scroll", hide, { passive: true });
+    return () => window.removeEventListener("scroll", hide);
+  }, [tip]);
+  const showTip = (item: ShopItem | null, el?: HTMLElement) => {
+    if (!item || !el) {
+      setTip(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const fitsRight = r.right + 8 + TIP_WIDTH <= window.innerWidth;
+    setTip({
+      item,
+      x: fitsRight ? r.right + 8 : Math.max(8, r.left - 8 - TIP_WIDTH),
+      y: Math.max(8, Math.min(r.top, window.innerHeight - 420)),
+    });
+  };
   const allTiers = useMemo(() => Array.from(new Set(items.map((i) => i.tier))).sort((a, b) => a - b), [items]);
   const [shownTiers, setShownTiers] = useState<number[]>(() => allTiers.filter((t) => t <= EXPERT_TIER));
   const activeFilters = allTiers.length - shownTiers.length + (onlyActive ? 1 : 0);
@@ -222,6 +258,7 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
       </div>
 
       {boards.length === 0 && <p className="text-sm text-neutral-500 italic">Nenhum item encontrado.</p>}
+      {tip && <ItemTooltip item={tip.item} accent={VENDORS[tip.item.slot].accent} x={tip.x} y={tip.y} />}
 
       {boards.map((b) => {
         const v = VENDORS[b.key];
@@ -247,19 +284,28 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
                 return (
                   <div
                     key={g.tier}
-                    className="rounded-[3px] p-3 shadow-[inset_0_2px_8px_rgba(0,0,0,0.45)]"
-                    style={{ background: last ? v.panelLast : v.panel }}
+                    className="rounded-[3px] border border-black/30 p-3"
+                    style={{ background: last ? v.panelLast : "rgba(0,0,0,0.07)" }}
                   >
                     <div className="mb-3 flex items-center gap-3">
                       <span
-                        className="font-deadlock rounded-[3px] px-3 py-1 text-base font-black text-white"
+                        className="font-deadlock -skew-x-6 rounded-[3px] border border-black/60 px-3 py-1 text-xl font-black text-[#6fd3b3]"
                         style={{ background: v.plate }}
                       >
                         ${tierCost(g.items)}
                       </span>
-                      <span className="font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]/70">
+                      <span
+                        className={`font-deadlock text-sm font-black uppercase tracking-wider ${
+                          last ? "text-[#f4efe6]/70" : "text-[#3b2d1a]/70"
+                        }`}
+                      >
                         Tier {g.tier}
                       </span>
+                      {last && (
+                        <span className="text-xs font-bold uppercase italic tracking-wider text-[#c9a46a]/80">
+                          Só para experts
+                        </span>
+                      )}
                     </div>
                     <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(68px, 1fr))" }}>
                       {g.items.map((item) => (
@@ -269,6 +315,7 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
                           vendor={VENDORS[item.slot]}
                           tierIndex={g.tier - 1}
                           last={last}
+                          onTip={showTip}
                           dim={q !== "" && !normalize(item.name).includes(q)}
                         />
                       ))}

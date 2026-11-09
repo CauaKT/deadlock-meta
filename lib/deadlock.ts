@@ -666,6 +666,24 @@ export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
   };
 }export type ItemSlot = "weapon" | "vitality" | "spirit";
 
+export interface ItemTipStat {
+  label: string;
+  value: string;
+  icon: string;
+  tone: "elevated" | "important" | "basic";
+}
+
+export interface ItemTipSection {
+  kind: string;
+  html: string;
+  stats: ItemTipStat[];
+}
+
+export interface ItemComponent {
+  name: string;
+  image: string | null;
+}
+
 export interface ShopItem {
   className: string;
   name: string;
@@ -674,6 +692,50 @@ export interface ShopItem {
   tier: number;
   cost: number;
   isActive: boolean;
+  isImbue: boolean;
+  sortName: string;
+  descriptionHtml: string;
+  sections: ItemTipSection[];
+  components: ItemComponent[];
+}
+
+const numberPt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+
+function formatItemProp(p: any): string {
+  const raw = String(p?.value ?? "");
+  const num = parseFloat(raw);
+  if (Number.isNaN(num) || num === 0) return "";
+  const sign = p.prefix === "-" ? "-" : /sign/.test(String(p.prefix ?? "")) && num > 0 ? "+" : "";
+  const postfix = (
+    typeof p.postfix === "string" && p.postfix !== "" ? p.postfix : (raw.match(/[a-zA-Z%]+\s*$/)?.[0] ?? "")
+  ).replace(/^\s+(?=%)/, "");
+  return `${sign}${numberPt.format(sign === "-" ? Math.abs(num) : num)}${postfix}`;
+}
+
+function buildItemSections(item: any): ItemTipSection[] {
+  const props = item?.properties ?? {};
+  const stat = (key: unknown, tone: ItemTipStat["tone"]): ItemTipStat[] => {
+    const p = props[String(key)];
+    const value = p ? formatItemProp(p) : "";
+    const label = stripHtml(p?.label);
+    if (!value || !label) return [];
+    const icon = typeof p.icon === "string" && p.icon.startsWith(ALLOWED_IMG_PREFIX) ? p.icon : "";
+    return [{ label, value, icon, tone }];
+  };
+
+  const sections: ItemTipSection[] = [];
+  for (const sec of item?.tooltip_sections ?? []) {
+    const stats: ItemTipStat[] = [];
+    let html = "";
+    for (const attr of sec?.section_attributes ?? []) {
+      if (!html && typeof attr?.loc_string === "string") html = sanitizeHtml(attr.loc_string);
+      for (const k of attr?.elevated_properties ?? []) stats.push(...stat(k, "elevated"));
+      for (const k of attr?.important_properties ?? []) stats.push(...stat(k, "important"));
+      for (const k of attr?.properties ?? []) stats.push(...stat(k, "basic"));
+    }
+    if (html || stats.length > 0) sections.push({ kind: String(sec?.section_type ?? ""), html, stats });
+  }
+  return sections;
 }
 
 const ITEM_SLOTS: ItemSlot[] = ["weapon", "vitality", "spirit"];
@@ -687,13 +749,33 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
   }
 
   try {
-    const res = await fetch("https://api.deadlock-api.com/v1/assets/items?language=brazilian", {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+    const [res, resEn] = await Promise.all([
+      fetch("https://api.deadlock-api.com/v1/assets/items?language=brazilian", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }),
+      fetch("https://api.deadlock-api.com/v1/assets/items", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }).catch(() => null),
+    ]);
     if (!res.ok) return shopItemsCache?.data ?? [];
 
     const raw: any[] = await res.json();
+
+    // O jogo ordena a loja pelo nome em inglês; sem ele, cai no nome em português
+    const namesEn = new Map<string, string>();
+    if (resEn?.ok) {
+      const rawEn: any[] = await resEn.json();
+      for (const e of rawEn) {
+        if (typeof e?.class_name === "string" && typeof e?.name === "string") namesEn.set(e.class_name, e.name);
+      }
+    }
+
+    const byClass = new Map<string, any>(
+      raw.filter((r) => typeof r?.class_name === "string").map((r): [string, any] => [r.class_name, r]),
+    );
+
     const items = raw.flatMap((i): ShopItem[] => {
       const slot = ITEM_SLOTS.find((s) => s === i?.item_slot_type);
       const tier = toNum(i?.item_tier);
@@ -715,7 +797,27 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
           : typeof i.image_webp === "string"
             ? i.image_webp
             : null;
-      return [{ className: i.class_name, name: i.name, image, slot, tier, cost, isActive: i.is_active_item === true }];
+      return [
+        {
+          className: i.class_name,
+          name: i.name,
+          image,
+          slot,
+          tier,
+          cost,
+          isActive: i.is_active_item === true,
+          isImbue: typeof i.imbue === "string" && i.imbue !== "",
+          sortName: namesEn.get(i.class_name) ?? i.name,
+          descriptionHtml: sanitizeHtml(i.description?.desc),
+          sections: buildItemSections(i),
+          components: (Array.isArray(i.component_items) ? i.component_items : []).flatMap((c: unknown) => {
+            const ci = byClass.get(String(c));
+            if (typeof ci?.name !== "string") return [];
+            const img = ci.shop_image_webp ?? ci.image_webp;
+            return [{ name: ci.name, image: typeof img === "string" ? img : null }];
+          }),
+        },
+      ];
     });
 
     shopItemsCache = { data: items, at: Date.now() };
