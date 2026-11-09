@@ -7,6 +7,7 @@ import {
   fetchHeroAbilitiesFull,
   fetchHeroWeapon,
   fetchHeroBuild,
+  extractColor,
   TIER_THRESHOLDS,
   PATCHES,
 } from "@/lib/deadlock";
@@ -15,6 +16,7 @@ import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
+import HeroAtmosphere from "./HeroAtmosphere";
 import fs from "fs";
 import path from "path";
 
@@ -58,18 +60,6 @@ function extractTags(h: any): string[] {
   }
   return [];
 }
-
-// Lê a cor de interface do herói (RGB) direto da API
-function extractColor(h: any): [number, number, number] | null {
-  const c = h?.colors?.style ?? h?.colors?.ui ?? h?.colors?.glow_team;
-  if (Array.isArray(c) && c.length >= 3) {
-    const [r, g, b] = c.map(Number);
-    if ([r, g, b].every(Number.isFinite)) return [r, g, b];
-  }
-  return null;
-}
-
-
 
 function calculateTier(winRate: number) {
   if (winRate >= TIER_THRESHOLDS.META) return { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" };
@@ -129,7 +119,7 @@ export default async function HeroPage({
   const heroKey = enName.toLowerCase();
 
   // 1. Títulos do herói (3 títulos oficiais)
-  const apiTags = extractTags(heroesMap[heroId]);
+  const apiTags = extractTags(hero);
   const heroTraits = apiTags;
   const rgb = extractColor(heroesMap[heroId]) ?? extractColor(hero);
   const tagBg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
@@ -163,6 +153,7 @@ export default async function HeroPage({
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
+      <HeroAtmosphere rgb={rgb} />
       {/* Botão de Voltar */}
       <div>
         <Link

@@ -1,7 +1,8 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import PatchSelect from "./PatchSelect";
 import fs from "fs";
 import path from "path";
@@ -113,6 +114,7 @@ export default async function Home({
         name: hero?.name || `Herói #${stat.hero_id}`,
         image,
         bannerImage,
+        rgb: extractColor(hero),
         matches,
         wins,
         losses,
@@ -192,10 +194,11 @@ export default async function Home({
                     <Link
                       key={hero.id}
                       href={`/heroes/${hero.id}?patch=${selectedPatch.id}`}
-                      className="group relative flex flex-col items-center bg-neutral-900/40 border border-neutral-800/70 rounded-xl w-[76px] sm:w-[84px] hover:border-amber-500/80 hover:scale-105 hover:z-30 transition-all duration-150 shadow-md cursor-pointer"
+                      className="hero-card group relative flex flex-col items-center bg-neutral-900/40 border rounded-xl w-[76px] sm:w-[84px] hover:scale-105 hover:z-30 transition-all duration-150 cursor-pointer"
+                      style={{ "--hc": hero.rgb ? hero.rgb.join(" ") : "245 158 11" } as CSSProperties}
                     >
                       {/* Imagem do Herói (QUADRADA) */}
-                      <div className="w-full aspect-square relative bg-neutral-850 flex items-center justify-center overflow-hidden rounded-t-xl">
+                      <div className="hero-card-art w-full aspect-square relative flex items-center justify-center overflow-hidden rounded-t-xl">
                         {hero.image ? (
                           <img
                             src={hero.image}

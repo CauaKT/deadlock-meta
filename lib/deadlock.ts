@@ -50,8 +50,15 @@ export interface MergedHero {
   wins: number;
   losses: number;
   winRate: number;
+  rgb?: [number, number, number] | null;
 }
 
+export function extractColor(h: any): [number, number, number] | null {
+  const c = h?.colors?.style;
+  if (!Array.isArray(c) || c.length < 3) return null;
+  const [r, g, b] = c.map(Number);
+  return [r, g, b].every(Number.isFinite) ? [r, g, b] : null;
+}
 let assetsCache: { data: Record<number, HeroAsset>; at: number } | null = null;
 const ASSETS_TTL = 24 * 60 * 60 * 1000;
 

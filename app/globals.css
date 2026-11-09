@@ -254,3 +254,77 @@ h1, h2, h3, h4 {
   text-transform: uppercase;
   color: #cdcdcd;
 }
+
+/* Tier list: identidade de cada herói (--hc = RGB do herói) */
+.hero-card {
+  border-color: rgb(var(--hc) / 0.45);
+  box-shadow: 0 0 10px rgb(var(--hc) / 0.22);
+}
+.hero-card:hover {
+  border-color: rgb(var(--hc) / 0.95);
+  box-shadow: 0 0 22px rgb(var(--hc) / 0.55);
+}
+.hero-card-art {
+  background:
+    radial-gradient(circle at 50% 35%, rgb(var(--hc) / 0.4), rgb(var(--hc) / 0.1) 60%, transparent 85%),
+    #0c0f0e;
+}
+
+/* Página do herói: brilho no topo e fumaça (--atm = RGB do herói) */
+.hero-glow {
+  background: radial-gradient(
+    ellipse 75% 100% at 50% 0%,
+    rgb(var(--atm) / 0.34),
+    rgb(var(--atm) / 0.1) 45%,
+    transparent 75%
+  );
+}
+.hero-smoke {
+  position: fixed;
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--atm) / 0.2),
+    rgb(var(--atm) / 0.07) 55%,
+    transparent 100%
+  );
+  will-change: transform;
+}
+.hero-smoke-a {
+  width: 70vw;
+  height: 70vw;
+  left: -20vw;
+  top: 5vh;
+  animation: smoke-a 60s ease-in-out infinite alternate;
+}
+.hero-smoke-b {
+  width: 60vw;
+  height: 60vw;
+  right: -15vw;
+  top: 35vh;
+  opacity: 0.8;
+  animation: smoke-b 75s ease-in-out infinite alternate;
+}
+.hero-smoke-c {
+  width: 80vw;
+  height: 50vw;
+  left: 10vw;
+  bottom: -20vh;
+  opacity: 0.7;
+  animation: smoke-c 90s ease-in-out infinite alternate;
+}
+@keyframes smoke-a {
+  to { transform: translate3d(35vw, 12vh, 0) scale(1.25); }
+}
+@keyframes smoke-b {
+  from { transform: scale(1.1); }
+  to { transform: translate3d(-30vw, -14vh, 0) scale(0.9); }
+}
+@keyframes smoke-c {
+  to { transform: translate3d(-25vw, -10vh, 0) scale(1.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-smoke {
+    animation: none;
+  }
+}
