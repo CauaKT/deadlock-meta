@@ -51,6 +51,7 @@ export interface MergedHero {
   losses: number;
   winRate: number;
   rgb?: [number, number, number] | null;
+  tags?: string[];
 }
 
 export function extractColor(h: any): [number, number, number] | null {
@@ -86,6 +87,43 @@ export async function fetchHeroesAssets(): Promise<Record<number, HeroAsset>> {
   } catch (err) {
     console.error("❌ Falha ao buscar assets:", err);
     return assetsCache?.data ?? {};
+  }
+}
+
+export interface HeroBlurb {
+  tags: string[];
+}
+
+let blurbsCache: { data: Record<number, HeroBlurb>; at: number } | null = null;
+
+export async function fetchHeroBlurbs(): Promise<Record<number, HeroBlurb>> {
+  await connection();
+  if (blurbsCache && Date.now() - blurbsCache.at < ASSETS_TTL) {
+    return blurbsCache.data;
+  }
+
+  try {
+    const res = await fetch("https://api.deadlock-api.com/v1/assets/heroes?language=brazilian", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return blurbsCache?.data ?? {};
+
+    const list: HeroAsset[] = await res.json();
+    const map: Record<number, HeroBlurb> = {};
+    for (const h of list) {
+      map[h.id] = {
+        tags: Array.isArray(h.tags)
+          ? h.tags.filter((t: unknown): t is string => typeof t === "string").slice(0, 3)
+          : [],
+      };
+    }
+
+    blurbsCache = { data: map, at: Date.now() };
+    return map;
+  } catch (err) {
+    console.error("Falha ao buscar tags dos heróis:", err);
+    return blurbsCache?.data ?? {};
   }
 }
 
