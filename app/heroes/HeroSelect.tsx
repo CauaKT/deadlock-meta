@@ -8,6 +8,8 @@ export interface SelectHero {
   id: number;
   name: string;
   rgb: [number, number, number];
+  tagBg: string;
+  tagText: string;
   card: string;
   bg: string;
   art: string;
@@ -16,7 +18,7 @@ export interface SelectHero {
   abilities: { name: string; image: string }[];
 }
 
-const TAG_ROTATIONS = ["-rotate-3", "rotate-2", "-rotate-1"];
+const TAG_ROTATIONS = ["-rotate-[4deg] sm:-rotate-[5deg]", "rotate-[4deg] sm:rotate-[5deg]", "-rotate-[3deg] sm:-rotate-[4deg]"];
 
 const TICKS = Array.from({ length: 120 }, (_, i) => {
   const a = (i / 120) * Math.PI * 2;
@@ -88,9 +90,8 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
   if (!active) return null;
 
   const color = `rgb(${active.rgb.join(", ")})`;
-  const tagBg = `color-mix(in srgb, ${color} 62%, #0a0805)`;
-  const circleBg = `color-mix(in srgb, ${color} 55%, #000)`;
-  const iconColor = `color-mix(in srgb, ${color} 35%, #fff)`;
+  const circleBg = color;
+  const iconColor = "#070908";
   const nameFail = nameFails[active.id] ?? 0;
 
   return (
@@ -159,25 +160,27 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
           className="absolute inset-0 h-full w-full object-contain object-right-top"
         />
 
-        <div className="pointer-events-none absolute inset-x-4 bottom-4 flex flex-col items-end gap-3 md:inset-x-6 md:bottom-6">
+        <div className="pointer-events-none absolute bottom-4 right-4 flex origin-bottom-right scale-[1.4] flex-col items-center md:bottom-7 md:right-8 lg:bottom-9 lg:right-12">
           {nameFail >= active.nameSvgs.length ? (
-            <span className="font-deadlock text-5xl font-black uppercase text-[#f4efe6]">{active.name}</span>
+            <span className="font-deadlock mb-2 text-center text-3xl font-black uppercase text-[#f4efe6] md:text-4xl lg:mb-2 lg:text-[42px]">
+              {active.name}
+            </span>
           ) : (
             <img
               key={`n${active.id}-${nameFail}`}
               src={active.nameSvgs[nameFail]}
               alt={active.name}
               onError={() => setNameFails((f) => ({ ...f, [active.id]: nameFail + 1 }))}
-              className="h-20 w-auto max-w-full object-contain object-right drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] md:h-28 lg:h-36"
+              className="mb-4 h-auto max-h-16 w-auto max-w-[240px] object-contain object-center drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] sm:max-h-20 sm:max-w-[270px] md:max-h-22 md:max-w-[290px] lg:mb-5 lg:max-h-[86px] lg:max-w-[305px]"
             />
           )}
 
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex scale-90 flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:gap-2.5">
             {active.tags.map((tag, i) => (
               <span
                 key={tag}
-                style={{ backgroundColor: tagBg }}
-                className={`font-deadlock px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#f6ead2] shadow-lg lg:px-4 lg:py-1.5 lg:text-[14px] ${
+                style={{ backgroundColor: active.tagBg, color: active.tagText }}
+                className={`font-deadlock px-3 py-0.5 text-[14px] font-black uppercase tracking-wider shadow-md sm:px-3.5 sm:py-1 sm:text-[16px] lg:px-4 lg:py-1 lg:text-[18px] ${
                   TAG_ROTATIONS[i % TAG_ROTATIONS.length]
                 }`}
               >
@@ -186,18 +189,18 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
             ))}
           </div>
 
-          <div className="flex gap-3">
+          <div className="mt-2.5 flex items-center justify-center gap-2 sm:gap-2 lg:mt-3 lg:gap-2">
             {active.abilities.map((ab) => (
               <span
                 key={ab.name}
                 title={ab.name}
-                className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg md:h-14 md:w-14 lg:h-16 lg:w-16"
+                className="flex h-10 w-10 items-center justify-center rounded-full shadow-lg sm:h-11 sm:w-11 lg:h-[45px] lg:w-[45px]"
                 style={{ backgroundColor: circleBg }}
               >
                 {ab.image && (
                   <span
                     aria-hidden
-                    className="block h-8 w-8 md:h-9 md:w-9 lg:h-10 lg:w-10"
+                    className="block h-6 w-6 sm:h-[26px] sm:w-[26px] lg:h-[29px] lg:w-[29px]"
                     style={{
                       backgroundColor: iconColor,
                       WebkitMask: `url(${ab.image}) center / contain no-repeat`,

@@ -54,12 +54,130 @@ export interface MergedHero {
   tags?: string[];
 }
 
-export function extractColor(h: any): [number, number, number] | null {
+function hexToRgb(hexStr?: string): [number, number, number] | null {
+  if (!hexStr) return null;
+  const clean = hexStr.replace("#", "").trim();
+  const hex = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  if (hex.length !== 6 && hex.length !== 8) return null;
+  const num = parseInt(hex.slice(0, 6), 16);
+  if (Number.isNaN(num)) return null;
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function colorLuminance([r, g, b]: [number, number, number]): number {
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+export interface WikiHeroTheme {
+  rgb: [number, number, number];
+  tagBg: string;
+  tagText: string;
+}
+
+let wikiColorsCache: { data: Record<string, WikiHeroTheme>; at: number } | null = null;
+
+export async function fetchWikiColors(): Promise<Record<string, WikiHeroTheme>> {
+  await connection();
+  if (wikiColorsCache && Date.now() - wikiColorsCache.at < ASSETS_TTL) {
+    return wikiColorsCache.data;
+  }
+
+  try {
+    const res = await fetch(
+      "https://deadlock.wiki/api.php?action=parse&page=Template:Infobox_hero/themes.css&prop=wikitext&format=json",
+      { headers: { Accept: "application/json" }, cache: "no-store" }
+    );
+    if (!res.ok) return wikiColorsCache?.data ?? {};
+
+    const data = await res.json();
+    const css: string = data.parse?.wikitext?.["*"] || "";
+    const map: Record<string, WikiHeroTheme> = {};
+
+    const blocks = css.split(/\.infobox-h\./).slice(1);
+    for (const b of blocks) {
+      const key = b.split(/[\s,{]/)[0];
+      if (!key) continue;
+
+      const color2 = b.match(/--th-heroinfobox-color2:\s*([^;]+)/)?.[1]?.trim();
+      const tagB = b.match(/--th-heroinfobox-tags-back:\s*([^;]+)/)?.[1]?.trim();
+      const tagT = b.match(/--th-heroinfobox-tags-text:\s*([^;]+)/)?.[1]?.trim();
+
+      const rgbB = hexToRgb(tagB);
+      const rgbT = hexToRgb(tagT);
+      const rgb2 = hexToRgb(color2);
+
+      let chosenRgb = rgbB;
+      if (!chosenRgb || colorLuminance(chosenRgb) < 35) {
+        chosenRgb = rgbT && colorLuminance(rgbT) >= 35 ? rgbT : rgb2;
+      }
+
+      if (chosenRgb) {
+        const bg = tagB || (rgbB ? `rgb(${rgbB.join(",")})` : `rgb(${chosenRgb.join(",")})`);
+        const lumBg = rgbB ? colorLuminance(rgbB) : colorLuminance(chosenRgb);
+        const text = tagT || (lumBg > 150 ? "#10130d" : "#f6ead2");
+
+        map[key] = {
+          rgb: chosenRgb,
+          tagBg: bg,
+          tagText: text,
+        };
+      }
+    }
+
+    wikiColorsCache = { data: map, at: Date.now() };
+    return map;
+  } catch (err) {
+    console.error("Falha ao buscar cores da Wiki:", err);
+    return wikiColorsCache?.data ?? {};
+  }
+}
+
+export function extractColor(
+  h: any,
+  colorsMap?: Record<string, WikiHeroTheme>
+): [number, number, number] | null {
+  if (!h) return null;
+  const className = typeof h.class_name === "string" ? h.class_name : "";
+  const fromMap = colorsMap?.[className]?.rgb || wikiColorsCache?.data?.[className]?.rgb;
+  if (fromMap) return fromMap;
+
   const c = h?.colors?.style;
   if (!Array.isArray(c) || c.length < 3) return null;
   const [r, g, b] = c.map(Number);
   return [r, g, b].every(Number.isFinite) ? [r, g, b] : null;
 }
+
+// Eleva proporcionalmente o brilho de tons escuros para o texto vibrar com nitidez sobre caixas pretas
+export function ensureVibrantTextColor(rgb: [number, number, number]): string {
+  const [r, g, b] = rgb;
+  const max = Math.max(r, g, b);
+  if (max < 205) {
+    const factor = 215 / Math.max(max, 1);
+    const nr = Math.min(255, Math.round(r * factor));
+    const ng = Math.min(255, Math.round(g * factor));
+    const nb = Math.min(255, Math.round(b * factor));
+    return `rgb(${nr}, ${ng}, ${nb})`;
+  }
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function extractHeroTheme(
+  h: any,
+  colorsMap?: Record<string, WikiHeroTheme>
+): WikiHeroTheme {
+  const className = typeof h?.class_name === "string" ? h.class_name : "";
+  const theme = colorsMap?.[className] || wikiColorsCache?.data?.[className];
+  if (theme) return theme;
+
+  const rgb = extractColor(h, colorsMap) ?? [245, 158, 11];
+  const lum = colorLuminance(rgb);
+  return {
+    rgb,
+    tagBg: `rgb(${rgb.join(",")})`,
+    tagText: lum > 150 ? "#10130d" : "#ffffff",
+  };
+}
+
 let assetsCache: { data: Record<number, HeroAsset>; at: number } | null = null;
 const ASSETS_TTL = 24 * 60 * 60 * 1000;
 

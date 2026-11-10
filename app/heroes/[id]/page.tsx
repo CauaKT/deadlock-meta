@@ -4,10 +4,13 @@ import {
   fetchHeroDetails,
   fetchHeroesAssets,
   fetchHeroesAnalytics,
+  fetchWikiColors,
   fetchHeroAbilitiesFull,
   fetchHeroWeapon,
   fetchHeroBuild,
   extractColor,
+  extractHeroTheme,
+  ensureVibrantTextColor,
   TIER_THRESHOLDS,
   PATCHES,
 } from "@/lib/deadlock";
@@ -89,10 +92,11 @@ export default async function HeroPage({
   const patchUntil =
     selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
 
-  const [heroDetails, heroesMap, stats] = await Promise.all([
+  const [heroDetails, heroesMap, stats, wikiColors] = await Promise.all([
     fetchHeroDetails(heroId),
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil),
+    fetchWikiColors(),
   ]);
 
   const hero = heroDetails || heroesMap[heroId];
@@ -120,13 +124,13 @@ export default async function HeroPage({
 
   const heroKey = enName.toLowerCase();
 
-  // 1. Títulos do herói (3 títulos oficiais)
+// 1. Títulos do herói (3 títulos oficiais)
   const apiTags = extractTags(hero);
   const heroTraits = apiTags;
-  const rgb = extractColor(heroesMap[heroId]) ?? extractColor(hero);
-  const tagBg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
-  const luminance = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
-  const tagText = luminance > 150 ? "#1a1608" : "#ffffff";
+  const heroTheme = extractHeroTheme(hero, wikiColors);
+  const rgb = heroTheme.rgb;
+  const tagBg = heroTheme.tagBg;
+  const tagText = heroTheme.tagText;
 
   const rawLore = typeof hero.description === "object" ? hero.description?.lore : hero.description;
   const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";

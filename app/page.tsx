@@ -1,6 +1,6 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import PatchSelect from "./PatchSelect";
@@ -60,10 +60,11 @@ export default async function Home({
   const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
   const patchUntil =
     selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
-  const [heroesMap, stats, blurbs] = await Promise.all([
+  const [heroesMap, stats, blurbs, wikiColors] = await Promise.all([
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil),
     fetchHeroBlurbs(),
+    fetchWikiColors(),
   ]);
 
   const heroesRanking: (MergedHero & { tier: TierKey })[] = stats
@@ -121,7 +122,7 @@ export default async function Home({
         name: hero?.name || `Herói #${stat.hero_id}`,
         image,
         bannerImage,
-        rgb: extractColor(hero),
+        rgb: extractColor(hero, wikiColors),
         tags: blurbs[stat.hero_id]?.tags ?? [],
         matches,
         wins,
