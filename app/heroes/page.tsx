@@ -45,7 +45,7 @@ export default async function HeroesPage() {
        (u): u is string => typeof u === "string" && u.startsWith("http"),
       ),
       tags: blurbs[h.id]?.tags ?? [],
-      abilities: abilities[i].map((a) => ({ name: a.name, image: a.image })),
+      abilities: abilities[i],
     };
   });
 
@@ -58,9 +58,6 @@ export default async function HeroesPage() {
       ) : (
         <HeroSelect heroes={heroes} />
       )}
-      <p className="px-4 py-3 text-[11px] text-neutral-500 md:px-10">
-        Heróis e habilidades carregados da Deadlock API, uma API comunitária não oficial. Arte e fontes são assets do jogo.
-      </p>
     </div>
   );
 }

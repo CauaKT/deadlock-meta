@@ -2,7 +2,9 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { HeroAbilityFull } from "@/lib/deadlock";
+import AbilityBar from "./[id]/AbilityBar";
 
 export interface SelectHero {
   id: number;
@@ -15,7 +17,7 @@ export interface SelectHero {
   art: string;
   nameSvgs: string[];
   tags: string[];
-  abilities: { name: string; image: string }[];
+  abilities: HeroAbilityFull[];
 }
 
 const TAG_ROTATIONS = ["-rotate-[4deg] sm:-rotate-[5deg]", "rotate-[4deg] sm:rotate-[5deg]", "-rotate-[3deg] sm:-rotate-[4deg]"];
@@ -85,6 +87,41 @@ function FrameEdge({ side }: { side: "left" | "right" }) {
 export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
   const [activeId, setActiveId] = useState<number | null>(heroes[0]?.id ?? null);
   const [nameFails, setNameFails] = useState<Record<number, number>>({});
+  const [pop, setPop] = useState<{ slot: number; left: number; bottom: number; width: number; maxH: number } | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pop) return;
+    const close = () => setPop(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || rowRef.current?.contains(t)) return;
+      close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close);
+    };
+  }, [pop]);
+
+  // Posiciona o popover acima do ícone clicado, limitado à viewport (o rect já inclui o scale do bloco)
+  const openAbility = (slot: number, el: HTMLElement) => {
+    if (pop?.slot === slot) return setPop(null);
+    const r = el.getBoundingClientRect();
+    const width = Math.min(520, window.innerWidth - 16);
+    const left = Math.min(Math.max(r.left + r.width / 2 - width / 2, 8), window.innerWidth - width - 8);
+    setPop({ slot, left, width, bottom: window.innerHeight - r.top + 12, maxH: Math.max(r.top - 82, 200) });
+  };
 
   const active = heroes.find((h) => h.id === activeId) ?? heroes[0];
   if (!active) return null;
@@ -95,15 +132,15 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
   const nameFail = nameFails[active.id] ?? 0;
 
   return (
-    <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] lg:h-[calc(100svh-57px)]">
+    <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-[calc(100svh-57px)]">
       <GameTexture />
-      <div className="relative z-10 flex min-h-0 flex-col p-4 md:p-8 lg:h-full lg:w-[48%] lg:px-10 lg:py-8">
+      <div className="relative z-10 flex min-h-0 flex-col p-4 md:p-8 lg:px-10 lg:py-8 wide:h-full wide:w-[51%] wide:max-w-[880px]">
         <div className="shrink-0">
           <p className="font-deadlock text-sm font-black uppercase tracking-wider text-[#5f7a76]">Deadlock</p>
           <h1 className="mb-4 font-deadlock text-6xl font-black uppercase tracking-tight text-[#5f7a76] md:text-7xl">Heróis</h1>
         </div>
 
-        <div className="min-h-0 flex-1 lg:overflow-y-auto lg:[scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 wide:overflow-y-auto wide:[scrollbar-width:thin]">
           <div className="grid grid-cols-5 gap-2 p-4 sm:grid-cols-7 lg:grid-cols-9 lg:gap-3 lg:p-8">
             {heroes.map((hero) => {
               const isActive = hero.id === active.id;
@@ -152,12 +189,12 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
         </Link>
       </div>
 
-      <div className="relative aspect-square w-full lg:absolute lg:inset-0 lg:aspect-auto">
+      <div className="relative aspect-square w-full wide:absolute wide:inset-0 wide:aspect-auto">
         <img
           key={active.id}
           src={active.art}
           alt={active.name}
-          className="absolute inset-0 h-full w-full object-contain object-right-top"
+          className="absolute inset-0 h-full w-full object-contain object-right-top wide:translate-x-[4%]"
         />
 
         <div className="pointer-events-none absolute bottom-4 right-4 flex origin-bottom-right scale-[1.4] flex-col items-center md:bottom-7 md:right-8 lg:bottom-9 lg:right-12">
@@ -171,7 +208,7 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
               src={active.nameSvgs[nameFail]}
               alt={active.name}
               onError={() => setNameFails((f) => ({ ...f, [active.id]: nameFail + 1 }))}
-              className="mb-4 h-auto max-h-16 w-auto max-w-[240px] object-contain object-center drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] sm:max-h-20 sm:max-w-[270px] md:max-h-22 md:max-w-[290px] lg:mb-5 lg:max-h-[86px] lg:max-w-[305px]"
+              className="mb-4 h-auto w-[240px] object-contain object-center drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] sm:w-[270px] md:w-[290px] lg:mb-5 lg:w-[305px]"
             />
           )}
 
@@ -189,12 +226,18 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
             ))}
           </div>
 
-          <div className="mt-2.5 flex items-center justify-center gap-2 sm:gap-2 lg:mt-3 lg:gap-2">
+          <div ref={rowRef} className="mt-2.5 flex items-center justify-center gap-2 sm:gap-2 lg:mt-3 lg:gap-2">
             {active.abilities.map((ab) => (
-              <span
-                key={ab.name}
+              <button
+                key={ab.slot}
+                type="button"
                 title={ab.name}
-                className="flex h-10 w-10 items-center justify-center rounded-full shadow-lg sm:h-11 sm:w-11 lg:h-[45px] lg:w-[45px]"
+                aria-label={ab.name}
+                onClick={(e) => openAbility(ab.slot, e.currentTarget)}
+                aria-expanded={pop?.slot === ab.slot}
+                className={`pointer-events-auto flex h-10 w-10 cursor-pointer items-center justify-center rounded-full shadow-lg outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-white/70 sm:h-11 sm:w-11 lg:h-[45px] lg:w-[45px] ${
+                  pop?.slot === ab.slot ? "scale-110 ring-2 ring-white" : ""
+                }`}
                 style={{ backgroundColor: circleBg }}
               >
                 {ab.image && (
@@ -208,11 +251,27 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
                     }}
                   />
                 )}
-              </span>
+              </button>
             ))}
           </div>
         </div>
       </div>
+      {pop && (
+        <div
+          ref={popRef}
+          className="fixed z-50 overflow-y-auto overflow-x-hidden px-2 [scrollbar-width:thin]"
+          style={{ left: pop.left, bottom: pop.bottom, width: pop.width, maxHeight: pop.maxH }}
+        >
+          <AbilityBar
+            key={`${active.id}-${pop.slot}`}
+            abilities={active.abilities}
+            initialSlot={pop.slot}
+            hideSelector
+            accent={active.tagBg}
+            accentText={active.tagText}
+          />
+        </div>
+      )}
     </section>
   );
 }

@@ -93,15 +93,7 @@ export default function RootLayout({
                 <p className="text-sm font-bold text-[#f4efe6]">
                   LOCK<span className="text-amber-500">PRO</span>
                 </p>
-                <p className="text-xs text-neutral-500">Tier List do Deadlock baseada em winrate</p>
               </div>
-            </div>
-
-            <div className="text-center md:text-right max-w-md">
-              <p className="text-[11px] text-neutral-500 leading-relaxed">
-                Deadlock é uma marca registrada da <span className="text-neutral-400 font-medium">Valve Corporation</span>. 
-                LockPro é um projeto comunitário sem fins lucrativos e não possui afiliação oficial com a Valve.
-              </p>
             </div>
           </div>
         </footer>

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant wide (@media (min-width: 1024px) and (min-aspect-ratio: 6/5));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

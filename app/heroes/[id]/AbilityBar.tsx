@@ -105,10 +105,14 @@ export default function AbilityBar({
   abilities: rawAbilities,
   accent = "#f1d36b",
   accentText = "#1a1608",
+  initialSlot,
+  hideSelector = false,
 }: {
   abilities?: HeroAbilityFull[];
   accent?: string;
   accentText?: string;
+  initialSlot?: number;
+  hideSelector?: boolean;
 }) {
   const abilities: HeroAbilityFull[] = (rawAbilities ?? [])
     .filter(Boolean)
@@ -126,7 +130,7 @@ export default function AbilityBar({
       sections: a.sections ?? [],
     }));
 
-  const [selectedSlot, setSelectedSlot] = useState(abilities[0]?.slot ?? 1);
+  const [selectedSlot, setSelectedSlot] = useState(initialSlot ?? abilities[0]?.slot ?? 1);
   const [levels, setLevels] = useState<Record<number, number>>({});
 
   if (abilities.length === 0) {
@@ -203,7 +207,7 @@ export default function AbilityBar({
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="flex flex-wrap justify-center gap-8">
+      <div className={`${hideSelector ? "hidden" : "flex"} flex-wrap justify-center gap-8`}>
         {abilities.map((ab) => {
           const active = ab.slot === selected.slot;
           return (
