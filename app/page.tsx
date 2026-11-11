@@ -4,30 +4,14 @@ import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColo
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import PatchSelect from "./PatchSelect";
+import TierListTabs from "./TierListTabs";
+import type { MakerHero } from "./TierMaker";
+import { TIERS, TIER_BY_KEY, type TierKey } from "./tiers";
 import fs from "fs";
 import path from "path";
 
 export const instant = false;
 
-type TierKey = "META" | "A" | "B" | "C" | "D" | "F";
-
-interface TierConfig {
-  key: TierKey;
-  label: string;
-  badgeBg: string;
-  badgeText: string;
-}
-
-const TIERS: TierConfig[] = [
-  { key: "META", label: "META", badgeBg: "bg-cyan-400", badgeText: "text-black" },
-  { key: "A", label: "A", badgeBg: "bg-green-500", badgeText: "text-black" },
-  { key: "B", label: "B", badgeBg: "bg-lime-400", badgeText: "text-black" },
-  { key: "C", label: "C", badgeBg: "bg-yellow-400", badgeText: "text-black" },
-  { key: "D", label: "D", badgeBg: "bg-orange-500", badgeText: "text-black" },
-  { key: "F", label: "F", badgeBg: "bg-red-600", badgeText: "text-black" },
-];
-
-const TIER_BY_KEY = Object.fromEntries(TIERS.map((t) => [t.key, t])) as Record<TierKey, TierConfig>;
 function tagColors(rgb?: [number, number, number] | null) {
   const bg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
   const lum = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
@@ -139,6 +123,20 @@ export default async function Home({
     return acc;
   }, {} as Record<TierKey, (MergedHero & { tier: TierKey })[]>);
 
+  // Montador: todos os heróis jogáveis (mesmo filtro de /heroes), não só os com MIN_MATCHES
+  const makerHeroes: MakerHero[] = Object.values(heroesMap)
+    .filter((h) => extractColor(h, wikiColors) !== null && !h.name.startsWith("hero_"))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+    .map((h) => ({
+      id: h.id,
+      name: h.name,
+      image: h.images?.icon_hero_card || h.images?.icon_image_small || h.images?.minimap_image || "",
+      rgb: extractColor(h, wikiColors),
+    }));
+  const metaTiers = Object.fromEntries(
+    TIERS.map((t) => [t.key, heroesByTier[t.key].map((h) => h.id)]),
+  ) as Record<TierKey, number[]>;
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10">
       <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -150,11 +148,6 @@ export default async function Home({
             A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
           </p>
         </div>
-
-        <PatchSelect
-          patches={PATCHES.map(({ id, label }) => ({ id, label }))}
-          selected={selectedPatch.id}
-        />
       </header>
       
       {heroesRanking.length === 0 && (
@@ -163,6 +156,18 @@ export default async function Home({
         </p>
       )}
 
+      <TierListTabs
+        heroes={makerHeroes}
+        metaTiers={metaTiers}
+        patchLabel={selectedPatch.label}
+        meta={
+          <>
+      <div className="mb-4 flex justify-end">
+        <PatchSelect
+          patches={PATCHES.map(({ id, label }) => ({ id, label }))}
+          selected={selectedPatch.id}
+        />
+      </div>
       {/* PRANCHA CONTÍNUA TIERMAKER */}
       <div className="rounded-2xl border border-neutral-800/90 bg-neutral-900/50 backdrop-blur-sm divide-y divide-neutral-800/90 shadow-2xl">
         {TIERS.map((tier, tierIndex) => {
@@ -323,6 +328,9 @@ export default async function Home({
           );
         })}
       </div>
+          </>
+        }
+      />
     </div>
   );
 }
