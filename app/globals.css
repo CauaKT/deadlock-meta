@@ -388,23 +388,20 @@ h1, h2, h3, h4 {
 .lp-load {
   animation: lp-fade-in 0.25s ease-out both;
 }
-.lp-page-in {
-  animation: lp-page-manifest 0.42s cubic-bezier(0.18, 0.9, 0.25, 1) both;
-  will-change: opacity, transform, filter;
+/* Anima a raiz da página real quando ela monta (após o loading); o fallback .lp-load fica de fora */
+main > :not(.lp-load) {
+  animation: lp-page-manifest 0.5s cubic-bezier(0.18, 0.9, 0.25, 1) backwards;
 }
 @keyframes lp-page-manifest {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(22px) scale(0.985);
-    filter: blur(8px);
+    transform: translateY(-24px) scale(0.985);
+    filter: blur(6px);
   }
-  50% {
-    opacity: 0.85;
-  }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0px);
+    transform: none;
+    filter: none;
   }
 }
 @keyframes lp-fade-in {
@@ -487,7 +484,7 @@ h1, h2, h3, h4 {
 
 @media (prefers-reduced-motion: reduce) {
   .lp-load,
-  .lp-page-in,
+  main > :not(.lp-load),
   .lp-logo,
   .lp-spin,
   .lp-card-in,
