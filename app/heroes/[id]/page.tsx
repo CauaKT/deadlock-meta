@@ -148,9 +148,11 @@ export default async function HeroPage({
     if (matched) heroArt = `/heroes/${matched}`;
   }
 
-  const abilities = await fetchHeroAbilitiesFull(heroId, hero.items);
-  const weapon = await fetchHeroWeapon(hero.items?.weapon_primary);
-  const build = await fetchHeroBuild(heroesMap[heroId]?.popular_items);
+  const [abilities, weapon, build] = await Promise.all([
+    fetchHeroAbilitiesFull(heroId, hero.items),
+    fetchHeroWeapon(hero.items?.weapon_primary),
+    fetchHeroBuild(heroesMap[heroId]?.popular_items),
+  ]);
   const weaponImage = hero.shop_stat_display?.weapon_stats_display?.weapon_image_webp;
   const weaponAttributes = hero.shop_stat_display?.weapon_stats_display?.weapon_attributes;
   const weaponTags: string[] = Array.isArray(weaponAttributes)

@@ -381,3 +381,74 @@ h1, h2, h3, h4 {
     animation: none;
   }
 }
+
+/* Loading discreto: só aparece se a espera passar de ~200ms */
+.lp-load {
+  animation: lp-fade-in 0.4s ease-out 0.2s both;
+}
+.lp-page-in {
+  animation: lp-fade-in 0.35s ease-out backwards;
+}
+@keyframes lp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.lp-logo {
+  animation: lp-breathe 2.2s ease-in-out infinite;
+}
+@keyframes lp-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(0.96); filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.2)); }
+  50% { opacity: 1; transform: scale(1.04); filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.55)); }
+}
+.lp-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgba(23, 23, 23, 0.6);
+  border: 1px solid rgba(64, 64, 64, 0.6);
+}
+.lp-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.18), transparent);
+  animation: lp-sweep 1.6s ease-in-out infinite;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes lp-sweep {
+  to { transform: translateX(100%); }
+}
+
+.lp-spin {
+  animation: lp-spin 8s linear infinite;
+}
+@keyframes lp-spin {
+  to { transform: rotate(360deg); }
+}
+.lp-card-in {
+  animation: lp-card-in 0.5s ease-out both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes lp-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lp-bar {
+  animation: lp-bar 1.2s ease-in-out infinite;
+}
+@keyframes lp-bar {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-load,
+  .lp-page-in,
+  .lp-logo,
+  .lp-spin,
+  .lp-card-in,
+  .lp-bar,
+  .lp-shimmer::after {
+    animation: none;
+  }
+}
