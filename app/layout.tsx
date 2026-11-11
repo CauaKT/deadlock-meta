@@ -2,8 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { RouteTracker } from "@/app/data-sources/SourcesAccordion";
+import NavTierDropdown from "./NavTierDropdown";
+import PageTransitionBar from "./PageTransitionBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +22,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-[#070807] text-neutral-100 font-sans relative flex flex-col justify-between overflow-x-hidden selection:bg-[#5ce1b6] selection:text-[#0a1612]">
+        <Suspense fallback={null}>
+          <PageTransitionBar />
+        </Suspense>
         <RouteTracker />
         {/* WALLPAPER FIXO DE FUNDO */}
         <div
@@ -44,12 +50,7 @@ export default function RootLayout({
 
             {/* Menu de Navegação */}
             <nav className="flex items-center gap-6 text-sm font-semibold">
-              <Link
-                href="/"
-                className="text-[#f4efe6] hover:text-amber-400 transition-colors"
-              >
-                Tier List
-              </Link>
+              <NavTierDropdown />
               <Link
                 href="/heroes"
                 className="text-[#f4efe6] hover:text-amber-400 transition-colors"

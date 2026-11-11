@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchWikiColors, extractColor, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchWikiColors, extractColor, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
 import type { MakerHero } from "@/app/TierMaker";
 import TierMakerClient from "./TierMakerClient";
 
@@ -15,6 +15,7 @@ export default async function TierMakerPage() {
     fetchHeroesAssets(),
     fetchWikiColors(),
     fetchHeroesAnalytics(PATCHES[0].since),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
 
   const statsById = new Map(stats.map((s) => [s.hero_id, s]));
@@ -46,13 +47,38 @@ export default async function TierMakerPage() {
       };
     });
 
+  const MIN_MATCHES = 1000;
+
+  const calculateTierKey = (wr: number) => {
+    if (wr >= TIER_THRESHOLDS.META) return "META";
+    if (wr >= TIER_THRESHOLDS.A) return "A";
+    if (wr >= TIER_THRESHOLDS.B) return "B";
+    if (wr >= TIER_THRESHOLDS.C) return "C";
+    if (wr >= TIER_THRESHOLDS.D) return "D";
+    return "F";
+  };
+
+  const rankedHeroes = stats
+    .filter((s) => (s.matches || 0) >= MIN_MATCHES)
+    .map((s) => {
+      const matches = s.matches || 0;
+      const wins = s.wins ?? Math.round((matches * (s.win_rate ?? 50)) / 100);
+      const winRate = s.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+      return {
+        id: s.hero_id,
+        winRate,
+        tier: calculateTierKey(winRate),
+      };
+    })
+    .sort((a, b) => b.winRate - a.winRate);
+
   const metaTiers: Record<string, number[]> = {
-    META: stats.filter((s) => (s.win_rate ?? 0) >= 53.5).map((s) => s.hero_id),
-    A: stats.filter((s) => (s.win_rate ?? 0) >= 51.5 && (s.win_rate ?? 0) < 53.5).map((s) => s.hero_id),
-    B: stats.filter((s) => (s.win_rate ?? 0) >= 50.0 && (s.win_rate ?? 0) < 51.5).map((s) => s.hero_id),
-    C: stats.filter((s) => (s.win_rate ?? 0) >= 48.5 && (s.win_rate ?? 0) < 50.0).map((s) => s.hero_id),
-    D: stats.filter((s) => (s.win_rate ?? 0) >= 47.0 && (s.win_rate ?? 0) < 48.5).map((s) => s.hero_id),
-    F: stats.filter((s) => (s.win_rate ?? 0) < 47.0).map((s) => s.hero_id),
+    META: rankedHeroes.filter((h) => h.tier === "META").map((h) => h.id),
+    A: rankedHeroes.filter((h) => h.tier === "A").map((h) => h.id),
+    B: rankedHeroes.filter((h) => h.tier === "B").map((h) => h.id),
+    C: rankedHeroes.filter((h) => h.tier === "C").map((h) => h.id),
+    D: rankedHeroes.filter((h) => h.tier === "D").map((h) => h.id),
+    F: rankedHeroes.filter((h) => h.tier === "F").map((h) => h.id),
   };
 
   return (

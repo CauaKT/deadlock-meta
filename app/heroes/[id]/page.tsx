@@ -29,6 +29,8 @@ import path from "path";
 
 export const instant = false;
 
+const TAG_ROTATIONS = ["-rotate-[3deg] sm:-rotate-[4deg]", "rotate-[3deg] sm:rotate-[4deg]", "-rotate-[2deg] sm:-rotate-[3deg]"];
+
 function cleanText(text: any): string {
   if (!text) return "";
   let str = "";
@@ -99,6 +101,7 @@ export default async function HeroPage({
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil),
     fetchWikiColors(),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
 
   const hero = heroDetails || heroesMap[heroId];
@@ -135,7 +138,7 @@ export default async function HeroPage({
   const tagText = heroTheme.tagText;
 
   const rawLore = typeof hero.description === "object" ? hero.description?.lore : hero.description;
-  const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patrões.";
+  const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patronos.";
 
  // 4. Imagem de Corpo Inteiro
   const heroSlug = enName.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -197,7 +200,9 @@ export default async function HeroPage({
                 <span
                   key={i}
                   style={{ backgroundColor: tagBg, color: tagText }}
-                  className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6"
+                  className={`font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow -skew-x-6 inline-block ${
+                    TAG_ROTATIONS[i % TAG_ROTATIONS.length]
+                  }`}
                 >
                   {trait}
                 </span>
@@ -241,7 +246,7 @@ export default async function HeroPage({
         </div>
 
         {/* Lado Direito: arte preenchendo toda a metade direita do card */}
-        <div className="pointer-events-none select-none absolute inset-y-0 right-0 w-full md:w-1/2 z-0">
+        <div className="pointer-events-none select-none absolute inset-y-0 right-0 w-full md:w-1/2 z-10">
           <img
             src={heroArt}
             alt={enName}
@@ -262,12 +267,14 @@ export default async function HeroPage({
             alt={enName}
             className="h-24 w-52 sm:h-28 sm:w-64 lg:h-32 lg:w-72 max-w-full object-contain object-right drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)]"
           />
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2.5">
             {heroTraits.map((trait, i) => (
               <span
                 key={i}
                 style={{ backgroundColor: tagBg, color: tagText }}
-                className="font-deadlock px-3 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6"
+                className={`font-deadlock px-3.5 py-1 font-black text-[11px] tracking-wider uppercase shadow-lg -skew-x-6 inline-block ${
+                  TAG_ROTATIONS[i % TAG_ROTATIONS.length]
+                }`}
               >
                 {trait}
               </span>
@@ -317,11 +324,11 @@ export default async function HeroPage({
         />
       </section>
 
-      {/* Histórico de Patches & Evolução do Win Rate */}
+      {/* Histórico de Patches & Mudança do Win Rate */}
       {patchHistory.length > 1 && (
         <section className="space-y-4">
           <h2 className="text-xl md:text-2xl font-black text-[#f4efe6]">
-            Evolução do Win Rate por Patch
+            Mudança do Win Rate por Patch
           </h2>
           <HeroPatchEvolution history={patchHistory} accent={tagBg} />
         </section>

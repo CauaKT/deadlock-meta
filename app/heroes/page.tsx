@@ -20,6 +20,7 @@ export default async function HeroesPage() {
     fetchHeroBlurbs(),
     fetchWikiColors(),
     fetchHeroesAnalytics(PATCHES[0].since),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
 
   // Heróis sem colors.style são internos ou ainda não lançados

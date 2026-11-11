@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useMemo, useEffect, type CSSProperties, type DragEvent } from "react";
+import { useState, useMemo, useEffect, useRef, type CSSProperties, type DragEvent } from "react";
 import type { MakerHero } from "@/app/TierMaker";
 
 export interface CustomTier {
@@ -56,6 +56,40 @@ export default function TierMakerClient({
   const [dragOverZone, setDragOverZone] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [publishedLists, setPublishedLists] = useState<PublishedTierList[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const [dynamicExpressions, setDynamicExpressions] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("lockpro_dynamic_expressions");
+        if (saved !== null) return saved === "true";
+      } catch {}
+    }
+    return true;
+  });
+
+  const toggleDynamicExpressions = (val: boolean) => {
+    setDynamicExpressions(val);
+    try {
+      localStorage.setItem("lockpro_dynamic_expressions", String(val));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      if (!settingsRef.current?.contains(e.target as Node)) setSettingsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+    };
+  }, [settingsOpen]);
 
   const byId = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
 
@@ -154,17 +188,48 @@ export default function TierMakerClient({
   };
 
   const fillWithMeta = () => {
-    const keys = Object.keys(metaTiers);
+    const META_KEYS = ["META", "A", "B", "C", "D", "F"];
+    const allRanked: number[] = [];
+
+    // Consolida todos os heróis com estatísticas ordenados pelo maior win rate
+    META_KEYS.forEach((key) => {
+      (metaTiers[key] || []).forEach((id) => {
+        if (byId.has(id) && !allRanked.includes(id)) {
+          allRanked.push(id);
+        }
+      });
+    });
+
     const next: Record<string, number[]> = { POOL: [] };
     const used = new Set<number>();
 
-    tiers.forEach((t, i) => {
-      const metaKey = keys[i];
-      const list = (metaTiers[metaKey] || []).filter((id) => byId.has(id));
-      list.forEach((id) => used.add(id));
-      next[t.id] = list;
-    });
+    // Se o usuário manteve exatamente os 6 tiers canônicos, preenche pelos limiares fixos
+    const hasCanonicalTiers =
+      tiers.length === 6 &&
+      tiers.every((t) => META_KEYS.includes(t.label.trim().toUpperCase()));
 
+    if (hasCanonicalTiers) {
+      tiers.forEach((t) => {
+        const key = t.label.trim().toUpperCase();
+        const list = (metaTiers[key] || []).filter((id) => byId.has(id));
+        list.forEach((id) => used.add(id));
+        next[t.id] = list;
+      });
+    } else {
+      // Caso tenha menos ou mais tiers (ex: 5, 4, 3), distribui proporcionalmente todos os heróis ranqueados
+      const total = allRanked.length;
+      const numTiers = Math.max(tiers.length, 1);
+
+      tiers.forEach((t, i) => {
+        const start = Math.round((i * total) / numTiers);
+        const end = Math.round(((i + 1) * total) / numTiers);
+        const list = allRanked.slice(start, end);
+        list.forEach((id) => used.add(id));
+        next[t.id] = list;
+      });
+    }
+
+    // Apenas heróis sem partidas registradas no patch ficam na bandeja de disponíveis
     next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
     setBoard(next);
   };
@@ -198,6 +263,26 @@ export default function TierMakerClient({
     setTab("community");
   };
 
+  const [communityQuery, setCommunityQuery] = useState("");
+
+  const filteredPublishedLists = useMemo(() => {
+    const q = communityQuery.trim().toLowerCase();
+    if (!q) return publishedLists;
+    return publishedLists.filter(
+      (l) => l.title.toLowerCase().includes(q) || l.author.toLowerCase().includes(q)
+    );
+  }, [publishedLists, communityQuery]);
+
+  const deletePublished = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Deseja remover esta tier list da sua galeria?")) return;
+    const updated = publishedLists.filter((l) => l.id !== id);
+    setPublishedLists(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  };
+
   const loadPublished = (pub: PublishedTierList) => {
     setTitle(pub.title);
     setAuthor(pub.author);
@@ -224,8 +309,8 @@ export default function TierMakerClient({
     const hero = byId.get(id);
     if (!hero) return null;
 
-    const isTopTier = currentTierId === tiers[0]?.id;
-    const isBottomTier = currentTierId === tiers[tiers.length - 1]?.id;
+    const isTopTier = dynamicExpressions && currentTierId === tiers[0]?.id;
+    const isBottomTier = dynamicExpressions && currentTierId === tiers[tiers.length - 1]?.id;
     const displayImage = isTopTier
       ? hero.gloatImage || hero.image
       : isBottomTier
@@ -371,6 +456,66 @@ export default function TierMakerClient({
               />
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Configurações da Prancha (Engrenagem) */}
+              <div ref={settingsRef} className="relative">
+                <button
+                  type="button"
+                  title="Configurações da prancha"
+                  aria-label="Configurações da prancha"
+                  aria-expanded={settingsOpen}
+                  onClick={() => setSettingsOpen((prev) => !prev)}
+                  className={`flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-[5px] border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
+                    settingsOpen || !dynamicExpressions
+                      ? "border-amber-500/80 bg-neutral-800 text-amber-400"
+                      : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-amber-500/70 hover:text-white"
+                  }`}
+                >
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? "rotate-90 text-amber-400" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+
+                {settingsOpen && (
+                  <div
+                    role="dialog"
+                    aria-label="Configurações da prancha"
+                    className="absolute left-0 top-full z-40 mt-2 w-72 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md"
+                  >
+                    <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
+                      Configurações da Prancha
+                    </p>
+                    <div className="pt-2.5">
+                      <label className="flex cursor-pointer items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={dynamicExpressions}
+                          onChange={(e) => toggleDynamicExpressions(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
+                        />
+                        <div className="space-y-0.5">
+                          <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+                            Expressões Dinâmicas
+                          </span>
+                          <span className="block text-[11px] font-medium leading-tight text-neutral-400">
+                            Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Preencher com Meta */}
               <button
                 type="button"
@@ -441,14 +586,28 @@ export default function TierMakerClient({
                   {/* Bloco Lateral Editável (Nome e Cor) com Cantos Arredondados */}
                   <div
                     style={{ backgroundColor: tier.color }}
-                    className={`relative flex w-20 sm:w-28 md:w-32 shrink-0 flex-col items-center justify-center p-2 text-center select-none ${
+                    className={`relative flex w-24 sm:w-36 md:w-40 shrink-0 flex-col items-center justify-center p-2 pb-7 text-center select-none ${
                       isFirst ? "rounded-tl-2xl" : ""
                     } ${isLast ? "rounded-bl-2xl" : ""}`}
                   >
-                    <input
+                    <textarea
+                      rows={1}
+                      maxLength={35}
                       value={tier.label}
-                      onChange={(e) => updateTierLabel(tier.id, e.target.value)}
-                      className="font-deadlock w-full bg-transparent text-center text-lg sm:text-xl font-black uppercase text-black outline-none leading-none px-1"
+                      onChange={(e) => {
+                        const lines = e.target.value.split("\n");
+                        if (lines.length > 3) return;
+                        updateTierLabel(tier.id, e.target.value);
+                      }}
+                      className={`font-deadlock w-full bg-transparent text-center font-black uppercase text-black outline-none resize-none leading-tight [overflow-wrap:anywhere] break-words px-1 [field-sizing:content] ${
+                        tier.label.length > 14
+                          ? "text-[11px] sm:text-xs"
+                          : tier.label.length > 8
+                            ? "text-xs sm:text-sm"
+                            : tier.label.length > 4
+                              ? "text-sm sm:text-base"
+                              : "text-base sm:text-lg md:text-xl"
+                      }`}
                     />
 
                     {/* Botão de Pincel com a Estética do Deadlock */}
@@ -622,55 +781,196 @@ export default function TierMakerClient({
       )}
 
       {tab === "community" && (
-        <div className="space-y-4">
-          <p className="text-xs font-semibold text-neutral-400">
-            Tier lists criadas e publicadas pelos jogadores:
-          </p>
-          {publishedLists.length === 0 ? (
-            <p className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500 italic">
-              Nenhuma tier list publicada ainda. Monte a sua na aba anterior e clique em &quot;Publicar no Site&quot;!
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {publishedLists.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 shadow-lg backdrop-blur-sm space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-deadlock text-lg font-black text-[#f4efe6]">{item.title}</h4>
-                      <p className="text-xs text-neutral-400">
-                        Por <strong className="text-neutral-200">{item.author}</strong> • {item.createdAt}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => loadPublished(item)}
-                      className="rounded bg-amber-500 px-3 py-1 text-xs font-black uppercase text-black hover:brightness-110"
-                    >
-                      Abrir no Editor
-                    </button>
-                  </div>
+        <div className="space-y-6">
+          {/* Barra de Filtros e Busca */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800/80 pb-4">
+            <div>
+              <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
+                Galeria da Comunidade
+              </h3>
+              <p className="text-xs text-neutral-400">
+                Tier lists salvas localmente no seu navegador.
+              </p>
+            </div>
 
-                  {/* Prévia dos Tiers */}
-                  <div className="space-y-1">
-                    {item.tiers.map((t, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <span
-                          style={{ backgroundColor: t.color }}
-                          className="font-deadlock w-16 px-1.5 py-0.5 text-center text-[10px] font-black uppercase text-black rounded"
-                        >
-                          {t.label}
-                        </span>
-                        <span className="text-neutral-400 text-[11px]">
-                          {t.heroes.length} heróis
-                        </span>
+            {publishedLists.length > 0 && (
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="search"
+                  value={communityQuery}
+                  onChange={(e) => setCommunityQuery(e.target.value)}
+                  placeholder="Buscar por título ou autor..."
+                  className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 py-1.5 pl-8 pr-3 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500 transition-colors"
+                />
+                <svg
+                  aria-hidden
+                  viewBox="0 0 16 16"
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <circle cx="7" cy="7" r="4.5" />
+                  <path d="M10.5 10.5 14 14" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {/* Estado Vazio */}
+          {publishedLists.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-800/90 bg-neutral-900/20 py-16 px-4 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 mb-4 shadow-[0_0_24px_rgba(245,158,11,0.15)]">
+                <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M3 15h18M9 3v18" />
+                </svg>
+              </div>
+              <h4 className="font-deadlock text-xl font-black text-[#f4efe6]">
+                Nenhuma Tier List na Galeria
+              </h4>
+              <p className="mt-1 text-xs text-neutral-400 max-w-sm leading-relaxed">
+                Monte sua classificação personalizada na aba anterior e clique em <strong className="text-neutral-200">&quot;Publicar no Site&quot;</strong> para salvá-la aqui.
+              </p>
+              <button
+                type="button"
+                onClick={() => setTab("builder")}
+                className="mt-5 rounded-lg border border-amber-500 bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-transform hover:scale-105 active:scale-95"
+              >
+                Criar Minha Primeira Tier List
+              </button>
+            </div>
+          ) : filteredPublishedLists.length === 0 ? (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 py-12 text-center text-xs text-neutral-400 italic">
+              Nenhuma tier list encontrada para &quot;{communityQuery}&quot;.
+            </div>
+          ) : (
+            /* Grade de Cards com Mini-Pranchas Visuais */
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {filteredPublishedLists.map((item) => {
+                const totalPlaced = item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
+
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-5 shadow-xl backdrop-blur-sm transition-all hover:border-neutral-700 space-y-4"
+                  >
+                    {/* Cabeçalho do Card */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
+                          {item.title}
+                        </h4>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                          <span>
+                            Por <strong className="text-neutral-200">{item.author}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>{item.createdAt}</span>
+                          <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
+                            {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
+                          </span>
+                        </div>
                       </div>
-                    ))}
+
+                      {/* Botão de Excluir */}
+                      <button
+                        type="button"
+                        title="Excluir da galeria"
+                        onClick={(e) => deletePublished(item.id, e)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
+                      >
+                        <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Mini-Prancha Visual com os Retratos dos Heróis */}
+                    <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
+                      {item.tiers.map((t, idx) => {
+                        const tierHeroes = (t.heroes || [])
+                          .map((hId) => byId.get(hId))
+                          .filter((h): h is NonNullable<typeof h> => Boolean(h));
+
+                        const MAX_PREVIEW = 10;
+                        const visibleHeroes = tierHeroes.slice(0, MAX_PREVIEW);
+                        const overflowCount = tierHeroes.length - MAX_PREVIEW;
+
+                        return (
+                          <div key={idx} className="flex min-h-[38px] items-stretch">
+                            {/* Letra/Nome do Tier */}
+                            <div
+                              style={{ backgroundColor: t.color }}
+                              className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
+                            >
+                              <span
+                                className="font-deadlock truncate px-1 text-[11px] font-black uppercase text-black leading-tight"
+                                title={t.label}
+                              >
+                                {t.label.replace(/\n+/g, " ")}
+                              </span>
+                            </div>
+
+                            {/* Miniaturas dos Heróis Lado a Lado */}
+                            <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
+                              {tierHeroes.length === 0 ? (
+                                <span className="text-[10px] text-neutral-600 italic px-1">—</span>
+                              ) : (
+                                <>
+                                  {visibleHeroes.map((h) => (
+                                    <div
+                                      key={h.id}
+                                      title={h.name}
+                                      className="relative h-6 w-6 sm:h-7 sm:w-7 shrink-0 overflow-hidden rounded-[4px] border border-neutral-800 bg-neutral-900 shadow-sm"
+                                    >
+                                      <img
+                                        src={h.image}
+                                        alt={h.name}
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  ))}
+                                  {overflowCount > 0 && (
+                                    <span className="flex h-6 items-center rounded-[4px] border border-neutral-800 bg-neutral-900 px-1.5 text-[9px] font-bold text-neutral-400">
+                                      +{overflowCount}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Ação: Abrir no Editor */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => loadPublished(item)}
+                        className="group flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/80 py-2.5 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] transition-all hover:border-amber-500/80 hover:bg-neutral-800 hover:text-amber-400"
+                      >
+                        <svg
+                          aria-hidden
+                          viewBox="0 0 16 16"
+                          className="h-3.5 w-3.5 transition-transform group-hover:scale-110"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                        </svg>
+                        <span>Abrir no Editor</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

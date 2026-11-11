@@ -46,14 +46,14 @@ const COMPARISONS: MobaComparison[] = [
     deadlock: "Guardiões da Base + Santuários (Shrines)",
     lol: "Torres de Inibidor + Inibidores",
     dota: "Torres Tier 3 + Barracas (Barracks)",
-    explanation: "Antes de atingir o Patrão inimigo, você precisa derrubar a defesa da base e destruir os dois Santuários para quebrar a imunidade do objetivo final.",
+    explanation: "Antes de atingir o Patrono inimigo, você precisa derrubar a defesa da base e destruir os dois Santuários para quebrar a imunidade do objetivo final.",
   },
   {
     concept: "Objetivo Principal",
-    deadlock: "Patrão (Patron)",
+    deadlock: "Patrono (Patron)",
     lol: "Nexus",
     dota: "Ancestral (Ancient)",
-    explanation: "O Patrão possui duas fases: a primeira na superfície e a segunda vulnerável no solo dentro do poço da base inimiga.",
+    explanation: "O Patrono possui duas fases: a primeira na superfície e a segunda vulnerável no solo dentro do poço da base inimiga.",
   },
   {
     concept: "Grande Chefe Neutro",
@@ -122,7 +122,7 @@ export default function GuideTabs() {
               1. O Ciclo do Jogo e Objetivo
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-neutral-300">
-              Deadlock é um MOBA 6v6 em terceira pessoa com mecânica de tiro tático. O objetivo de cada partida é destruir o <strong>Patrão (Patron)</strong> da base adversária. Para alcançar a base inimiga, seu time precisa avançar pelas 4 rotas da cidade, derrubando estruturas defensivas sequenciais:
+              Deadlock é um MOBA 6v6 em terceira pessoa com mecânica de tiro tático. O objetivo de cada partida é destruir o <strong>Patrono (Patron)</strong> da base adversária. Para alcançar a base inimiga, seu time precisa avançar pelas 4 rotas da cidade, derrubando estruturas defensivas sequenciais:
             </p>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-neutral-800 bg-black/40 p-3">
@@ -138,11 +138,11 @@ export default function GuideTabs() {
               <div className="rounded-lg border border-neutral-800 bg-black/40 p-3">
                 <span className="font-deadlock text-xs font-black uppercase text-amber-500">3º Passo</span>
                 <p className="mt-1 text-sm font-bold text-[#f4efe6]">Santuários (Shrines)</p>
-                <p className="mt-1 text-xs text-neutral-400">Dois núcleos na entrada da base que protegem o Patrão com invulnerabilidade.</p>
+                <p className="mt-1 text-xs text-neutral-400">Dois núcleos na entrada da base que protegem o Patrono com invulnerabilidade.</p>
               </div>
               <div className="rounded-lg border border-neutral-800 bg-black/40 p-3">
                 <span className="font-deadlock text-xs font-black uppercase text-amber-500">Objetivo Final</span>
-                <p className="mt-1 text-sm font-bold text-[#f4efe6]">O Patrão (Patron)</p>
+                <p className="mt-1 text-sm font-bold text-[#f4efe6]">O Patrono (Patron)</p>
                 <p className="mt-1 text-xs text-neutral-400">Monstro sagrado na base. Derrube a primeira barra e depois destrua seu núcleo no chão.</p>
               </div>
             </div>

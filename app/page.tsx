@@ -27,6 +27,7 @@ function calculateTier(winRate: number): TierKey {
 }
 
 const MIN_MATCHES = 1000;
+const TAG_ROTATIONS = ["-rotate-[3deg] sm:-rotate-[4deg]", "rotate-[3deg] sm:rotate-[4deg]", "-rotate-[2deg] sm:-rotate-[3deg]"];
 
 const heroesDir = path.join(process.cwd(), "public", "heroes");
 const localHeroFiles = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
@@ -207,11 +208,11 @@ export default async function Home({
             >
               {/* Coluna da Letra do Tier à Esquerda */}
               <div
-                className={`w-20 sm:w-28 md:w-32 flex-shrink-0 flex items-center justify-center p-2 text-center select-none ${tier.badgeBg} ${tier.badgeText} ${
+                className={`w-24 sm:w-36 md:w-40 flex-shrink-0 flex items-center justify-center p-2 text-center select-none ${tier.badgeBg} ${tier.badgeText} ${
                   isFirst ? "rounded-tl-2xl" : ""
                 } ${isLast ? "rounded-bl-2xl" : ""}`}
               >
-                <span className="font-deadlock text-base sm:text-lg md:text-xl font-black tracking-wider leading-none">
+                <span className="font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black tracking-wider leading-tight [overflow-wrap:anywhere] break-words max-w-full px-1">
                   {tier.label}
                 </span>
               </div>

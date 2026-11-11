@@ -1,7 +1,31 @@
+"use client";
 // app/loading.tsx
 /* eslint-disable @next/next/no-img-element */
+import { useEffect, useState } from "react";
+
+const LOADING_PHRASES = [
+  { title: "Canalizando", highlight: "Almas", sub: "Sintonizando frequências do Patrono…" },
+  { title: "Invocando", highlight: "Ocultismo", sub: "Consultando os registros da Cidade Amaldiçoada…" },
+  { title: "Coletando", highlight: "Orbes", sub: "Garantindo cada alma antes da negativa inimiga…" },
+  { title: "Navegando", highlight: "Trilhos", sub: "Acelerando pelas linhas rumo à linha de frente…" },
+  { title: "Forjando", highlight: "Relíquias", sub: "Consultando os estoques da Loja Secreta…" },
+  { title: "Despertando", highlight: "Santuários", sub: "Decifrando os grimórios do meta atual…" },
+  { title: "Canalizando", highlight: "Espírito", sub: "Escalando atributos para o próximo combate…" },
+  { title: "Disputando", highlight: "Rejuvenescedor", sub: "Preparando golpe pesado no Chefe Central…" },
+  { title: "Transportando", highlight: "a Urna", sub: "Cruzando os becos em busca de poder adicional…" },
+  { title: "Invocando", highlight: "Bênçãos", sub: "Calculando estatísticas de combate por nível…" },
+];
 
 export default function Loading() {
+  const [phrase, setPhrase] = useState<(typeof LOADING_PHRASES)[number] | null>(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setPhrase(LOADING_PHRASES[Math.floor(Math.random() * LOADING_PHRASES.length)]);
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
     <div
       role="status"
@@ -69,13 +93,21 @@ export default function Loading() {
         </div>
 
         {/* Tipografia de imersão */}
-        <div className="mt-6 text-center space-y-1">
-          <p className="font-deadlock text-lg font-black uppercase tracking-[0.25em] text-[#f4efe6]">
-            Canalizando <span className="text-amber-500">Almas</span>
-          </p>
-          <p className="text-[11px] font-semibold tracking-wider text-neutral-400 uppercase">
-            Sintonizando frequências do Patrão…
-          </p>
+        <div
+          className={`mt-6 min-h-[44px] text-center space-y-1 transition-opacity duration-200 ${
+            phrase ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {phrase && (
+            <>
+              <p className="font-deadlock text-lg font-black uppercase tracking-[0.25em] text-[#f4efe6]">
+                {phrase.title} <span className="text-amber-500">{phrase.highlight}</span>
+              </p>
+              <p className="text-[11px] font-semibold tracking-wider text-neutral-400 uppercase">
+                {phrase.sub}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

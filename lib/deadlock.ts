@@ -969,8 +969,18 @@ export async function fetchHeroPatchHistory(heroId: number, count = 6): Promise<
       const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
       const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
 
-      const dateMatch = patch.label.match(/\((\d{2}\/\d{2})/);
-      const dateLabel = dateMatch ? dateMatch[1] : patch.id.replace("minor-", "").replace("update-", "");
+      const dateMatch = patch.label.match(/(\d{2}\/\d{2})/);
+      let dateLabel = dateMatch ? dateMatch[1] : "";
+      if (!dateLabel && patch.since) {
+        dateLabel = new Date(patch.since * 1000).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          timeZone: "UTC",
+        });
+      }
+      if (!dateLabel) {
+        dateLabel = patch.id;
+      }
 
       return {
         patchId: patch.id,

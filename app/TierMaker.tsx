@@ -271,11 +271,11 @@ export default function TierMaker({ heroes, metaTiers, patchLabel }: Props) {
                 type="button"
                 onClick={() => selected !== null && moveHero(selected, tier.key)}
                 aria-label={`Mover o herói selecionado para o tier ${tier.label}`}
-                className={`flex w-20 shrink-0 select-none items-center justify-center p-2 text-center outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:w-28 md:w-32 ${tier.badgeBg} ${tier.badgeText} ${
+                className={`flex w-24 shrink-0 select-none items-center justify-center p-2 text-center outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:w-36 md:w-40 ${tier.badgeBg} ${tier.badgeText} ${
                   isFirst ? "rounded-tl-2xl" : ""
                 } ${isLast ? "rounded-bl-2xl" : ""}`}
               >
-                <span className="font-deadlock text-base font-black leading-none tracking-wider sm:text-lg md:text-xl">{tier.label}</span>
+                <span className="font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black leading-tight tracking-wider [overflow-wrap:anywhere] break-words max-w-full px-1">{tier.label}</span>
               </button>
               <div
                 {...zoneHandlers(tier.key)}
