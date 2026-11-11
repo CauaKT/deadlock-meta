@@ -6,8 +6,8 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LockPro • Tier List de Deadlock",
-  description: "Tier list de heróis de Deadlock baseada em winrate e partidas da Deadlock API.",
+  title: "LockPro • Heróis, Itens e Tier List de Deadlock",
+  description: "Tier list por patch, atributos e habilidades dos heróis e catálogo de itens de Deadlock, com dados da Deadlock API e da Deadlock Wiki. Projeto não oficial.",
 };
 
 export default function RootLayout({

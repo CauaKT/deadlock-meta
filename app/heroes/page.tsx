@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import fs from "fs";
 import path from "path";
-import { fetchHeroesAssets, fetchHeroBlurbs, fetchWikiColors, fetchHeroAbilitiesFull, extractColor, extractHeroTheme } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, fetchHeroAbilitiesFull, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
 import HeroSelect, { type SelectHero } from "./HeroSelect";
 
 export const instant = false;
+
+// Mesmo limite da Home: abaixo disso o winrate é amostra pequena demais para ordenar
+const MIN_MATCHES = 1000;
 
 export const metadata: Metadata = {
   title: "LockPro • Heróis de Deadlock",
@@ -12,10 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default async function HeroesPage() {
-  const [heroesMap, blurbs, wikiColors] = await Promise.all([
+  const [heroesMap, blurbs, wikiColors, stats] = await Promise.all([
     fetchHeroesAssets(),
     fetchHeroBlurbs(),
     fetchWikiColors(),
+    fetchHeroesAnalytics(PATCHES[0].since),
   ]);
 
   // Heróis sem colors.style são internos ou ainda não lançados
@@ -25,6 +29,15 @@ export default async function HeroesPage() {
 
   const abilities = await Promise.all(base.map((h) => fetchHeroAbilitiesFull(h.id, h.items)));
 
+  const statsById = new Map(
+    stats.map((s) => {
+      const matches = s.matches || 0;
+      const wins = s.wins ?? Math.round((matches * (s.win_rate ?? 50)) / 100);
+      const winRate = s.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+      return [s.hero_id, { matches, winRate }] as const;
+    }),
+  );
+
   const heroesDir = path.join(process.cwd(), "public", "heroes");
   const localArt = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
   const heroes: SelectHero[] = base.map((h, i) => {
@@ -32,6 +45,7 @@ export default async function HeroesPage() {
     const slug = h.name.toLowerCase().replace(/[^a-z0-9]/g, "");
     const local = localArt.find((f) => f.toLowerCase().startsWith(slug));
     const theme = extractHeroTheme(h, wikiColors);
+    const st = statsById.get(h.id);
     return {
       id: h.id,
       name: h.name,
@@ -46,6 +60,10 @@ export default async function HeroesPage() {
       ),
       tags: blurbs[h.id]?.tags ?? [],
       abilities: abilities[i],
+      matches: st?.matches ?? 0,
+      winRate: st && st.matches >= MIN_MATCHES ? st.winRate : null,
+      // Lançado = selecionável, não desativado e fora de desenvolvimento (campos da Deadlock API)
+      released: h.player_selectable === true && h.disabled !== true && h.in_development !== true,
     };
   });
 
@@ -56,7 +74,7 @@ export default async function HeroesPage() {
           Não foi possível carregar os heróis agora. Tente novamente em alguns minutos.
         </p>
       ) : (
-        <HeroSelect heroes={heroes} />
+        <HeroSelect heroes={heroes} statsLabel={PATCHES[0].label} />
       )}
     </div>
   );

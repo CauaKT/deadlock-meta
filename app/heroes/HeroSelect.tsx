@@ -18,7 +18,20 @@ export interface SelectHero {
   nameSvgs: string[];
   tags: string[];
   abilities: HeroAbilityFull[];
+  matches: number;
+  winRate: number | null;
+  released: boolean;
 }
+
+type SortKey = "name" | "name-desc" | "winrate-desc" | "winrate-asc" | "matches";
+
+const SORT_OPTIONS: { id: SortKey; label: string }[] = [
+  { id: "name", label: "Nome (A–Z)" },
+  { id: "name-desc", label: "Nome (Z–A)" },
+  { id: "winrate-desc", label: "Winrate (maior pra menor)" },
+  { id: "winrate-asc", label: "Winrate (menor pra maior)" },
+  { id: "matches", label: "Número de partidas" },
+];
 
 const TAG_ROTATIONS = ["-rotate-[4deg] sm:-rotate-[5deg]", "rotate-[4deg] sm:rotate-[5deg]", "-rotate-[3deg] sm:-rotate-[4deg]"];
 
@@ -84,12 +97,16 @@ function FrameEdge({ side }: { side: "left" | "right" }) {
   );
 }
 
-export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
+export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[]; statsLabel: string }) {
   const [activeId, setActiveId] = useState<number | null>(heroes[0]?.id ?? null);
+  const [showUnreleased, setShowUnreleased] = useState(false);
   const [nameFails, setNameFails] = useState<Record<number, number>>({});
   const [pop, setPop] = useState<{ slot: number; left: number; bottom: number; width: number; maxH: number } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const [sort, setSort] = useState<SortKey>("name");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!pop) return;
@@ -114,6 +131,22 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
     };
   }, [pop]);
 
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFilterOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      if (!filterRef.current?.contains(e.target as Node)) setFilterOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+    };
+  }, [filterOpen]);
+
   // Posiciona o popover acima do ícone clicado, limitado à viewport (o rect já inclui o scale do bloco)
   const openAbility = (slot: number, el: HTMLElement) => {
     if (pop?.slot === slot) return setPop(null);
@@ -123,7 +156,20 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
     setPop({ slot, left, width, bottom: window.innerHeight - r.top + 12, maxH: Math.max(r.top - 82, 200) });
   };
 
-  const active = heroes.find((h) => h.id === activeId) ?? heroes[0];
+  const visible = heroes
+    .filter((h) => showUnreleased || h.released)
+    .sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, "pt-BR");
+      if (sort === "name") return byName;
+      if (sort === "name-desc") return -byName;
+      if (sort === "matches") return b.matches - a.matches || byName;
+      // Winrate: heróis sem amostra mínima (null) ficam sempre no final
+      if (a.winRate === null || b.winRate === null) {
+        return (a.winRate === null ? 1 : 0) - (b.winRate === null ? 1 : 0) || byName;
+      }
+      return (sort === "winrate-asc" ? a.winRate - b.winRate : b.winRate - a.winRate) || byName;
+    });
+  const active = visible.find((h) => h.id === activeId) ?? visible[0];
   if (!active) return null;
 
   const color = `rgb(${active.rgb.join(", ")})`;
@@ -135,14 +181,71 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
     <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-[calc(100svh-57px)]">
       <GameTexture />
       <div className="relative z-10 flex min-h-0 flex-col p-4 md:p-8 lg:px-10 lg:py-8 wide:h-full wide:w-[51%] wide:max-w-[880px]">
-        <div className="shrink-0">
-          <p className="font-deadlock text-sm font-black uppercase tracking-wider text-[#5f7a76]">Deadlock</p>
-          <h1 className="mb-4 font-deadlock text-6xl font-black uppercase tracking-tight text-[#5f7a76] md:text-7xl">Heróis</h1>
+        <div className="flex shrink-0 items-end justify-between gap-4">
+          <div>
+            <p className="font-deadlock text-sm font-black uppercase tracking-wider text-[#5f7a76]">Deadlock</p>
+            <h1 className="mb-4 font-deadlock text-6xl font-black uppercase tracking-tight text-[#5f7a76] md:text-7xl">Heróis</h1>
+          </div>
+          <div ref={filterRef} className="relative mb-4 shrink-0">
+            <button
+              type="button"
+              title="Filtros"
+              aria-label="Filtros"
+              aria-haspopup="true"
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((v) => !v)}
+              className={`flex h-10 w-10 cursor-pointer items-center justify-center border-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/70 ${
+                filterOpen || showUnreleased || sort !== "name"
+                  ? "border-[#5f7a76] bg-[#5f7a76]/25 text-[#f0e1cb]"
+                  : "border-[#465353] bg-[#070707] text-[#8b9a96] hover:text-[#f0e1cb]"
+              }`}
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor">
+                <path d="M1 2h14l-5.5 6.5V14l-3 1.5V8.5Z" />
+              </svg>
+            </button>
+            {filterOpen && (
+              <div
+                role="dialog"
+                aria-label="Filtros"
+                className="absolute right-0 top-full z-30 mt-2 w-64 border-2 border-[#465353] bg-[#070707] p-3 font-deadlock text-[#f0e1cb] shadow-[0_8px_24px_rgba(0,0,0,0.8)]"
+              >
+                <p className="mb-2 text-xs font-black uppercase tracking-wider text-[#5f7a76]">Ordenar por</p>
+                <div role="radiogroup" className="flex flex-col gap-1">
+                  {SORT_OPTIONS.map((o) => (
+                    <label key={o.id} className="flex cursor-pointer items-center gap-2 py-1 text-sm font-black uppercase tracking-wider hover:text-white">
+                      <input
+                        type="radio"
+                        name="hero-sort"
+                        checked={sort === o.id}
+                        onChange={() => setSort(o.id)}
+                        className="accent-[#5f7a76]"
+                      />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mb-2 mt-3 border-t border-[#465353] pt-3 text-xs font-black uppercase tracking-wider text-[#5f7a76]">Exibição</p>
+                <label className="flex cursor-pointer items-center gap-2 py-1 text-sm font-black uppercase tracking-wider hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={showUnreleased}
+                    onChange={(e) => setShowUnreleased(e.target.checked)}
+                    className="accent-[#5f7a76]"
+                  />
+                  Mostrar não lançados
+                </label>
+                <p className="mt-3 border-t border-[#465353] pt-2 font-sans text-[11px] normal-case tracking-normal text-[#8b9a96]">
+                  Winrate e partidas: {statsLabel}. Winrate só com {"≥"} 1000 partidas.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 wide:overflow-y-auto wide:[scrollbar-width:thin]">
           <div className="grid grid-cols-5 gap-2 p-4 sm:grid-cols-7 lg:grid-cols-9 lg:gap-3 lg:p-8">
-            {heroes.map((hero) => {
+            {visible.map((hero) => {
               const isActive = hero.id === active.id;
               const heroColor = `rgb(${hero.rgb.join(", ")})`;
               return (
