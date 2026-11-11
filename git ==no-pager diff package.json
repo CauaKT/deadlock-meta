@@ -1,0 +1,13 @@
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/package.json b/package.json[m
+[1mindex e73665b..58039ae 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -9,6 +9,7 @@[m
+     "lint": "eslint"[m
+   },[m
+   "dependencies": {[m
+[32m+[m[32m    "@vercel/analytics": "^2.0.1",[m
+     "next": "16.4.5",[m
+     "react": "19.3.0",[m
+     "react-dom": "19.3.0"[m
