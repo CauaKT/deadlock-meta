@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Analytics } from "@vercel/analytics/next";
+import { RouteTracker } from "@/app/data-sources/SourcesAccordion";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-[#070807] text-neutral-100 font-sans relative flex flex-col justify-between overflow-x-hidden selection:bg-[#5ce1b6] selection:text-[#0a1612]">
+        <RouteTracker />
         {/* WALLPAPER FIXO DE FUNDO */}
         <div
           className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center bg-no-repeat opacity-15 blur-[2px] scale-105"
@@ -60,6 +62,12 @@ export default function RootLayout({
               >
                 Itens
               </Link>
+              <Link
+                href="/guide"
+                className="text-[#f4efe6] hover:text-amber-400 transition-colors"
+              >
+                Guia
+              </Link>
             </nav>
 
             {/* Status da API & GitHub */}
@@ -82,19 +90,91 @@ export default function RootLayout({
         </main>
 
         {/* BANNER INFERIOR / FOOTER */}
-        <footer className="w-full relative z-20 border-t border-neutral-800/80 bg-neutral-950/85 backdrop-blur-md py-8 px-4 text-neutral-400">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img
-                src="/logo.png"
-                alt="LockPro"
-                className="w-8 h-8 object-contain opacity-70"
-              />
-              <div>
-                <p className="text-sm font-bold text-[#f4efe6]">
-                  LOCK<span className="text-amber-500">PRO</span>
+        <footer className="w-full relative z-20 border-t border-neutral-800/80 bg-neutral-950/90 backdrop-blur-md py-10 px-4 text-neutral-400">
+          <div className="max-w-6xl mx-auto space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Marca e Resumo */}
+              <div className="space-y-3 md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/logo.png"
+                    alt="LockPro"
+                    className="w-7 h-7 object-contain opacity-90"
+                  />
+                  <span className="font-deadlock text-lg font-black tracking-tight text-[#f4efe6]">
+                    LOCK<span className="text-amber-500">PRO</span>
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-neutral-400 max-w-md">
+                  Plataforma comunitária de estatísticas, tier list por patch, catálogo de itens e simulador de habilidades para Deadlock.
                 </p>
               </div>
+
+              {/* Transparência e Código */}
+              <div className="space-y-2.5 md:text-right">
+                <p className="text-[11px] font-black uppercase tracking-wider text-[#f4efe6]">
+                  Transparência
+                </p>
+                <ul className="space-y-2 text-xs font-semibold">
+                  <li>
+                    <Link
+                      href="/data-sources"
+                      className="group inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold transition-colors"
+                    >
+                      <span>Fontes de Dados</span>
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 16 16"
+                        className="h-3 w-3 shrink-0 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 12 12 4M6 4h6v6" />
+                      </svg>
+                    </Link>
+                  </li>
+                  <li>
+                    <a
+                      href="https://github.com/CauaKT/deadlock-meta"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group inline-flex items-center gap-1.5 text-neutral-400 hover:text-white transition-colors"
+                    >
+                      <span>Repositório GitHub</span>
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 16 16"
+                        className="h-3 w-3 shrink-0 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 12 12 4M6 4h6v6" />
+                      </svg>
+                    </a>
+                  </li>
+                  <li>
+                    <span className="text-neutral-500 text-[11px] block">
+                      Atualizações sincronizadas via API pública
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Aviso de Não Afiliação com a Valve */}
+            <div className="pt-6 border-t border-neutral-800/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-neutral-500">
+              <p>
+                Deadlock é marca registrada da Valve Corporation. O LockPro é um projeto comunitário independente, sem fins lucrativos e sem afiliação oficial com a Valve.
+              </p>
+              <p className="shrink-0 font-semibold text-neutral-400">
+                LockPro © 2026
+              </p>
             </div>
           </div>
         </footer>

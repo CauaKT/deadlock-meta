@@ -945,3 +945,51 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
     return shopItemsCache?.data ?? [];
   }
 }
+
+export interface PatchWinRatePoint {
+  patchId: string;
+  label: string;
+  dateLabel: string;
+  winRate: number;
+  matches: number;
+  delta: number | null;
+}
+
+// Coleta o desempenho do herói ao longo dos últimos patches cronológicos
+export async function fetchHeroPatchHistory(heroId: number, count = 6): Promise<PatchWinRatePoint[]> {
+  const patchesWithSince = PATCHES.filter((p) => typeof p.since === "number").slice(0, count);
+  if (patchesWithSince.length === 0) return [];
+
+  const results = await Promise.all(
+    patchesWithSince.map(async (patch, idx) => {
+      const until = idx > 0 ? patchesWithSince[idx - 1].since : undefined;
+      const stats = await fetchHeroesAnalytics(patch.since, until);
+      const stat = stats.find((s) => s.hero_id === heroId);
+      const matches = stat?.matches || 0;
+      const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
+      const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+
+      const dateMatch = patch.label.match(/\((\d{2}\/\d{2})/);
+      const dateLabel = dateMatch ? dateMatch[1] : patch.id.replace("minor-", "").replace("update-", "");
+
+      return {
+        patchId: patch.id,
+        label: patch.label,
+        dateLabel,
+        winRate: Number(winRate.toFixed(2)),
+        matches,
+      };
+    })
+  );
+
+  const chronological = results.reverse().filter((r) => r.matches > 0);
+
+  return chronological.map((point, i) => {
+    const prev = i > 0 ? chronological[i - 1] : null;
+    const delta = prev ? Number((point.winRate - prev.winRate).toFixed(2)) : null;
+    return {
+      ...point,
+      delta,
+    };
+  });
+}

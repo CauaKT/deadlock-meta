@@ -8,6 +8,7 @@ import {
   fetchHeroAbilitiesFull,
   fetchHeroWeapon,
   fetchHeroBuild,
+  fetchHeroPatchHistory,
   extractColor,
   extractHeroTheme,
   ensureVibrantTextColor,
@@ -21,6 +22,7 @@ import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
 import HeroAtmosphere from "./HeroAtmosphere";
+import HeroPatchEvolution from "./HeroPatchEvolution";
 import NavButton from "./NavButton";
 import fs from "fs";
 import path from "path";
@@ -148,11 +150,13 @@ export default async function HeroPage({
     if (matched) heroArt = `/heroes/${matched}`;
   }
 
-  const [abilities, weapon, build] = await Promise.all([
+  const [abilities, weapon, build, patchHistory] = await Promise.all([
     fetchHeroAbilitiesFull(heroId, hero.items),
     fetchHeroWeapon(hero.items?.weapon_primary),
     fetchHeroBuild(heroesMap[heroId]?.popular_items),
+    fetchHeroPatchHistory(heroId),
   ]);
+
   const weaponImage = hero.shop_stat_display?.weapon_stats_display?.weapon_image_webp;
   const weaponAttributes = hero.shop_stat_display?.weapon_stats_display?.weapon_attributes;
   const weaponTags: string[] = Array.isArray(weaponAttributes)
@@ -312,6 +316,16 @@ export default async function HeroPage({
           accent={tagBg}
         />
       </section>
+
+      {/* Histórico de Patches & Evolução do Win Rate */}
+      {patchHistory.length > 1 && (
+        <section className="space-y-4">
+          <h2 className="text-xl md:text-2xl font-black text-[#f4efe6]">
+            Evolução do Win Rate por Patch
+          </h2>
+          <HeroPatchEvolution history={patchHistory} accent={tagBg} />
+        </section>
+      )}
     </div>
   );
 }

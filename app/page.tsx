@@ -123,9 +123,17 @@ export default async function Home({
     return acc;
   }, {} as Record<TierKey, (MergedHero & { tier: TierKey })[]>);
 
-  // Montador: todos os heróis jogáveis (mesmo filtro de /heroes), não só os com MIN_MATCHES
+  // Montador: apenas heróis lançados (com partidas registradas ou liberados na API)
+  const statsById = new Map(stats.map((s) => [s.hero_id, s]));
   const makerHeroes: MakerHero[] = Object.values(heroesMap)
-    .filter((h) => extractColor(h, wikiColors) !== null && !h.name.startsWith("hero_"))
+    .filter((h) => {
+      if (extractColor(h, wikiColors) === null || h.name.startsWith("hero_")) return false;
+      const st = statsById.get(h.id);
+      return (
+        (st?.matches ?? 0) > 0 ||
+        (h.player_selectable === true && h.disabled !== true && h.in_development !== true)
+      );
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     .map((h) => ({
       id: h.id,
@@ -148,6 +156,32 @@ export default async function Home({
             A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
           </p>
         </div>
+        <div className="flex flex-col items-end gap-2.5 shrink-0">
+          <Link
+            href="/tier-maker"
+            className="group relative inline-flex items-center gap-2 overflow-hidden rounded-[5px] border border-amber-300/70 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_14px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_22px_rgba(245,158,11,0.6)] active:scale-[0.98]"
+          >
+            <span className="relative z-10 flex items-center gap-2 leading-none">
+              <span>TierMaker</span>
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M1 8a.75.75 0 0 1 .75-.75h9.793L8.27 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.273-3.22H1.75A.75.75 0 0 1 1 8Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+          </Link>
+          <PatchSelect
+            patches={PATCHES.map(({ id, label }) => ({ id, label }))}
+            selected={selectedPatch.id}
+          />
+        </div>
       </header>
       
       {heroesRanking.length === 0 && (
@@ -156,18 +190,7 @@ export default async function Home({
         </p>
       )}
 
-      <TierListTabs
-        heroes={makerHeroes}
-        metaTiers={metaTiers}
-        patchLabel={selectedPatch.label}
-        meta={
-          <>
-      <div className="mb-4 flex justify-end">
-        <PatchSelect
-          patches={PATCHES.map(({ id, label }) => ({ id, label }))}
-          selected={selectedPatch.id}
-        />
-      </div>
+      {/* PRANCHA CONTÍNUA DA TIER LIST DO META */}
       {/* PRANCHA CONTÍNUA TIERMAKER */}
       <div className="rounded-2xl border border-neutral-800/90 bg-neutral-900/50 backdrop-blur-sm divide-y divide-neutral-800/90 shadow-2xl">
         {TIERS.map((tier, tierIndex) => {
@@ -328,9 +351,6 @@ export default async function Home({
           );
         })}
       </div>
-          </>
-        }
-      />
     </div>
   );
 }

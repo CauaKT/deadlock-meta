@@ -62,8 +62,8 @@ export default async function HeroesPage() {
       abilities: abilities[i],
       matches: st?.matches ?? 0,
       winRate: st && st.matches >= MIN_MATCHES ? st.winRate : null,
-      // Lançado = selecionável, não desativado e fora de desenvolvimento (campos da Deadlock API)
-      released: h.player_selectable === true && h.disabled !== true && h.in_development !== true,
+      // Lançado se possuir partidas registradas no analytics ou se a API marcar explicitamente como jogável
+      released: (st?.matches ?? 0) > 0 || (h.player_selectable === true && h.disabled !== true && h.in_development !== true),
     };
   });
 
