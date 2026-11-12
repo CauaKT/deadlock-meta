@@ -59,6 +59,13 @@ export default function ProfileForm({
   const heroColor = selectedHero?.rgb ? `rgb(${selectedHero.rgb.join(",")})` : "#f59e0b";
   const avatarImage = initialProfile.avatar_url || selectedHero?.image;
 
+  const tabClass = (tab: typeof activeTab) =>
+    `-mb-px flex items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+      activeTab === tab
+        ? "border-amber-500 text-[#f4efe6]"
+        : "border-transparent text-neutral-400 hover:text-white"
+    }`;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -100,7 +107,7 @@ export default function ProfileForm({
       {/* ========================================================================= */}
       <section className="relative overflow-hidden rounded-3xl border border-neutral-800/90 bg-[#0a0d0c] shadow-[0_25px_60px_rgba(0,0,0,0.95)]">
         {/* Banner Panorâmico */}
-        <div className="relative h-44 sm:h-60 md:h-72 w-full overflow-hidden bg-neutral-900">
+        <div className="relative h-40 sm:h-52 md:h-60 w-full overflow-hidden bg-neutral-900">
           {selectedHero?.banner ? (
             <img
               src={selectedHero.banner}
@@ -201,41 +208,41 @@ export default function ProfileForm({
           </div>
 
           {/* Barra Horizontal de Métricas do Jogador (Igual ao Modelo de Referência) */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-neutral-800/80 pt-5 text-center sm:text-left">
-            <div className="rounded-xl border border-neutral-800/80 bg-black/40 p-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
-                Herói Assinatura
-              </span>
-              <p style={{ color: heroColor }} className="font-deadlock text-base font-black truncate mt-0.5">
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 divide-x divide-neutral-800/80 border-t border-neutral-800/80 pt-4 text-center">
+            <div className="px-3">
+              <p style={{ color: heroColor }} className="font-deadlock text-lg font-black truncate">
                 {selectedHero?.name || "Nenhum"}
               </p>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                Herói Assinatura
+              </span>
             </div>
 
-            <div className="rounded-xl border border-neutral-800/80 bg-black/40 p-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
-                Vínculo com Deadlock
-              </span>
-              <p className="font-deadlock text-base font-black text-[#f4efe6] truncate mt-0.5">
+            <div className="px-3">
+              <p className="font-deadlock text-lg font-black text-[#f4efe6] truncate">
                 {steamId ? "Steam Conectada" : "Pendente"}
               </p>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                Vínculo com Deadlock
+              </span>
             </div>
 
-            <div className="rounded-xl border border-neutral-800/80 bg-black/40 p-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
-                Tier Lists Criadas
-              </span>
-              <p className="font-deadlock text-base font-black text-amber-400 mt-0.5">
-                {savedTierLists.length} {savedTierLists.length === 1 ? "Lista" : "Listas"}
+            <div className="px-3">
+              <p className="font-deadlock text-lg font-black text-amber-400">
+                {savedTierLists.length}
               </p>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                {savedTierLists.length === 1 ? "Tier List" : "Tier Lists"}
+              </span>
             </div>
 
-            <div className="rounded-xl border border-neutral-800/80 bg-black/40 p-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
-                Status da Cidade
-              </span>
-              <p className="font-deadlock text-base font-black text-emerald-400 mt-0.5">
+            <div className="px-3">
+              <p className="font-deadlock text-lg font-black text-emerald-400">
                 Iniciado Ativo
               </p>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                Status da Cidade
+              </span>
             </div>
           </div>
         </div>
@@ -244,15 +251,11 @@ export default function ProfileForm({
       {/* ========================================================================= */}
       {/* 2. BARRA DE NAVEGAÇÃO EM ABAS (ESTILO GAMER DA REFERÊNCIA)                */}
       {/* ========================================================================= */}
-      <div className="flex items-center gap-2 border-b border-neutral-800 pb-2">
+      <div className="flex items-center gap-1 border-b border-neutral-800">
         <button
           type="button"
           onClick={() => setActiveTab("overview")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === "overview"
-              ? "bg-amber-500 text-black shadow-[0_2px_12px_rgba(245,158,11,0.3)]"
-              : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
-          }`}
+          className={tabClass("overview")}
         >
           <span>Visão Geral</span>
         </button>
@@ -260,11 +263,7 @@ export default function ProfileForm({
         <button
           type="button"
           onClick={() => setActiveTab("tierlists")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === "tierlists"
-              ? "bg-amber-500 text-black shadow-[0_2px_12px_rgba(245,158,11,0.3)]"
-              : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
-          }`}
+          className={tabClass("tierlists")}
         >
           <span>Minhas Tier Lists</span>
           <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
@@ -275,11 +274,7 @@ export default function ProfileForm({
         <button
           type="button"
           onClick={() => setActiveTab("settings")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === "settings"
-              ? "bg-amber-500 text-black shadow-[0_2px_12px_rgba(245,158,11,0.3)]"
-              : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
-          }`}
+          className={tabClass("settings")}
         >
           <span>Configurações</span>
         </button>
@@ -291,6 +286,7 @@ export default function ProfileForm({
 
       {/* ABA 1: VISÃO GERAL */}
       {activeTab === "overview" && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           {/* Card Destaque do Herói Favorito */}
           {selectedHero ? (
@@ -393,6 +389,50 @@ export default function ProfileForm({
               </div>
             )}
           </div>
+        </div>
+
+        <aside className="space-y-4">
+          <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
+            <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+              Atividade
+            </h3>
+            <dl className="space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <dt className="text-neutral-400">Tier lists salvas</dt>
+                <dd className="font-deadlock text-base font-black text-amber-400">{savedTierLists.length}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-neutral-400">Heróis classificados</dt>
+                <dd className="font-deadlock text-base font-black text-amber-400">
+                  {savedTierLists.reduce(
+                    (acc, tl) => acc + tl.tiers.reduce((sum, t) => sum + (t.heroes?.length || 0), 0),
+                    0
+                  )}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-[11px] text-neutral-500">
+              As tier lists ficam salvas apenas neste navegador.
+            </p>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
+            <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+              Atalhos
+            </h3>
+            <div className="flex flex-col gap-2">
+              <Link href="/tier-maker" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
+                TierMaker
+              </Link>
+              <Link href="/heroes" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
+                Heróis
+              </Link>
+              <Link href="/items" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
+                Itens
+              </Link>
+            </div>
+          </section>
+        </aside>
         </div>
       )}
 
