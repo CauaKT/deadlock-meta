@@ -10,6 +10,7 @@ interface ProfileSummary {
   username: string;
   avatar_url?: string;
   favorite_hero_id?: number;
+  handle?: string | null;
 }
 
 type UserStatus = "online" | "dnd" | "invisible";
@@ -50,12 +51,13 @@ export default function NavUserButton() {
     const loadUserData = async (u: User | null) => {
       setUser(u);
       if (u) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("profiles")
-          .select("username, avatar_url, favorite_hero_id")
+          .select("username, avatar_url, favorite_hero_id, handle")
           .eq("id", u.id)
-          .single();
+          .maybeSingle();
         if (data) setProfile(data);
+        if (!error && !data?.handle && pathname !== "/welcome") router.replace("/welcome");
       } else {
         setProfile(null);
       }
@@ -69,7 +71,7 @@ export default function NavUserButton() {
     });
 
     return () => subscription.unsubscribe();
-  }, [pathname]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!open) return;
@@ -273,9 +275,9 @@ export default function NavUserButton() {
             <p className="font-deadlock truncate text-sm font-black uppercase tracking-wide text-[#f4efe6]">
               {displayName}
             </p>
-            <p className="truncate font-mono text-[10.5px] text-neutral-400">
-              {user.email}
-            </p>
+            {profile?.handle && (
+              <p className="truncate font-mono text-[10.5px] text-neutral-400">@{profile.handle}</p>
+            )}
           </div>
         </div>
 
@@ -283,7 +285,7 @@ export default function NavUserButton() {
         <div className="py-1 space-y-0.5">
           {/* Opção 1: Meu Perfil */}
           <Link
-            href="/profile"
+            href={profile?.handle ? `/profile/${profile.handle}` : "/profile"}
             onClick={() => setOpen(false)}
             className="group flex items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-neutral-800/60"
           >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +23,8 @@ interface HeroOption {
 interface ProfileData {
   id: string;
   username: string;
+  bio?: string | null;
+  handle?: string | null;
   avatar_url?: string | null;
   steam_id: string;
   favorite_hero_id: number | null;
@@ -36,7 +38,6 @@ const STORAGE_KEY = "lockpro_community_tierlists";
 export default function ProfileForm({
   initialProfile,
   heroes,
-  userEmail,
 }: {
   initialProfile: ProfileData;
   heroes: HeroOption[];
@@ -48,6 +49,8 @@ export default function ProfileForm({
   // Estados do formulário de edição
   const [username, setUsername] = useState(initialProfile.username || "");
   const [steamId, setSteamId] = useState(initialProfile.steam_id || "");
+  const [bio, setBio] = useState(initialProfile.bio || "");
+  const [handle, setHandle] = useState(initialProfile.handle || "");
   const [favoriteHeroId, setFavoriteHeroId] = useState<number | null>(initialProfile.favorite_hero_id);
   const [editing, setEditing] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatar_url ?? null);
@@ -58,6 +61,9 @@ export default function ProfileForm({
     heroId: number | null;
     image: string | null;
     avatar: string | null;
+    username: string;
+    bio: string;
+    handle: string;
   } | null>(null);
   const [bannerMode, setBannerMode] = useState<BannerMode>(
     initialProfile.banner_image ? "custom" : initialProfile.banner_hero_id != null ? "hero" : "default",
@@ -66,6 +72,15 @@ export default function ProfileForm({
   const [bannerImage, setBannerImage] = useState<string | null>(initialProfile.banner_image);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Bio cresce conforme o texto, sem barra de rolagem
+  const bioRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = bioRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [bio, editing]);
 
   // Tier lists criadas pelo usuário (lidas do localStorage)
   const [savedTierLists, setSavedTierLists] = useState<PublishedTierList[]>([]);
@@ -90,7 +105,7 @@ export default function ProfileForm({
     ) : null;
 
   const startEdit = () => {
-    setSnapshot({ mode: bannerMode, heroId: bannerHeroId, image: bannerImage, avatar: avatarUrl });
+    setSnapshot({ mode: bannerMode, heroId: bannerHeroId, image: bannerImage, avatar: avatarUrl, username, bio, handle });
     setLookError("");
     setEditing(true);
   };
@@ -101,6 +116,9 @@ export default function ProfileForm({
       setBannerHeroId(snapshot.heroId);
       setBannerImage(snapshot.image);
       setAvatarUrl(snapshot.avatar);
+      setUsername(snapshot.username);
+      setBio(snapshot.bio);
+      setHandle(snapshot.handle);
     }
     setSnapshot(null);
     setLookError("");
@@ -108,11 +126,28 @@ export default function ProfileForm({
   };
 
   const saveLook = async () => {
+    const cleanName = username.trim();
+    if (cleanName.length < 3) {
+      setLookError("O apelido deve ter no mínimo 3 caracteres.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\-\s]+$/.test(cleanName)) {
+      setLookError("O apelido só pode conter letras, números, espaços, traço e sublinhado.");
+      return;
+    }
+    const cleanHandle = handle.trim();
+    if (cleanHandle && cleanHandle.length < 3) {
+      setLookError("O @ deve ter de 3 a 20 caracteres (minúsculas, números e _).");
+      return;
+    }
     setLookSaving(true);
     setLookError("");
     const { error } = await createClient()
       .from("profiles")
       .update({
+        username: cleanName,
+        bio: bio.trim() || null,
+        handle: cleanHandle || null,
         avatar_url: avatarUrl,
         banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
         banner_image: bannerMode === "custom" ? bannerImage : null,
@@ -121,12 +156,21 @@ export default function ProfileForm({
       .eq("id", initialProfile.id);
     setLookSaving(false);
     if (error) {
-      setLookError("Não foi possível salvar. Tente novamente.");
+      console.error("saveLook:", error);
+      setLookError(
+        error.code === "23505" && error.message.includes("handle")
+          ? "Esse @ já está em uso."
+          : "Não foi possível salvar. Tente novamente.",
+      );
       return;
     }
+    setUsername(cleanName);
+    setBio(bio.trim());
     setSnapshot(null);
     setEditing(false);
-    router.refresh();
+    const target = cleanHandle ? `/profile/${cleanHandle}` : "/profile";
+    if (target !== window.location.pathname) router.replace(target);
+    else router.refresh();
   };
 
   const tabClass = (tab: typeof activeTab) =>
@@ -211,7 +255,14 @@ export default function ProfileForm({
                 }}
                 onError={setLookError}
               />
-              <div className="absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2">
+            </>
+          )}
+
+          {/* Lápis (visualização) ou Cancelar/Salvar (modo edição) no canto superior do Banner */}
+          <div className="absolute right-4 top-4 z-20 flex flex-wrap items-center justify-end gap-2">
+            {editing ? (
+              <>
+                {lookError && <span className="rounded bg-black/70 px-2 py-1 text-xs text-rose-400">{lookError}</span>}
                 <button
                   type="button"
                   onClick={cancelEdit}
@@ -228,23 +279,19 @@ export default function ProfileForm({
                 >
                   {lookSaving ? "Salvando..." : "Salvar"}
                 </button>
-                {lookError && <span className="rounded bg-black/70 px-2 py-1 text-xs text-rose-400">{lookError}</span>}
-              </div>
-            </>
-          )}
-
-          {/* Botão de Atalho para Configurações no canto superior do Banner */}
-          <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={editing ? cancelEdit : startEdit}
-              title="Personalizar Perfil"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-700/80 bg-black/60 text-neutral-300 backdrop-blur-md transition-all hover:border-amber-400 hover:text-amber-400 hover:scale-105 cursor-pointer shadow-lg"
-            >
-              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-            </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={startEdit}
+                title="Personalizar Perfil"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-700/80 bg-black/60 text-neutral-300 backdrop-blur-md transition-all hover:border-amber-400 hover:text-amber-400 hover:scale-105 cursor-pointer shadow-lg"
+              >
+                <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -253,16 +300,16 @@ export default function ProfileForm({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 -mt-14 sm:-mt-16">
             
             {/* Bloco de Avatar e Identidade */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
               {/* Avatar Circular Sobreposto */}
               <div
-                className="relative flex h-28 w-28 sm:h-32 sm:w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 bg-[#0c100e] shadow-[0_0_30px_rgba(0,0,0,0.9)]"
+                className="relative z-30 flex h-28 w-28 sm:h-32 sm:w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 bg-[#0c100e] shadow-[0_0_30px_rgba(0,0,0,0.9)]"
                 style={{
                   borderColor: heroColor,
                   boxShadow: `0 0 24px color-mix(in srgb, ${heroColor} 45%, transparent)`,
                 }}
               >
-                {editing && <AvatarEditButton onImage={setAvatarUrl} onError={setLookError} />}
+                {editing && <AvatarEditButton onImageAction={setAvatarUrl} onErrorAction={setLookError} />}
                 {avatarImage ? (
                   <img
                     src={avatarImage}
@@ -277,18 +324,62 @@ export default function ProfileForm({
               </div>
 
               {/* Nome, E-mail e Badges */}
-              <div className="text-center sm:text-left space-y-1 min-w-0">
+              <div className="text-center sm:text-left space-y-1 min-w-0 sm:mt-[5.5rem]">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                  <h1 className="font-deadlock truncate text-3xl sm:text-4xl font-black uppercase tracking-tight text-[#f4efe6]">
-                    {username || "Sem Nickname"}
-                  </h1>
+                  {editing ? (
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      maxLength={20}
+                      placeholder="Seu apelido"
+                      aria-label="Apelido"
+                      className="font-deadlock w-full min-w-0 rounded-lg border border-dashed border-neutral-600 bg-black/40 px-2 py-0.5 text-center text-3xl font-black uppercase tracking-tight text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none sm:w-72 sm:text-left sm:text-4xl"
+                    />
+                  ) : (
+                    <h1 className="font-deadlock truncate text-3xl sm:text-4xl font-black uppercase tracking-tight text-[#f4efe6]">
+                      {username || "Sem Nickname"}
+                    </h1>
+                  )}
                 </div>
-                <p className="text-xs font-mono text-neutral-400 truncate">{userEmail}</p>
+                {editing ? (
+                  <div className="flex items-center justify-center gap-1 sm:justify-start">
+                    <span className="font-mono text-sm text-neutral-500">@</span>
+                    <input
+                      type="text"
+                      value={handle}
+                      onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
+                      maxLength={20}
+                      placeholder="seu_usuario"
+                      aria-label="@ do perfil"
+                      className="w-40 rounded-lg border border-dashed border-neutral-600 bg-black/40 px-2 py-0.5 font-mono text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  handle && <p className="font-mono text-sm text-neutral-400">@{handle}</p>
+                )}
+                {editing ? (
+                  <div className="space-y-0.5">
+                    <textarea
+                      ref={bioRef}
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      maxLength={160}
+                      rows={2}
+                      placeholder="Escreva uma bio..."
+                      aria-label="Bio"
+                      className="w-full resize-none overflow-hidden rounded-lg border border-dashed border-neutral-600 bg-black/40 px-2 py-1 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none sm:w-96"
+                    />
+                    <p className="text-right text-[10px] text-neutral-500 sm:w-96">{bio.length}/160</p>
+                  </div>
+                ) : (
+                  bio && <p className="max-w-md whitespace-pre-line break-words text-sm text-neutral-300">{bio}</p>
+                )}
               </div>
             </div>
 
             {/* Ação Rápida: Alternar para aba de Configurações */}
-            <div className="flex justify-center sm:justify-end">
+            <div className="flex justify-center sm:justify-end sm:self-start sm:mt-[5.75rem]">
               <button
                 type="button"
                 onClick={() => setActiveTab(activeTab === "settings" ? "overview" : "settings")}

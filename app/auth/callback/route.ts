@@ -15,12 +15,12 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("username")
+          .select("username, handle")
           .eq("id", user.id)
           .maybeSingle();
 
-        // Se não possui perfil ou username ainda não foi escolhido, vai para a tela de boas-vindas
-        if (!profile || !profile.username || profile.username.trim() === "") {
+        // Sem perfil, nick ou @, vai para a tela de boas-vindas
+        if (!profile || !profile.username || profile.username.trim() === "" || !profile.handle) {
           return NextResponse.redirect(`${origin}/welcome`);
         }
       }

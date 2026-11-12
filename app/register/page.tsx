@@ -90,7 +90,7 @@ export default function RegisterPage() {
 
     // Se a confirmação de e-mail estiver desativada, redireciona imediatamente
     if (data.session) {
-      router.push("/profile");
+      router.push("/welcome");
       router.refresh();
     } else {
       setSuccessMsg("Conta criada com sucesso! Caso tenha recebido um e-mail de confirmação, valide-o antes de logar.");
@@ -153,7 +153,7 @@ export default function RegisterPage() {
                 maxLength={20}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: Kaito"
+                placeholder="Ex: Billy"
                 className="w-full rounded-lg border border-neutral-800 bg-black/60 px-3.5 py-2 text-sm text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none transition-colors"
               />
             </div>

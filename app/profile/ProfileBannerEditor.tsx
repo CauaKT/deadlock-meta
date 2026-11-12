@@ -7,7 +7,7 @@ import type { BannerHero, BannerMode } from "./ProfileBanner";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_WIDTH = 1600;
 // A imagem vai para uma coluna de texto do Supabase; mantém ~450 KB no máximo
-const MAX_DATA_URL_CHARS = 600_000;
+export const MAX_DATA_URL_CHARS = 600_000;
 
 export function toBannerDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

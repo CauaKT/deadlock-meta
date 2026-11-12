@@ -1,65 +1,28 @@
 "use client";
 // app/profile/ProfileEditControls.tsx
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { BannerHero } from "./ProfileBanner";
-import { toBannerDataUrl } from "./ProfileBannerEditor";
+import ProfileBanner, { type BannerHero } from "./ProfileBanner";
+import { MAX_DATA_URL_CHARS } from "./ProfileBannerEditor";
+import ImageCropModal from "./ImageCropModal";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const AVATAR_SIZE = 256;
 
-// Recorte quadrado centralizado, igual ao resultado do ajuste de avatar de /welcome
-function toAvatarDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      const canvas = document.createElement("canvas");
-      canvas.width = AVATAR_SIZE;
-      canvas.height = AVATAR_SIZE;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("canvas"));
-      ctx.drawImage(
-        img,
-        (img.naturalWidth - side) / 2,
-        (img.naturalHeight - side) / 2,
-        side,
-        side,
-        0,
-        0,
-        AVATAR_SIZE,
-        AVATAR_SIZE,
-      );
-      resolve(canvas.toDataURL("image/jpeg", 0.9));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("load"));
-    };
-    img.src = url;
-  });
-}
-
-async function handleFile(
-  e: ChangeEvent<HTMLInputElement>,
-  convert: (f: File) => Promise<string>,
-  onImage: (data: string) => void,
-  onError: (msg: string) => void,
-) {
+// Valida e lê o arquivo; o recorte acontece depois, no ImageCropModal
+function pickImage(e: ChangeEvent<HTMLInputElement>, onPick: (src: string) => void, onError: (msg: string) => void) {
   const file = e.target.files?.[0];
   e.target.value = "";
   if (!file) return;
   if (!file.type.startsWith("image/")) return onError("Escolha um arquivo de imagem.");
   if (file.size > MAX_FILE_BYTES) return onError("A imagem passa de 8 MB.");
-  try {
-    onImage(await convert(file));
+  const reader = new FileReader();
+  reader.onload = () => {
     onError("");
-  } catch {
-    onError("Não foi possível processar essa imagem.");
-  }
+    onPick(reader.result as string);
+  };
+  reader.onerror = () => onError("Não foi possível processar essa imagem.");
+  reader.readAsDataURL(file);
 }
 
 function Icon({ children }: { children: ReactNode }) {
@@ -77,6 +40,21 @@ const CameraPlus = () => (
   </Icon>
 );
 
+const PaintingIcon = () => (
+  <Icon>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </Icon>
+);
+
+const PersonIcon = () => (
+  <Icon>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+  </Icon>
+);
+
 function RoundBtn({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
     <button
@@ -91,6 +69,9 @@ function RoundBtn({ title, onClick, children }: { title: string; onClick: () => 
   );
 }
 
+// Busca sem acento e sem diferenciar maiúsculas
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 function HeroPicker({
   heroes,
   selectedId,
@@ -102,6 +83,9 @@ function HeroPicker({
   onSelect: (id: number) => void;
   onClose: () => void;
 }) {
+  const [pendingId, setPendingId] = useState<number | null>(selectedId);
+  const [query, setQuery] = useState("");
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -110,6 +94,13 @@ function HeroPicker({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const playable = useMemo(() => heroes.filter((h) => h.playable), [heroes]);
+  const visible = useMemo(() => {
+    const q = norm(query.trim());
+    return q ? playable.filter((h) => norm(h.name).includes(q)) : playable;
+  }, [playable, query]);
+  const pending = playable.find((h) => h.id === pendingId) ?? null;
+
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
       <div
@@ -117,9 +108,9 @@ function HeroPicker({
         aria-modal="true"
         aria-label="Escolher herói do banner"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-5 shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col gap-4 rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-5 shadow-2xl"
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">Herói do banner</h3>
           <button type="button" onClick={onClose} aria-label="Fechar" className="cursor-pointer text-neutral-400 hover:text-white">
             <Icon>
@@ -127,32 +118,105 @@ function HeroPicker({
             </Icon>
           </button>
         </div>
-        <div className="grid max-h-[60vh] grid-cols-4 gap-2 overflow-y-auto [scrollbar-width:thin] sm:grid-cols-6 md:grid-cols-8">
-          {heroes
-            .filter((h) => h.playable)
-            .map((h) => {
-              const active = h.id === selectedId;
-              const color = h.rgb ? `rgb(${h.rgb.join(",")})` : "#f59e0b";
-              return (
-                <button
-                  key={h.id}
-                  type="button"
-                  title={h.name}
-                  aria-label={h.name}
-                  aria-pressed={active}
-                  onClick={() => {
-                    onSelect(h.id);
-                    onClose();
-                  }}
-                  className={`aspect-square cursor-pointer overflow-hidden rounded-lg border-2 bg-neutral-900 transition-all ${
-                    active ? "scale-105" : "border-transparent opacity-75 hover:opacity-100"
-                  }`}
-                  style={active ? { borderColor: color, boxShadow: `0 0 12px ${color}` } : undefined}
-                >
-                  {h.image && <img src={h.image} alt="" loading="lazy" className="h-full w-full object-cover object-top" />}
-                </button>
-              );
-            })}
+
+        {/* Prévia com o mesmo componente do banner real */}
+        <div className="relative aspect-[5/1] w-full shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
+          {pending ? (
+            <ProfileBanner hero={pending} />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-neutral-500">
+              Selecione um herói para ver a prévia
+            </div>
+          )}
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a0d0c] via-[#0a0d0c]/30 to-black/40" />
+          {pending && (
+            <span className="absolute bottom-2 left-3 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+              {pending.name}
+            </span>
+          )}
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar herói..."
+          aria-label="Buscar herói"
+          className="w-full shrink-0 rounded-xl border border-neutral-800 bg-black/60 px-4 py-2 text-sm text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5 [scrollbar-width:thin]">
+          {visible.length === 0 ? (
+            <p className="py-8 text-center text-xs text-neutral-500">Nenhum herói encontrado.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
+              {visible.map((h) => {
+                const active = h.id === pendingId;
+                const color = h.rgb ? `rgb(${h.rgb.join(",")})` : "#f59e0b";
+                return (
+                  <button
+                    key={h.id}
+                    type="button"
+                    title={h.name}
+                    aria-label={h.name}
+                    aria-pressed={active}
+                    onClick={() => setPendingId(h.id)}
+                    style={
+                      {
+                        "--hc": color,
+                        ...(active
+                          ? { borderColor: color, boxShadow: `0 0 14px color-mix(in srgb, ${color} 55%, transparent)` }
+                          : null),
+                      } as CSSProperties
+                    }
+                    className={`relative aspect-[2/3] cursor-pointer overflow-hidden rounded-xl border-2 bg-neutral-900 transition-all ${
+                      active ? "scale-[1.03]" : "border-neutral-800 hover:-translate-y-0.5 hover:border-[var(--hc)]"
+                    }`}
+                  >
+                    <img
+                      src={h.art || h.image}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (img.dataset.fallback || !h.image) return;
+                        img.dataset.fallback = "1";
+                        img.src = h.image;
+                      }}
+                      className="h-full w-full object-cover object-top"
+                    />
+                    <span
+                      className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-6 text-center font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6]"
+                      style={active ? { color } : undefined}
+                    >
+                      {h.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-1/2 cursor-pointer rounded-xl border border-neutral-700 bg-neutral-900 py-2.5 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 transition-colors hover:bg-neutral-800"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={pendingId == null}
+            onClick={() => {
+              if (pendingId != null) onSelect(pendingId);
+              onClose();
+            }}
+            className="w-1/2 cursor-pointer rounded-xl border border-amber-400 bg-amber-500 py-2.5 font-deadlock text-xs font-black uppercase tracking-wider text-black shadow-md transition-all hover:brightness-110 active:scale-95 disabled:opacity-50"
+          >
+            Confirmar
+          </button>
         </div>
       </div>
     </div>,
@@ -173,6 +237,7 @@ interface BannerOverlayProps {
 export function BannerEditOverlay({ heroes, heroId, canReset, onImage, onHero, onReset, onError }: BannerOverlayProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [picking, setPicking] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 bg-black/45">
@@ -181,32 +246,56 @@ export function BannerEditOverlay({ heroes, heroId, canReset, onImage, onHero, o
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => handleFile(e, toBannerDataUrl, onImage, onError)}
+        onChange={(e) => pickImage(e, setCropSrc, onError)}
       />
-      <RoundBtn title="Enviar imagem para o banner" onClick={() => fileRef.current?.click()}>
-        <CameraPlus />
-      </RoundBtn>
-      <RoundBtn title="Usar um herói no banner" onClick={() => setPicking(true)}>
-        <Icon>
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <circle cx="9" cy="9" r="1.5" />
-          <path d="M21 15l-5-5L5 21" />
-        </Icon>
-      </RoundBtn>
-      {canReset && (
-        <RoundBtn title="Voltar ao banner padrão" onClick={onReset}>
-          <Icon>
-            <path d="M6 6l12 12M18 6L6 18" />
-          </Icon>
+      <div className="relative flex items-center gap-3">
+        <RoundBtn title="Enviar imagem para o banner" onClick={() => fileRef.current?.click()}>
+          <PaintingIcon />
         </RoundBtn>
-      )}
+        <RoundBtn title="Usar um herói no banner" onClick={() => setPicking(true)}>
+          <PersonIcon />
+        </RoundBtn>
+        {canReset && (
+          <div className="absolute left-full top-1/2 ml-3 -translate-y-1/2">
+            <RoundBtn title="Voltar ao banner padrão" onClick={onReset}>
+              <Icon>
+                <path d="M6 6l12 12M18 6L6 18" />
+              </Icon>
+            </RoundBtn>
+          </div>
+        )}
+      </div>
       {picking && <HeroPicker heroes={heroes} selectedId={heroId} onSelect={onHero} onClose={() => setPicking(false)} />}
+      {cropSrc && (
+        <ImageCropModal
+          src={cropSrc}
+          title="Banner"
+          shape="rect"
+          aspect={4}
+          outputWidth={1600}
+          outputHeight={400}
+          maxChars={MAX_DATA_URL_CHARS}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={(data) => {
+            onImage(data);
+            setCropSrc(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-export function AvatarEditButton({ onImage, onError }: { onImage: (data: string) => void; onError: (msg: string) => void }) {
+export function AvatarEditButton({
+  onImageAction: onImage,
+  onErrorAction: onError,
+}: {
+  onImageAction: (data: string) => void;
+  onErrorAction: (msg: string) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+
   return (
     <>
       <input
@@ -214,7 +303,7 @@ export function AvatarEditButton({ onImage, onError }: { onImage: (data: string)
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => handleFile(e, toAvatarDataUrl, onImage, onError)}
+        onChange={(e) => pickImage(e, setCropSrc, onError)}
       />
       <button
         type="button"
@@ -225,6 +314,21 @@ export function AvatarEditButton({ onImage, onError }: { onImage: (data: string)
       >
         <CameraPlus />
       </button>
+      {cropSrc && (
+        <ImageCropModal
+          src={cropSrc}
+          title="Avatar"
+          shape="circle"
+          aspect={1}
+          outputWidth={256}
+          outputHeight={256}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={(data) => {
+            onImage(data);
+            setCropSrc(null);
+          }}
+        />
+      )}
     </>
   );
 }
