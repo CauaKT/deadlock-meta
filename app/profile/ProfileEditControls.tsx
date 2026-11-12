@@ -120,9 +120,9 @@ function HeroPicker({
         </div>
 
         {/* Prévia com o mesmo componente do banner real */}
-        <div className="relative aspect-[5/1] w-full shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
+        <div className="relative aspect-[4/1] w-full shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
           {pending ? (
-            <ProfileBanner hero={pending} />
+            <ProfileBanner hero={pending} compact />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-neutral-500">
               Selecione um herói para ver a prévia
@@ -169,10 +169,17 @@ function HeroPicker({
                           : null),
                       } as CSSProperties
                     }
-                    className={`relative aspect-[2/3] cursor-pointer overflow-hidden rounded-xl border-2 bg-neutral-900 transition-all ${
+                    className={`group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border-2 bg-neutral-900 transition-all ${
                       active ? "scale-[1.03]" : "border-neutral-800 hover:-translate-y-0.5 hover:border-[var(--hc)]"
                     }`}
                   >
+                    {h.rgb && (
+                      <span aria-hidden className="absolute inset-0 overflow-hidden" style={{ "--hc": h.rgb.join(" ") } as CSSProperties}>
+                        <i className="absolute hero-tip-puff hero-tip-puff-a" />
+                        <i className="absolute hero-tip-puff hero-tip-puff-b" />
+                        <i className="absolute hero-tip-puff hero-tip-puff-c" />
+                      </span>
+                    )}
                     <img
                       src={h.art || h.image}
                       alt=""
@@ -183,7 +190,7 @@ function HeroPicker({
                         img.dataset.fallback = "1";
                         img.src = h.image;
                       }}
-                      className="h-full w-full object-cover object-top"
+                      className="relative h-full w-full object-cover object-top"
                     />
                     <span
                       className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-6 text-center font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6]"

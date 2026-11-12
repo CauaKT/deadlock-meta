@@ -295,6 +295,10 @@ h1, h2, h3, h4 {
 .pf-smoke .hero-tip-puff-a { animation: tip-puff-a 12s ease-in-out infinite alternate; }
 .pf-smoke .hero-tip-puff-b { animation: tip-puff-b 14s ease-in-out infinite alternate; }
 .pf-smoke .hero-tip-puff-c { animation: tip-puff-c 16s ease-in-out infinite alternate; }
+.pf-smoke .hero-tip-puff {
+  filter: blur(24px);
+  background: radial-gradient(closest-side, rgb(var(--hc) / 0.45), rgb(var(--hc) / 0.14) 55%, transparent 100%);
+}
 @media (prefers-reduced-motion: reduce) {
   .pf-smoke .hero-tip-puff { animation: none; }
 }

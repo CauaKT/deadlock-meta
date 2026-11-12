@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchHeroesAssets, fetchWikiColors, extractColor, extractHeroTheme } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
 import ProfileForm from "./ProfileForm";
 import fs from "fs";
 import path from "path";
@@ -15,16 +15,36 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     redirect("/login");
   }
 
-  const [{ data: profile }, heroesMap, wikiColors] = await Promise.all([
+  const [{ data: profile }, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     fetchHeroesAssets(),
     fetchWikiColors(),
+    fetchHeroesAnalytics(PATCHES[0].since),
+    fetchHeroBlurbs(),
   ]);
+  const withMatches = new Set(stats.filter((s) => (s.matches || 0) > 0).map((s) => s.hero_id));
+
+  const { data: community } = await supabase
+    .from("public_profiles")
+    .select("id, username, handle, avatar_url, favorite_hero_id")
+    .neq("id", user.id)
+    .not("handle", "is", null)
+    .limit(8);
 
   // O endereço só abre para o dono; /profile redireciona para /profile/<@>
   const ownHandle: string | null = profile?.handle ?? null;
   if (handle === undefined && ownHandle) redirect(`/profile/${ownHandle}`);
-  if (handle !== undefined && handle !== ownHandle) notFound();
+  const isOwner = handle === undefined || handle === ownHandle;
+  let viewed = profile;
+  if (!isOwner) {
+    const { data: other } = await supabase
+      .from("public_profiles")
+      .select("id, username, handle, avatar_url, favorite_hero_id, bio, banner_hero_id, banner_image, profile_color")
+      .eq("handle", handle)
+      .maybeSingle();
+    if (!other) notFound();
+    viewed = other;
+  }
 
   const heroesDir = path.join(process.cwd(), "public", "heroes");
   const localArt = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
@@ -43,9 +63,16 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         name: h.name,
         image: h.images?.icon_hero_card || h.images?.icon_image_small || h.images?.minimap_image || "",
         banner: bg,
+        head: h.images?.icon_image_small || "",
         art: local ? `/heroes/${local}` : `https://cdn.deadlock.wiki/thumb/${file}_Render.png/800px-${file}_Render.png`,
         tagBg: theme.tagBg,
-        playable: extractColor(h, wikiColors) !== null,
+        tagText: theme.tagText,
+        tags: blurbs[h.id]?.tags ?? [],
+        nameSvg: `https://cdn.deadlock.wiki/${file}_name.svg`,
+        // Mesma regra de "lançado" da /heroes
+        playable:
+          extractColor(h, wikiColors) !== null &&
+          (withMatches.has(h.id) || (h.player_selectable === true && h.disabled !== true && h.in_development !== true)),
         rgb: theme.rgb,
       };
     });
@@ -64,16 +91,35 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     favorite_hero_id: profile?.favorite_hero_id ?? null,
     banner_hero_id: profile?.banner_hero_id ?? null,
     banner_image: profile?.banner_image ?? null,
+    profile_color: profile?.profile_color ?? null,
     createdAt: createdAtDate,
   };
+
+  const shownProfile = isOwner
+    ? initialProfile
+    : {
+        id: viewed.id as string,
+        username: viewed.username ?? "",
+        bio: viewed.bio ?? "",
+        handle: viewed.handle ?? "",
+        avatar_url: viewed.avatar_url ?? null,
+        steam_id: "",
+        favorite_hero_id: viewed.favorite_hero_id ?? null,
+        banner_hero_id: viewed.banner_hero_id ?? null,
+        banner_image: viewed.banner_image ?? null,
+        profile_color: viewed.profile_color ?? null,
+        createdAt: initialProfile.createdAt,
+      };
 
   return (
     <div className="max-w-6xl mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6">
 
       <ProfileForm
-        initialProfile={initialProfile}
+        initialProfile={shownProfile}
+        readOnly={!isOwner}
         heroes={heroesList}
         userEmail={user.email || ""}
+        community={community ?? []}
       />
     </div>
   );
