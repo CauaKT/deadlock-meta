@@ -32,6 +32,16 @@ export default function RegisterPage() {
 
   const strength = getPasswordStrength(password);
 
+  const resetForm = () => {
+    setErrorMsg("");
+    setSuccessMsg("");
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setPasswordConfirm("");
+    setShowPassword(false);
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -53,8 +63,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMsg("A senha precisa ter pelo menos 6 caracteres.");
+    if (password.length < 8) {
+      setErrorMsg("A senha precisa ter pelo menos 8 caracteres.");
       return;
     }
 
@@ -122,19 +132,14 @@ export default function RegisterPage() {
             <div className="flex gap-2 pt-1">
               <Link
                 href="/login"
+                onClick={resetForm}
                 className="inline-block rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
               >
                 Ir para o Login
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  setSuccessMsg("");
-                  setUsername("");
-                  setEmail("");
-                  setPassword("");
-                  setPasswordConfirm("");
-                }}
+                onClick={resetForm}
                 className="inline-block rounded border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase text-neutral-300 hover:text-white"
               >
                 Novo Cadastro
@@ -181,7 +186,7 @@ export default function RegisterPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
@@ -221,7 +226,7 @@ export default function RegisterPage() {
                 Confirmar Senha
               </label>
               <input
-                type={showPassword ? "text" : "password"}
+                type="password"
                 required
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
