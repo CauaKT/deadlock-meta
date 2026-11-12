@@ -10,6 +10,21 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Verifica se é o primeiro acesso e se o usuário já definiu seu nickname
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        // Se não possui perfil ou username ainda não foi escolhido, vai para a tela de boas-vindas
+        if (!profile || !profile.username || profile.username.trim() === "") {
+          return NextResponse.redirect(`${origin}/welcome`);
+        }
+      }
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
