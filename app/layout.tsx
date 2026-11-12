@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { RouteTracker } from "@/app/data-sources/SourcesAccordion";
 import NavTierDropdown from "./NavTierDropdown";
+import NavUserButton from "./NavUserButton";
 import PageTransitionBar from "./PageTransitionBar";
 import "./globals.css";
 
@@ -71,16 +72,9 @@ export default function RootLayout({
               </Link>
             </nav>
 
-            {/* Status da API & GitHub */}
-            <div className="hidden sm:flex items-center gap-4 text-xs">
-              <a
-                href="https://github.com/CauaKT/deadlock-meta"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-neutral-400 hover:text-white transition-colors"
-              >
-                GitHub ↗
-              </a>
+            {/* Usuário / Login */}
+            <div className="flex items-center text-xs">
+              <NavUserButton />
             </div>
           </div>
         </header>
@@ -120,7 +114,7 @@ export default function RootLayout({
                   <li>
                     <Link
                       href="/data-sources"
-                      className="group inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold transition-colors"
+                      className="group inline-flex items-center gap-1.5 text-neutral-400 hover:text-white transition-colors"
                     >
                       <span>Fontes de Dados</span>
                       <svg
@@ -158,11 +152,6 @@ export default function RootLayout({
                         <path d="M4 12 12 4M6 4h6v6" />
                       </svg>
                     </a>
-                  </li>
-                  <li>
-                    <span className="text-neutral-500 text-[11px] block">
-                      Atualizações sincronizadas via API pública
-                    </span>
                   </li>
                 </ul>
               </div>
