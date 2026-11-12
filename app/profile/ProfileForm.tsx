@@ -5,12 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { PublishedTierList } from "@/app/tier-maker/TierMakerClient";
+import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
+import ProfileBanner, { type BannerMode } from "./ProfileBanner";
+import ProfileBannerEditor from "./ProfileBannerEditor";
 
 interface HeroOption {
   id: number;
   name: string;
   image: string;
   banner?: string;
+  art: string;
+  tagBg: string;
+  playable: boolean;
   rgb?: [number, number, number];
 }
 
@@ -20,6 +26,8 @@ interface ProfileData {
   avatar_url?: string | null;
   steam_id: string;
   favorite_hero_id: number | null;
+  banner_hero_id: number | null;
+  banner_image: string | null;
   createdAt: string;
 }
 
@@ -41,6 +49,21 @@ export default function ProfileForm({
   const [username, setUsername] = useState(initialProfile.username || "");
   const [steamId, setSteamId] = useState(initialProfile.steam_id || "");
   const [favoriteHeroId, setFavoriteHeroId] = useState<number | null>(initialProfile.favorite_hero_id);
+  const [editing, setEditing] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatar_url ?? null);
+  const [lookSaving, setLookSaving] = useState(false);
+  const [lookError, setLookError] = useState("");
+  const [snapshot, setSnapshot] = useState<{
+    mode: BannerMode;
+    heroId: number | null;
+    image: string | null;
+    avatar: string | null;
+  } | null>(null);
+  const [bannerMode, setBannerMode] = useState<BannerMode>(
+    initialProfile.banner_image ? "custom" : initialProfile.banner_hero_id != null ? "hero" : "default",
+  );
+  const [bannerHeroId, setBannerHeroId] = useState<number | null>(initialProfile.banner_hero_id);
+  const [bannerImage, setBannerImage] = useState<string | null>(initialProfile.banner_image);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -57,7 +80,54 @@ export default function ProfileForm({
   const heroesById = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
   const selectedHero = heroesById.get(favoriteHeroId ?? -1);
   const heroColor = selectedHero?.rgb ? `rgb(${selectedHero.rgb.join(",")})` : "#f59e0b";
-  const avatarImage = initialProfile.avatar_url || selectedHero?.image;
+  const avatarImage = avatarUrl || selectedHero?.image;
+  const bannerHero = heroesById.get((bannerMode === "hero" ? bannerHeroId : favoriteHeroId) ?? -1) ?? null;
+  const bannerNode =
+    bannerMode === "custom" && bannerImage ? (
+      <ProfileBanner customImage={bannerImage} />
+    ) : bannerHero ? (
+      <ProfileBanner hero={bannerHero} />
+    ) : null;
+
+  const startEdit = () => {
+    setSnapshot({ mode: bannerMode, heroId: bannerHeroId, image: bannerImage, avatar: avatarUrl });
+    setLookError("");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    if (snapshot) {
+      setBannerMode(snapshot.mode);
+      setBannerHeroId(snapshot.heroId);
+      setBannerImage(snapshot.image);
+      setAvatarUrl(snapshot.avatar);
+    }
+    setSnapshot(null);
+    setLookError("");
+    setEditing(false);
+  };
+
+  const saveLook = async () => {
+    setLookSaving(true);
+    setLookError("");
+    const { error } = await createClient()
+      .from("profiles")
+      .update({
+        avatar_url: avatarUrl,
+        banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
+        banner_image: bannerMode === "custom" ? bannerImage : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", initialProfile.id);
+    setLookSaving(false);
+    if (error) {
+      setLookError("Não foi possível salvar. Tente novamente.");
+      return;
+    }
+    setSnapshot(null);
+    setEditing(false);
+    router.refresh();
+  };
 
   const tabClass = (tab: typeof activeTab) =>
     `-mb-px flex items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
@@ -78,6 +148,8 @@ export default function ProfileForm({
         username: username.trim(),
         steam_id: steamId.trim(),
         favorite_hero_id: favoriteHeroId,
+        banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
+        banner_image: bannerMode === "custom" ? bannerImage : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", initialProfile.id);
@@ -93,22 +165,17 @@ export default function ProfileForm({
     router.refresh();
   };
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  };
-
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
       {/* 1. HEADER CINEMÁTICO GAMER (IDÊNTICO À REFERÊNCIA)                       */}
       {/* ========================================================================= */}
-      <section className="relative overflow-hidden rounded-3xl border border-neutral-800/90 bg-[#0a0d0c] shadow-[0_25px_60px_rgba(0,0,0,0.95)]">
+      <section className="relative overflow-hidden rounded-b-3xl border border-t-0 border-neutral-800/90 bg-[#0a0d0c] shadow-[0_25px_60px_rgba(0,0,0,0.95)]">
         {/* Banner Panorâmico */}
         <div className="relative h-40 sm:h-52 md:h-60 w-full overflow-hidden bg-neutral-900">
-          {selectedHero?.banner ? (
+{bannerNode ? (
+            bannerNode
+          ) : selectedHero?.banner ? (
             <img
               src={selectedHero.banner}
               alt=""
@@ -123,28 +190,59 @@ export default function ProfileForm({
           {/* Vinheta escura nas bordas e fusão na base */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0d0c] via-[#0a0d0c]/30 to-black/40" />
 
+          {editing && (
+            <>
+              <BannerEditOverlay
+                heroes={heroes}
+                heroId={bannerHeroId}
+                canReset={bannerMode !== "default"}
+                onImage={(data) => {
+                  setBannerImage(data);
+                  setBannerMode("custom");
+                }}
+                onHero={(id) => {
+                  setBannerHeroId(id);
+                  setBannerMode("hero");
+                }}
+                onReset={() => {
+                  setBannerMode("default");
+                  setBannerHeroId(null);
+                  setBannerImage(null);
+                }}
+                onError={setLookError}
+              />
+              <div className="absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  disabled={lookSaving}
+                  className="cursor-pointer rounded-xl border border-neutral-700 bg-black/70 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] backdrop-blur-md transition-colors hover:border-neutral-500 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={saveLook}
+                  disabled={lookSaving}
+                  className="cursor-pointer rounded-xl border border-amber-500 bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-[filter] hover:brightness-110 disabled:opacity-50"
+                >
+                  {lookSaving ? "Salvando..." : "Salvar"}
+                </button>
+                {lookError && <span className="rounded bg-black/70 px-2 py-1 text-xs text-rose-400">{lookError}</span>}
+              </div>
+            </>
+          )}
+
           {/* Botão de Atalho para Configurações no canto superior do Banner */}
           <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setActiveTab("settings")}
+              onClick={editing ? cancelEdit : startEdit}
               title="Personalizar Perfil"
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-700/80 bg-black/60 text-neutral-300 backdrop-blur-md transition-all hover:border-amber-400 hover:text-amber-400 hover:scale-105 cursor-pointer shadow-lg"
             >
               <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="Sair da Conta"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-700/80 bg-black/60 text-neutral-400 backdrop-blur-md transition-all hover:border-rose-500 hover:text-rose-400 hover:scale-105 cursor-pointer shadow-lg"
-            >
-              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </button>
           </div>
@@ -164,6 +262,7 @@ export default function ProfileForm({
                   boxShadow: `0 0 24px color-mix(in srgb, ${heroColor} 45%, transparent)`,
                 }}
               >
+                {editing && <AvatarEditButton onImage={setAvatarUrl} onError={setLookError} />}
                 {avatarImage ? (
                   <img
                     src={avatarImage}
@@ -183,15 +282,8 @@ export default function ProfileForm({
                   <h1 className="font-deadlock truncate text-3xl sm:text-4xl font-black uppercase tracking-tight text-[#f4efe6]">
                     {username || "Sem Nickname"}
                   </h1>
-                  <span className="rounded-[4px] bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-400">
-                    Conta LockPro
-                  </span>
                 </div>
                 <p className="text-xs font-mono text-neutral-400 truncate">{userEmail}</p>
-                <p className="text-xs text-neutral-300">
-                  Na Cidade Amaldiçoada desde{" "}
-                  <strong className="text-neutral-200">{initialProfile.createdAt}</strong>
-                </p>
               </div>
             </div>
 
@@ -204,45 +296,6 @@ export default function ProfileForm({
               >
                 {activeTab === "settings" ? "Visualizar Perfil" : "Editar Perfil"}
               </button>
-            </div>
-          </div>
-
-          {/* Barra Horizontal de Métricas do Jogador (Igual ao Modelo de Referência) */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 divide-x divide-neutral-800/80 border-t border-neutral-800/80 pt-4 text-center">
-            <div className="px-3">
-              <p style={{ color: heroColor }} className="font-deadlock text-lg font-black truncate">
-                {selectedHero?.name || "Nenhum"}
-              </p>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                Herói Assinatura
-              </span>
-            </div>
-
-            <div className="px-3">
-              <p className="font-deadlock text-lg font-black text-[#f4efe6] truncate">
-                {steamId ? "Steam Conectada" : "Pendente"}
-              </p>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                Vínculo com Deadlock
-              </span>
-            </div>
-
-            <div className="px-3">
-              <p className="font-deadlock text-lg font-black text-amber-400">
-                {savedTierLists.length}
-              </p>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                {savedTierLists.length === 1 ? "Tier List" : "Tier Lists"}
-              </span>
-            </div>
-
-            <div className="px-3">
-              <p className="font-deadlock text-lg font-black text-emerald-400">
-                Iniciado Ativo
-              </p>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                Status da Cidade
-              </span>
             </div>
           </div>
         </div>
@@ -269,14 +322,6 @@ export default function ProfileForm({
           <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
             {savedTierLists.length}
           </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("settings")}
-          className={tabClass("settings")}
-        >
-          <span>Configurações</span>
         </button>
       </div>
 
@@ -340,55 +385,6 @@ export default function ProfileForm({
               </button>
             </div>
           )}
-
-          {/* Resumo das Tier Lists do Usuário */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
-                Vitrines de Classificação
-              </h3>
-              <Link
-                href="/tier-maker"
-                className="font-deadlock text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
-              >
-                Criar Nova Tier List →
-              </Link>
-            </div>
-
-            {savedTierLists.length === 0 ? (
-              <div className="rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-6 text-center text-xs text-neutral-500">
-                Você ainda não publicou nenhuma tier list. Acesse o{" "}
-                <Link href="/tier-maker" className="text-amber-400 font-bold underline">
-                  TierMaker
-                </Link>{" "}
-                para criar e salvar sua classificação.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {savedTierLists.slice(0, 2).map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-4 space-y-2 shadow-lg"
-                  >
-                    <p className="font-deadlock text-base font-black text-[#f4efe6] truncate">
-                      {item.title}
-                    </p>
-                    <p className="text-[11px] text-neutral-500">
-                      Publicada em {item.createdAt} • {item.tiers.length} categorias
-                    </p>
-                    <div className="pt-1">
-                      <Link
-                        href="/tier-maker"
-                        className="font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 hover:underline"
-                      >
-                        Ver no TierMaker →
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <aside className="space-y-4">
@@ -414,23 +410,6 @@ export default function ProfileForm({
             <p className="text-[11px] text-neutral-500">
               As tier lists ficam salvas apenas neste navegador.
             </p>
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
-            <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
-              Atalhos
-            </h3>
-            <div className="flex flex-col gap-2">
-              <Link href="/tier-maker" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
-                TierMaker
-              </Link>
-              <Link href="/heroes" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
-                Heróis
-              </Link>
-              <Link href="/items" className="rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-xs font-bold text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400">
-                Itens
-              </Link>
-            </div>
           </section>
         </aside>
         </div>
@@ -529,8 +508,17 @@ export default function ProfileForm({
             </div>
 
             <div className="space-y-1.5">
+              <ProfileBannerEditor
+                heroes={heroes}
+                mode={bannerMode}
+                onMode={setBannerMode}
+                heroId={bannerHeroId}
+                onHero={setBannerHeroId}
+                customImage={bannerImage}
+                onCustomImage={setBannerImage}
+              />
               <label className="font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300">
-                Herói Favorito (Define Tema e Banner)
+                Herói Favorito (Define Tema e Banner Padrão)
               </label>
               <select
                 value={favoriteHeroId ?? ""}

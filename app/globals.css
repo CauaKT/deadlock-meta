@@ -292,6 +292,13 @@ h1, h2, h3, h4 {
   .group:hover .tier-meta-glow { animation: none; }
 }
 
+.pf-smoke .hero-tip-puff-a { animation: tip-puff-a 12s ease-in-out infinite alternate; }
+.pf-smoke .hero-tip-puff-b { animation: tip-puff-b 14s ease-in-out infinite alternate; }
+.pf-smoke .hero-tip-puff-c { animation: tip-puff-c 16s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) {
+  .pf-smoke .hero-tip-puff { animation: none; }
+}
+
 .hero-tip-stat {
   --sc: 244 239 230;
   clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
