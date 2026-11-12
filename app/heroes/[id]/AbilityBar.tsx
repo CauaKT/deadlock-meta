@@ -10,7 +10,6 @@ const CHIP_KEYS = [
   "AbilityChannelDuration",
   "ChannelTime",
   "AbilityChannelTime",
-  "AbilityCastDelay",
   "AbilityCastRange",
   "Radius",
   "AbilityDuration",
@@ -40,7 +39,7 @@ const BOX_STYLES: Record<string, { box: string; badge: string; glyph: string }> 
   other: {
     box: "border-[#3f8574] bg-[radial-gradient(ellipse_at_center,#0d2119_25%,#1f4a3b_100%)]",
     badge: "text-[#99ffd6]",
-    glyph: "◆",
+    glyph: "↗",
   },
   none: {
     box: "border-transparent bg-[#3a3731]",
@@ -49,14 +48,18 @@ const BOX_STYLES: Record<string, { box: string; badge: string; glyph: string }> 
   },
 };
 
-// Cor do ícone de cada propriedade, como na wiki
+// Cores canônicas dos ícones fiéis ao jogo e à wiki (dano priorizado para garantir coração vermelho)
 function iconColor(key: string): string {
-  if (/heal/i.test(key)) return "#00ff99";
-  if (/speed/i.test(key)) return "#00ff99";
-  if (/channel/i.test(key)) return "#ffeb3b";
-  if (/distance|range|radius/i.test(key)) return "#b57edc";
-  if (/amp/i.test(key)) return "#f0553d";
   if (/damage|dps|strike/i.test(key)) return "#ff5a47";
+  if (/barrier|shield/i.test(key)) return "#00ff99";
+  if (/movespeed|^speed/i.test(key)) return "#00ff99";
+  if (/firerate|bulletspersecond|attackrate/i.test(key)) return "#ec981a";
+  if (/debuff|resist|slow/i.test(key)) return "#ce91ff";
+  if (/spirit|tech/i.test(key)) return "#ce91ff";
+  if (/heal/i.test(key)) return "#00ff99";
+  if (/channel/i.test(key)) return "#ffeb3b";
+  if (/distance|range|radius|knockback/i.test(key)) return "#b57edc";
+  if (/amp/i.test(key)) return "#f0553d";
   return "#cdcdcd";
 }
 
@@ -148,14 +151,25 @@ export default function AbilityBar({
 
   const rows = selected.stats
     .map((s) => {
-      const bonus = selected.upgrades
-        .slice(0, level)
-        .flat()
+      const activeUpgrades = selected.upgrades.slice(0, level).flat();
+      const bonus = activeUpgrades
         .filter((u) => u.key === s.key && u.additive)
         .reduce((sum, u) => sum + u.bonus, 0);
-      return { ...s, bonus, value: (s.base ?? 0) + bonus };
+      const scaleBonus = activeUpgrades
+        .filter((u) => u.key === s.key && u.scaleBonus)
+        .reduce((sum, u) => sum + (u.scaleBonus ?? 0), 0);
+      const currentScale = (s.scale ?? 0) + scaleBonus;
+      const scaleType = s.scaleType ?? (scaleBonus > 0 ? "spirit" : null);
+
+      return {
+        ...s,
+        bonus,
+        value: (s.base ?? 0) + bonus,
+        scale: currentScale > 0 ? currentScale : s.scale,
+        scaleType,
+      };
     })
-    .filter((r) => r.value !== 0);
+    .filter((r) => r.value !== 0 || (r.scale !== null && r.scale > 0));
 
   const cooldown = rows.find((r) => r.key === COOLDOWN_KEY);
   const chipKeys = [...CHIP_KEYS, ...selected.headerKeys].filter(
@@ -186,10 +200,14 @@ export default function AbilityBar({
     .map((k) => rows.find((r) => r.key === k))
     .filter((r): r is NonNullable<typeof r> => Boolean(r) && !used.has(r!.key));
 
-  const show = (r: { prefix: string; value: number; unit: string }) => {
-    const prefix = r.prefix
-      .replace(/\{s:sign\}/g, r.value > 0 ? "+" : "")
+  const show = (r: { key: string; prefix: string; value: number; unit: string }) => {
+    let prefix = r.prefix
+      .replace(/\{s:sign\}/g, "")
       .replace(/\{[^}]*\}/g, "");
+    // Remove sinal de + indesejado de atributos exibidos nas caixas
+    if (/AttackDamage|Damage|FireRate|MoveSpeed|Barrier|Debuff|Resist/i.test(r.key)) {
+      prefix = prefix.replace(/\+/, "");
+    }
     return `${prefix}${fmt(r.value)}`;
   };
 
@@ -274,11 +292,7 @@ export default function AbilityBar({
                 </h3>
               </div>
               {cooldown && (
-                <div
-                  className={`flex shrink-0 items-center gap-1.5 rounded-[4px] bg-white/10 px-2 py-1 font-bold ${
-                    cooldown.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                  }`}
-                >
+                <div className="flex shrink-0 items-center gap-1.5 rounded-[4px] bg-white/10 px-2 py-1 font-bold text-[#ffefd7]">
                   <ClockIcon />
                   <span className="text-lg leading-none">
                     {fmt(cooldown.value)}
@@ -293,9 +307,7 @@ export default function AbilityBar({
                 {chips.map((c) => (
                   <div
                     key={c.key}
-                    className={`flex items-center gap-1.5 rounded-[4px] bg-white/10 px-2 py-1 font-bold ${
-                      c.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                    }`}
+                    className="flex items-center gap-1.5 rounded-[4px] bg-white/10 px-2 py-1 font-bold text-[#ffefd7]"
                   >
                     {c.icon && <img src={c.icon} alt="" className="h-4 w-4 opacity-80" />}
                     <span className="text-sm leading-none">
@@ -397,11 +409,7 @@ export default function AbilityBar({
                                     {st.glyph} x{fmt(r.scale)}
                                   </span>
                                 ) : null}
-                                <div
-                                  className={`flex items-center justify-center gap-1.5 font-bold ${
-                                    r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                                  }`}
-                                >
+                                <div className="flex items-center justify-center gap-1.5 font-bold text-[#ffefd7]">
                                   {r.icon && (
                                     <TintIcon src={r.icon} color={iconColor(r.key)} className="h-[1.1rem] w-[1.1rem]" />
                                   )}
@@ -411,13 +419,6 @@ export default function AbilityBar({
                                 <p className="mt-1 text-[0.8rem] font-semibold leading-tight text-[#ffefd7]">
                                   {r.postLabel || r.label}
                                 </p>
-                                {r.bonus ? (
-                                  <p className="text-[0.65rem] font-bold text-[#99f051]">
-                                    ({r.bonus > 0 ? "+" : ""}
-                                    {fmt(r.bonus)}
-                                    {r.unit})
-                                  </p>
-                                ) : null}
                               </div>
                             );
                           })}
@@ -426,24 +427,35 @@ export default function AbilityBar({
                     ))}
 
                     {secBasic.length > 0 && (
-                      <div className="flex flex-wrap justify-around gap-x-6 gap-y-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5">
+                      <div
+                        className={`rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5 gap-x-5 gap-y-2 ${
+                          secBasic.length === 3
+                            ? "flex flex-col sm:flex-row sm:items-center sm:justify-between"
+                            : "grid grid-cols-1 sm:grid-cols-2"
+                        }`}
+                      >
                         {secBasic.map((r) => (
                           <div
                             key={r.key}
-                            className={`flex items-baseline gap-1.5 ${
-                              r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                            }`}
+                            className="flex items-center justify-between gap-2 text-[#ffefd7]"
                           >
-                            {r.icon && (
-                              <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 self-center" />
-                            )}
-                            <span className="text-[1.05rem] font-bold leading-none">
-                              {show(r)}
-                              <span className="text-[0.75rem]">{r.unit}</span>
-                            </span>
-                            <span className="text-[0.8rem] font-medium text-[#cdcdcd]">
-                              {r.postLabel || r.label}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {r.icon && (
+                                <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 shrink-0" />
+                              )}
+                              <span className="text-[1.05rem] font-bold leading-none shrink-0">
+                                {show(r)}
+                                <span className="text-[0.75rem] ml-0.5">{r.unit}</span>
+                              </span>
+                              <span className="text-[0.8rem] font-medium text-[#cdcdcd] whitespace-normal">
+                                {r.postLabel || r.label}
+                              </span>
+                            </div>
+                            {r.scale ? (
+                              <span className="text-[0.75rem] font-black text-[#ce91ff] shrink-0 ml-1">
+                                ☆ x{fmt(r.scale)}
+                              </span>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -496,11 +508,7 @@ export default function AbilityBar({
                                 {st.glyph} x{fmt(r.scale)}
                               </span>
                             ) : null}
-                            <div
-                              className={`flex items-center justify-center gap-1.5 font-bold ${
-                                r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                              }`}
-                            >
+                            <div className="flex items-center justify-center gap-1.5 font-bold text-[#ffefd7]">
                               {r.icon && (
                                 <TintIcon src={r.icon} color={iconColor(r.key)} className="h-[1.1rem] w-[1.1rem]" />
                               )}
@@ -510,13 +518,6 @@ export default function AbilityBar({
                             <p className="mt-1 text-[0.8rem] font-semibold leading-tight text-[#ffefd7]">
                               {r.postLabel || r.label}
                             </p>
-                            {r.bonus ? (
-                              <p className="text-[0.65rem] font-bold text-[#99f051]">
-                                ({r.bonus > 0 ? "+" : ""}
-                                {fmt(r.bonus)}
-                                {r.unit})
-                              </p>
-                            ) : null}
                           </div>
                         );
                       })}
@@ -525,24 +526,35 @@ export default function AbilityBar({
                 ))}
 
                 {basicRows.length > 0 && (
-                  <div className="mt-1 flex flex-wrap justify-around gap-x-6 gap-y-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5">
+                  <div
+                    className={`mt-1 rounded-[3px] bg-[#3a3731]/90 px-4 py-2.5 gap-x-5 gap-y-2 ${
+                      basicRows.length === 3
+                        ? "flex flex-col sm:flex-row sm:items-center sm:justify-between"
+                        : "grid grid-cols-1 sm:grid-cols-2"
+                    }`}
+                  >
                     {basicRows.map((r) => (
                       <div
                         key={r.key}
-                        className={`flex items-baseline gap-1.5 ${
-                          r.bonus ? "text-[#99f051]" : "text-[#ffefd7]"
-                        }`}
+                        className="flex items-center justify-between gap-2 text-[#ffefd7]"
                       >
-                        {r.icon && (
-                          <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 self-center" />
-                        )}
-                        <span className="text-[1.05rem] font-bold leading-none">
-                          {show(r)}
-                          <span className="text-[0.75rem]">{r.unit}</span>
-                        </span>
-                        <span className="text-[0.8rem] font-medium text-[#cdcdcd]">
-                          {r.postLabel || r.label}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {r.icon && (
+                            <TintIcon src={r.icon} color={iconColor(r.key)} className="h-4 w-4 shrink-0" />
+                          )}
+                          <span className="text-[1.05rem] font-bold leading-none shrink-0">
+                            {show(r)}
+                            <span className="text-[0.75rem] ml-0.5">{r.unit}</span>
+                          </span>
+                          <span className="text-[0.8rem] font-medium text-[#cdcdcd] whitespace-normal">
+                            {r.postLabel || r.label}
+                          </span>
+                        </div>
+                        {r.scale ? (
+                          <span className="text-[0.75rem] font-black text-[#ce91ff] shrink-0 ml-1">
+                            ☆ x{fmt(r.scale)}
+                          </span>
+                        ) : null}
                       </div>
                     ))}
                   </div>

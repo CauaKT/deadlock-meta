@@ -343,6 +343,7 @@ export interface AbilityUpgradeBonus {
   key: string;
   bonus: number;
   additive: boolean;
+  scaleBonus?: number;
 }
 
 export interface AbilityPropRef {
@@ -426,9 +427,12 @@ function sanitizeHtml(html: unknown): string {
       if (tag === "span") {
         if (closing) return "</span>";
         const cls = safeClass(attrs);
-        const color = attrs.match(
+        const rawColor = attrs.match(
           /style\s*=\s*"[^"]*?color\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\))/i
         )?.[1];
+        // Remove cores verdes chamativas no meio do texto corrido (como BonusMoveSpeed #0F9)
+        const isLoudColor = rawColor && /#0F9|#00ff99/i.test(rawColor) && /movespeed|speed/i.test(cls);
+        const color = isLoudColor ? "#ffefd7" : rawColor;
         return `<span${cls ? ` class="${cls}"` : ""}${color ? ` style="color:${color}"` : ""}>`;
       }
       if (["key", "kbd", "binding"].includes(tag)) {
@@ -513,11 +517,15 @@ export async function fetchHeroAbilitiesFull(
       const upgrades: AbilityUpgradeBonus[][] = (item.upgrades ?? [])
         .slice(0, 3)
         .map((u: any) =>
-          (u.property_upgrades ?? []).map((pu: any) => ({
-            key: String(pu.name),
-            bonus: toNum(pu.bonus) ?? 0,
-            additive: !pu.upgrade_type || /add/i.test(String(pu.upgrade_type)),
-          }))
+          (u.property_upgrades ?? []).map((pu: any) => {
+            const isScale = pu.upgrade_type === "EAddToScale" || /scale/i.test(String(pu.upgrade_type));
+            return {
+              key: String(pu.name),
+              bonus: isScale ? 0 : (toNum(pu.bonus) ?? 0),
+              additive: !isScale,
+              scaleBonus: isScale ? (toNum(pu.bonus) ?? 0) : 0,
+            };
+          })
         );
       const upgradedKeys = new Set(upgrades.flat().map((u) => u.key));
 
@@ -553,31 +561,10 @@ export async function fetchHeroAbilitiesFull(
           }
         }
 
-        // Se uma propriedade listada em basic_properties tiver escalonamento numérico (ex.: Dano do Raio com x0.5),
-        // promove para caixa destacada da seção com estilo e badge de espírito/arma
-        const promotedProps: AbilityPropRef[] = [];
         for (const k of section.basic_properties ?? []) {
           const keyStr = String(k);
-          const propData = item.properties?.[keyStr];
-          const hasScale = propData?.scale_function && toNum(propData.scale_function.stat_scale) !== null;
-
-          if (hasScale) {
-            promotedProps.push({
-              key: keyStr,
-              valueKey: "",
-              statusName: "",
-              icon: typeof propData?.icon === "string" ? propData.icon : "",
-            });
-          } else {
-            if (keyStr && !basicKeys.includes(keyStr)) basicKeys.push(keyStr);
-            if (keyStr && !secBasicKeys.includes(keyStr)) secBasicKeys.push(keyStr);
-          }
-        }
-
-        if (promotedProps.length > 0) {
-          const grp = { label: "", props: promotedProps };
-          secGroups.push(grp);
-          groups.push(grp);
+          if (keyStr && !basicKeys.includes(keyStr)) basicKeys.push(keyStr);
+          if (keyStr && !secBasicKeys.includes(keyStr)) secBasicKeys.push(keyStr);
         }
 
         const secDescHtml = sanitizeHtml(section.loc_string);

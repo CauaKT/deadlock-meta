@@ -72,8 +72,16 @@ export default function NavUserButton() {
     router.refresh();
   };
 
+  const handleSwitchAccount = async () => {
+    setOpen(false);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
+
   if (loading) {
-    return <div className="h-8 w-20 rounded bg-neutral-800/40 animate-pulse" />;
+    return <div className="h-8 w-8 rounded-full bg-neutral-800/40 animate-pulse" />;
   }
 
   if (!user) {
@@ -87,68 +95,131 @@ export default function NavUserButton() {
     );
   }
 
-  const displayName = profile?.username || user.user_metadata?.username || user.email?.split("@")[0] || "Perfil";
+  const displayName = profile?.username || user.user_metadata?.username || user.user_metadata?.full_name || user.email?.split("@")[0] || "Perfil";
+  const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture;
 
   return (
-    <div ref={containerRef} className="relative select-none">
+    <div ref={containerRef} className="relative select-none flex items-center">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        aria-label={`Menu de ${displayName}`}
         aria-expanded={open}
-        className={`flex items-center gap-2 rounded-[5px] border px-3 py-1 font-deadlock text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+        className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border transition-all cursor-pointer ${
           open
-            ? "border-amber-400 bg-amber-500/15 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
-            : "border-neutral-700 bg-neutral-900/90 text-[#f4efe6] hover:border-amber-500/60 hover:text-amber-400"
+            ? "border-amber-400 ring-2 ring-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.4)]"
+            : "border-neutral-700 bg-neutral-900 hover:border-amber-500/80 hover:scale-105"
         }`}
       >
-        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-        <span className="max-w-[110px] truncate">{displayName}</span>
-        <svg
-          aria-hidden
-          viewBox="0 0 16 16"
-          className={`h-3 w-3 text-neutral-400 transition-transform duration-200 ${open ? "rotate-180 text-amber-400" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-        >
-          <path d="m4 6 4 4 4-4" />
-        </svg>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-4 w-4 text-neutral-400"
+            fill="currentColor"
+          >
+            <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+          </svg>
+        )}
       </button>
 
-      {/* Menu Suspenso */}
+      {/* Menu Suspenso Redesenhado */}
       <div
-        className={`absolute right-0 top-full mt-2 w-64 origin-top-right rounded-xl border border-neutral-800/90 bg-neutral-950/95 p-2 shadow-[0_20px_40px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all duration-200 z-50 ${
+        className={`absolute right-0 top-full mt-2 w-[270px] origin-top-right rounded-2xl border border-neutral-800/90 bg-[#0a0d0c]/98 p-2 shadow-[0_24px_50px_rgba(0,0,0,0.95)] backdrop-blur-md transition-all duration-200 z-50 ${
           open ? "scale-100 opacity-100 pointer-events-auto" : "scale-95 opacity-0 pointer-events-none"
         }`}
       >
-        <div className="border-b border-neutral-800/80 px-3 py-2.5">
-          <p className="font-deadlock truncate text-sm font-black uppercase text-[#f4efe6]">
-            {displayName}
-          </p>
-          <p className="truncate font-mono text-[11px] text-neutral-400">{user.email}</p>
+        {/* Cabeçalho do Usuário com Mini-Avatar */}
+        <div className="flex items-center gap-3 border-b border-neutral-800/80 p-2.5">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-500/40 bg-neutral-900 shadow-inner">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5 text-neutral-400" fill="currentColor">
+                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+              </svg>
+            )}
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0a0d0c] bg-emerald-400" />
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="font-deadlock truncate text-sm font-black uppercase tracking-wide text-[#f4efe6]">
+              {displayName}
+            </p>
+            <p className="truncate font-mono text-[10.5px] text-neutral-400">
+              {user.email}
+            </p>
+          </div>
         </div>
 
+        {/* Lista de Ações Diretas */}
         <div className="py-1 space-y-0.5">
+          {/* Opção 1: Meu Perfil */}
           <Link
             href="/profile"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-bold text-neutral-300 hover:bg-neutral-800/60 hover:text-[#f4efe6] transition-colors"
+            className="group flex items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-neutral-800/60"
           >
-            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 text-amber-400" fill="currentColor">
-              <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4Zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10Z" />
-            </svg>
-            <span>Meu Perfil & Deadlock ID</span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-black/40 text-neutral-300 group-hover:border-amber-500/50 group-hover:bg-amber-500/10 group-hover:text-amber-400 transition-colors">
+              <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <span className="font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] group-hover:text-amber-400 transition-colors">
+              Meu Perfil
+            </span>
           </Link>
 
+          {/* Opção 2: Trocar de Conta */}
+          <button
+            type="button"
+            onClick={handleSwitchAccount}
+            className="group flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition-colors hover:bg-neutral-800/60 cursor-pointer"
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-black/40 text-neutral-300 group-hover:border-cyan-500/50 group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition-colors">
+              <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 11l-3-3m0 0l-3 3m3-3v8" />
+              </svg>
+            </div>
+            <span className="font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] group-hover:text-cyan-400 transition-colors">
+              Trocar de Conta
+            </span>
+          </button>
+
+          {/* Divisor */}
+          <div className="border-t border-neutral-800/70 my-1" />
+
+          {/* Opção 3: Sair da Conta */}
           <button
             type="button"
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-bold text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
+            className="group flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition-colors hover:bg-rose-950/25 cursor-pointer"
           >
-            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M10 12l4-4-4-4M14 8H6" />
-            </svg>
-            <span>Sair da Conta</span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-rose-950/50 bg-rose-950/20 text-rose-400 group-hover:bg-rose-900/40 transition-colors">
+              <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <span className="font-deadlock text-xs font-black uppercase tracking-wider text-rose-400 transition-colors">
+              Sair da Conta
+            </span>
           </button>
         </div>
       </div>

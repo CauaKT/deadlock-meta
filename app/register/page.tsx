@@ -72,8 +72,8 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      if (error.message.includes("User already registered")) {
-        setErrorMsg("Este e-mail já está cadastrado.");
+      if (error.message.includes("User already registered") || error.message.includes("already registered")) {
+        setErrorMsg("Este e-mail já está cadastrado. Tente fazer login.");
       } else {
         setErrorMsg(error.message);
       }
@@ -81,12 +81,19 @@ export default function RegisterPage() {
       return;
     }
 
-    // Se a confirmação de e-mail estiver desativada no Supabase, a sessão já é criada na hora
+    // Proteção contra enumeração do Supabase: e-mail existente retorna identities vazio
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setErrorMsg("Este e-mail já está cadastrado. Tente fazer login.");
+      setLoading(false);
+      return;
+    }
+
+    // Se a confirmação de e-mail estiver desativada, redireciona imediatamente
     if (data.session) {
       router.push("/profile");
       router.refresh();
     } else {
-      setSuccessMsg("Conta criada com sucesso! Verifique seu e-mail para ativar seu cadastro.");
+      setSuccessMsg("Conta criada com sucesso! Caso tenha recebido um e-mail de confirmação, valide-o antes de logar.");
       setLoading(false);
     }
   };
@@ -112,12 +119,27 @@ export default function RegisterPage() {
         {successMsg ? (
           <div className="mt-6 rounded-lg border border-emerald-500/40 bg-emerald-950/30 p-4 text-xs font-bold text-emerald-300 space-y-3">
             <p>{successMsg}</p>
-            <Link
-              href="/login"
-              className="inline-block rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
-            >
-              Ir para o Login
-            </Link>
+            <div className="flex gap-2 pt-1">
+              <Link
+                href="/login"
+                className="inline-block rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
+              >
+                Ir para o Login
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessMsg("");
+                  setUsername("");
+                  setEmail("");
+                  setPassword("");
+                  setPasswordConfirm("");
+                }}
+                className="inline-block rounded border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase text-neutral-300 hover:text-white"
+              >
+                Novo Cadastro
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleRegister} className="mt-6 space-y-3.5">

@@ -167,7 +167,7 @@ export default async function HeroPage({
     : [];
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10">
+    <div className="relative max-w-6xl mx-auto p-4 md:p-10 space-y-10">
       <HeroAtmosphere rgb={rgb} />
       {/* Botão de Voltar */}
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -759,11 +759,11 @@ export default function TierMakerClient({
               if (dragId !== null) moveHero(dragId, "POOL");
               setDragId(null);
             }}
-            className={`rounded-2xl border transition-colors p-4 shadow-xl ${
+            className={`rounded-2xl border transition-colors p-4 sm:p-5 shadow-xl ${
               dragOverZone === "POOL" ? "border-amber-500/80 bg-neutral-900/90" : "border-neutral-800/90 bg-neutral-950/95"
             }`}
           >
-            <div className="flex items-center justify-between pb-2 text-[11px] font-black uppercase tracking-wider text-neutral-400">
+            <div className="flex items-center justify-between pb-3 text-[11px] font-black uppercase tracking-wider text-neutral-400">
               <span>Heróis Disponíveis</span>
               <span>{(board.POOL || []).length} restantes</span>
             </div>
@@ -772,7 +772,7 @@ export default function TierMakerClient({
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
               }}
-              className="flex flex-wrap gap-2 max-h-[36svh] overflow-y-auto [scrollbar-width:thin] p-1"
+              className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(78px,1fr))] justify-items-center gap-2.5 p-1"
             >
               {(board.POOL || []).map((id) => renderHeroChip(id, "POOL"))}
             </div>

@@ -243,8 +243,8 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 wide:overflow-y-auto wide:[scrollbar-width:thin]">
-          <div className="grid grid-cols-5 gap-2 p-4 sm:grid-cols-7 lg:grid-cols-9 lg:gap-3 lg:p-8">
+        <div className="min-h-0 flex-1 wide:overflow-y-auto lp-scroll pr-1.5">
+          <div className="grid grid-cols-5 gap-1.5 p-2 sm:grid-cols-7 sm:gap-2 lg:grid-cols-9 lg:gap-2 lg:p-3">
             {visible.map((hero) => {
               const isActive = hero.id === active.id;
               const heroColor = `rgb(${hero.rgb.join(", ")})`;
