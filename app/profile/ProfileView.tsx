@@ -1,6 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import {
+  getCommunityProfiles,
+  getOwnFullProfile,
+  getPublicProfileByHandle,
+  getServerAuthUser,
+} from "@/lib/backend/server";
 import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
 import ProfileForm from "./ProfileForm";
 import fs from "fs";
@@ -8,15 +13,14 @@ import path from "path";
 
 export default async function ProfileView({ handle }: { handle?: string }) {
   await connection();
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getServerAuthUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  const [{ data: profile }, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user.id).single(),
+  const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
+    getOwnFullProfile(user.id),
     fetchHeroesAssets(),
     fetchWikiColors(),
     fetchHeroesAnalytics(PATCHES[0].since),
@@ -24,27 +28,12 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   ]);
   const withMatches = new Set(stats.filter((s) => (s.matches || 0) > 0).map((s) => s.hero_id));
 
-  const { data: community } = await supabase
-    .from("public_profiles")
-    .select("id, username, handle, avatar_url, favorite_hero_id")
-    .neq("id", user.id)
-    .not("handle", "is", null)
-    .limit(8);
+  const community = await getCommunityProfiles(user.id, 8);
 
   // O endereço só abre para o dono; /profile redireciona para /profile/<@>
   const ownHandle: string | null = profile?.handle ?? null;
   if (handle === undefined && ownHandle) redirect(`/profile/${ownHandle}`);
   const isOwner = handle === undefined || handle === ownHandle;
-  let viewed = profile;
-  if (!isOwner) {
-    const { data: other } = await supabase
-      .from("public_profiles")
-      .select("id, username, handle, avatar_url, favorite_hero_id, bio, banner_hero_id, banner_image, profile_color")
-      .eq("handle", handle)
-      .maybeSingle();
-    if (!other) notFound();
-    viewed = other;
-  }
 
   const heroesDir = path.join(process.cwd(), "public", "heroes");
   const localArt = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
@@ -77,16 +66,16 @@ export default async function ProfileView({ handle }: { handle?: string }) {
       };
     });
 
-  const createdAtDate = user.created_at
-    ? new Date(user.created_at).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+  const createdAtDate = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
     : "Recentemente";
 
   const initialProfile = {
     id: user.id,
-    username: profile?.username || user.user_metadata?.username || "",
+    username: profile?.username || user.suggestedUsername || "",
     bio: profile?.bio ?? "",
     handle: ownHandle ?? "",
-    avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+    avatar_url: profile?.avatar_url || user.suggestedAvatarUrl,
     steam_id: profile?.steam_id || "",
     favorite_hero_id: profile?.favorite_hero_id ?? null,
     banner_hero_id: profile?.banner_hero_id ?? null,
@@ -95,21 +84,26 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     createdAt: createdAtDate,
   };
 
-  const shownProfile = isOwner
-    ? initialProfile
-    : {
-        id: viewed.id as string,
-        username: viewed.username ?? "",
-        bio: viewed.bio ?? "",
-        handle: viewed.handle ?? "",
-        avatar_url: viewed.avatar_url ?? null,
-        steam_id: "",
-        favorite_hero_id: viewed.favorite_hero_id ?? null,
-        banner_hero_id: viewed.banner_hero_id ?? null,
-        banner_image: viewed.banner_image ?? null,
-        profile_color: viewed.profile_color ?? null,
-        createdAt: initialProfile.createdAt,
-      };
+  let shownProfile = initialProfile;
+  if (!isOwner) {
+    const other = await getPublicProfileByHandle(handle);
+    if (!other) notFound();
+    shownProfile = {
+      id: other.id,
+      username: other.username ?? "",
+      bio: other.bio ?? "",
+      handle: other.handle ?? "",
+      avatar_url: other.avatar_url ?? null,
+      steam_id: "",
+      favorite_hero_id: other.favorite_hero_id ?? null,
+      banner_hero_id: other.banner_hero_id ?? null,
+      banner_image: other.banner_image ?? null,
+      profile_color: other.profile_color ?? null,
+      createdAt: other.createdAt
+        ? new Date(other.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+        : "Recentemente",
+    };
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6">
@@ -118,8 +112,8 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         initialProfile={shownProfile}
         readOnly={!isOwner}
         heroes={heroesList}
-        userEmail={user.email || ""}
-        community={community ?? []}
+        userEmail={user.email}
+        community={community}
       />
     </div>
   );

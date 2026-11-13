@@ -3,37 +3,49 @@
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import {
+  resendVerificationEmail,
+  signInWithEmail,
+  signInWithGoogle,
+} from "@/lib/backend/client";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextRoute = searchParams.get("next") || "/";
+  const verifiedParam = searchParams.get("verified");
+  const errorParam = searchParams.get("error");
 
   const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+  const [canResend, setCanResend] = useState(false);
+  const [resending, setResending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (verifiedParam === "1") {
+      setInfoMsg("E-mail confirmado com sucesso! Já pode entrar na sua conta.");
+    } else if (errorParam === "invalid-verification-token") {
+      setErrorMsg("Link de confirmação inválido ou expirado.");
+    } else if (errorParam === "google-not-configured") {
+      setErrorMsg("Login com Google ainda não está configurado na API.");
+    } else if (errorParam === "auth-callback-failed") {
+      setErrorMsg("Não foi possível concluir o login com Google.");
+    }
+  }, [verifiedParam, errorParam]);
 
   const handleGoogleLogin = async () => {
     setErrorMsg("");
     setGoogleLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextRoute)}`,
-      },
-    });
-    if (error) {
-      setErrorMsg(error.message);
+    const result = await signInWithGoogle(nextRoute);
+    if (!result.ok) {
+      setErrorMsg(result.message);
       setGoogleLoading(false);
     }
   };
@@ -41,28 +53,34 @@ function LoginForm() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setInfoMsg("");
+    setCanResend(false);
     setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    if (error) {
-      if (error.message.includes("Invalid login credentials")) {
-        setErrorMsg("E-mail ou senha incorretos.");
-      } else if (error.message.includes("Email not confirmed")) {
-        setErrorMsg("Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.");
-      } else {
-        setErrorMsg(error.message);
-      }
+    const result = await signInWithEmail(email.trim(), password);
+    if (!result.ok) {
+      setErrorMsg(result.message);
+      setCanResend(Boolean(result.unverified));
       setLoading(false);
       return;
     }
 
     router.push(nextRoute);
     router.refresh();
+  };
+
+  const handleResend = async () => {
+    if (!email.trim()) return;
+    setResending(true);
+    const res = await resendVerificationEmail(email.trim());
+    setResending(false);
+    if (res.ok) {
+      setErrorMsg("");
+      setCanResend(false);
+      setInfoMsg(res.message);
+    } else {
+      setErrorMsg(res.message);
+    }
   };
 
   if (!mounted) {
@@ -80,9 +98,25 @@ function LoginForm() {
         </p>
       </div>
 
+      {infoMsg && (
+        <div className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs font-bold text-emerald-300">
+          {infoMsg}
+        </div>
+      )}
+
       {errorMsg && (
-        <div className="mt-4 rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs font-bold text-rose-300">
-          {errorMsg}
+        <div className="mt-4 rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs font-bold text-rose-300 space-y-2">
+          <p>{errorMsg}</p>
+          {canResend && (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="text-amber-400 underline hover:text-amber-300 cursor-pointer disabled:opacity-50"
+            >
+              {resending ? "Reenviando..." : "Reenviar e-mail de confirmação"}
+            </button>
+          )}
         </div>
       )}
 
@@ -108,6 +142,12 @@ function LoginForm() {
             <label className="font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300">
               Senha
             </label>
+            <Link
+              href="/reset-password"
+              className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              Esqueci minha senha
+            </Link>
           </div>
           <div className="relative">
             <input

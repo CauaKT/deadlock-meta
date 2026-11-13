@@ -3,7 +3,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { updateProfileLook, updateProfileSettings } from "@/lib/backend/client";
 import type { PublishedTierList } from "@/app/tier-maker/TierMakerClient";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
@@ -191,29 +191,17 @@ export default function ProfileForm({
     }
     setLookSaving(true);
     setLookError("");
-    const { data, error } = await createClient()
-      .from("profiles")
-      .update({
-        username: cleanName,
-        bio: bio.trim() || null,
-        handle: cleanHandle || null,
-        avatar_url: avatarUrl,
-        banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
-        banner_image: bannerMode === "custom" ? bannerImage : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", initialProfile.id)
-      .select("id");
+    const result = await updateProfileLook(initialProfile.id, {
+      username: cleanName,
+      bio: bio.trim() || null,
+      handle: cleanHandle || null,
+      avatar_url: avatarUrl,
+      banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
+      banner_image: bannerMode === "custom" ? bannerImage : null,
+    });
     setLookSaving(false);
-    if (error || !data?.length) {
-      console.error("saveLook:", error ?? "0 linhas afetadas");
-      setLookError(
-        error?.code === "23505" && error.message.includes("handle")
-          ? "Esse @ já está em uso."
-          : error
-            ? "Não foi possível salvar. Tente novamente."
-            : "Sem permissão para atualizar este perfil.",
-      );
+    if (!result.ok) {
+      setLookError(result.message);
       return;
     }
     setUsername(cleanName);
@@ -237,30 +225,19 @@ export default function ProfileForm({
     setSaving(true);
     setMessage(null);
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .update({
-        username: username.trim(),
-        steam_id: steamId.trim(),
-        profile_color: profileColor,
-        favorite_hero_id: favoriteHeroId,
-        banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
-        banner_image: bannerMode === "custom" ? bannerImage : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", initialProfile.id)
-      .select("id");
+    const result = await updateProfileSettings(initialProfile.id, {
+      username: username.trim(),
+      steam_id: steamId.trim(),
+      profile_color: profileColor,
+      favorite_hero_id: favoriteHeroId,
+      banner_hero_id: bannerMode === "hero" ? bannerHeroId : null,
+      banner_image: bannerMode === "custom" ? bannerImage : null,
+    });
 
     setSaving(false);
 
-    if (error) {
-      setMessage({ type: "error", text: "Erro ao salvar alterações: " + error.message });
-      return;
-    }
-
-    if (!data?.length) {
-      setMessage({ type: "error", text: "Sem permissão para atualizar este perfil." });
+    if (!result.ok) {
+      setMessage({ type: "error", text: result.message });
       return;
     }
 
@@ -381,7 +358,7 @@ export default function ProfileForm({
               </div>
 
               {/* Nome, E-mail e Badges */}
-              <div className="text-center sm:text-left space-y-1 min-w-0 sm:mt-[5.5rem]">
+              <div className="w-full min-w-0 flex-1 text-center sm:text-left space-y-1 sm:mt-[5.5rem]">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                   {editing ? (
                     <input
@@ -391,7 +368,7 @@ export default function ProfileForm({
                       maxLength={20}
                       placeholder="Seu apelido"
                       aria-label="Apelido"
-                      className="font-deadlock w-full min-w-0 rounded-lg border border-dashed border-neutral-600 bg-black/40 px-2 py-0.5 text-center text-3xl font-black uppercase tracking-tight text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none sm:w-72 sm:text-left sm:text-4xl"
+                      className="font-deadlock w-full max-w-full min-w-0 rounded-lg border border-dashed border-neutral-600 bg-black/40 px-2 py-0.5 text-center text-3xl font-black uppercase tracking-tight text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none sm:w-[32rem] sm:text-left sm:text-4xl"
                     />
                   ) : (
                     <h1 className="font-deadlock truncate text-3xl sm:text-4xl font-black uppercase tracking-tight text-[#f4efe6]">

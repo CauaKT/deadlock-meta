@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { signUpWithEmail } from "@/lib/backend/client";
 
 function getPasswordStrength(pwd: string): { label: string; color: string; width: string } {
   if (!pwd) return { label: "", color: "", width: "0%" };
@@ -48,8 +48,8 @@ export default function RegisterPage() {
     setSuccessMsg("");
 
     const cleanNick = username.trim();
-    if (cleanNick.length < 3) {
-      setErrorMsg("O nome de usuário deve ter pelo menos 3 caracteres.");
+    if (cleanNick.length < 3 || cleanNick.length > 20) {
+      setErrorMsg("O nome de usuário deve ter entre 3 e 20 caracteres.");
       return;
     }
 
@@ -69,37 +69,16 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
+    const result = await signUpWithEmail(email.trim(), password, cleanNick);
 
-    const { error, data } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          username: cleanNick,
-        },
-      },
-    });
-
-    if (error) {
-      if (error.message.includes("User already registered") || error.message.includes("already registered")) {
-        setErrorMsg("Este e-mail já está cadastrado. Tente fazer login.");
-      } else {
-        setErrorMsg(error.message);
-      }
-      setLoading(false);
-      return;
-    }
-
-    // Proteção contra enumeração do Supabase: e-mail existente retorna identities vazio
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      setErrorMsg("Este e-mail já está cadastrado. Tente fazer login.");
+    if (!result.ok) {
+      setErrorMsg(result.message);
       setLoading(false);
       return;
     }
 
     // Se a confirmação de e-mail estiver desativada, redireciona imediatamente
-    if (data.session) {
+    if (result.sessionActive) {
       router.push("/welcome");
       router.refresh();
     } else {
@@ -189,7 +168,7 @@ export default function RegisterPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   className="w-full rounded-lg border border-neutral-800 bg-black/60 px-3.5 py-2 pr-10 text-sm text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none transition-colors"
                 />
                 <button

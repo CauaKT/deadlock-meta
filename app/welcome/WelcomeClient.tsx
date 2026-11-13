@@ -2,14 +2,18 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import {
+  getCurrentClientUser,
+  getOnboardingStatus,
+  saveOnboardingProfile,
+} from "@/lib/backend/client";
+import type { AuthUser } from "@/lib/backend/types";
 
 export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [nickname, setNickname] = useState("");
   const [handle, setHandle] = useState("");
   const [nickPlaceholder] = useState(() => {
@@ -81,43 +85,22 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
   }, [cropModalOpen]);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
+    getCurrentClientUser().then(async (u) => {
       if (!u) {
         router.push("/login");
         return;
       }
       setUser(u);
 
-      // Se já possui username preenchido, libera para a home
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, avatar_url, handle")
-        .eq("id", u.id)
-        .maybeSingle();
-
+      // Se já possui username e @ preenchidos, libera para a home
+      const profile = await getOnboardingStatus(u.id);
       if (profile?.username && profile.username.trim() !== "" && profile.handle) {
         router.push("/");
         return;
       }
 
-      // Foto inicial vinda do perfil ou dos metadados do Google
-      const initialAvatar =
-        profile?.avatar_url ||
-        u.user_metadata?.avatar_url ||
-        u.user_metadata?.picture ||
-        null;
-      setAvatarPreview(initialAvatar);
-
-      // Sugere o nome do Google ou o prefixo do e-mail
-      const suggestedName =
-        profile?.username?.trim() ||
-        u.user_metadata?.username ||
-        u.user_metadata?.full_name?.split(" ")[0] ||
-        u.user_metadata?.name?.split(" ")[0] ||
-        u.email?.split("@")[0] ||
-        "";
-
+      setAvatarPreview(profile?.avatar_url || u.suggestedAvatarUrl);
+      const suggestedName = profile?.username?.trim() || u.suggestedUsername;
       setNickname(suggestedName.slice(0, 20));
       setLoading(false);
     });
@@ -245,34 +228,20 @@ const BOX_SIZE = 300; // Tamanho do viewport de visualização expandido para 30
       return;
     }
 
-    setSaving(true);
-    const supabase = createClient();
-
     if (!user) return;
+    setSaving(true);
 
-    // Salva ou atualiza a tabela profiles com o avatar escolhido e nickname
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: user.id,
+    const result = await saveOnboardingProfile(user.id, {
       username: clean,
       handle: cleanHandle,
       avatar_url: avatarPreview,
-      updated_at: new Date().toISOString(),
     });
 
-    if (profileError) {
-      setErrorMsg(
-        profileError.code === "23505" && profileError.message.includes("handle")
-          ? "Esse @ já está em uso. Escolha outro."
-          : "Erro ao salvar perfil: " + profileError.message,
-      );
+    if (!result.ok) {
+      setErrorMsg(result.message);
       setSaving(false);
       return;
     }
-
-    // Atualiza apenas o nickname no JWT (a foto fica salva apenas na tabela profiles para não estourar o limite de cookies)
-    await supabase.auth.updateUser({
-      data: { username: clean },
-    });
 
     router.push("/");
     router.refresh();

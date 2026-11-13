@@ -2,23 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter, usePathname } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
-
-interface ProfileSummary {
-  username: string;
-  avatar_url?: string;
-  favorite_hero_id?: number;
-  handle?: string | null;
-}
+import {
+  getCurrentClientUser,
+  getNavProfileSummary,
+  signOut,
+  subscribeToAuthChanges,
+} from "@/lib/backend/client";
+import type { AuthUser, ProfileSummary } from "@/lib/backend/types";
 
 type UserStatus = "online" | "dnd" | "invisible";
 
 export default function NavUserButton() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<ProfileSummary | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,16 +44,10 @@ export default function NavUserButton() {
   };
 
   useEffect(() => {
-    const supabase = createClient();
-
-    const loadUserData = async (u: User | null) => {
+    const loadUserData = async (u: AuthUser | null) => {
       setUser(u);
       if (u) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("username, avatar_url, favorite_hero_id, handle")
-          .eq("id", u.id)
-          .maybeSingle();
+        const { data, error } = await getNavProfileSummary(u.id);
         if (data) setProfile(data);
         if (!error && !data?.handle && pathname !== "/welcome") router.replace("/welcome");
       } else {
@@ -64,13 +56,8 @@ export default function NavUserButton() {
       setLoading(false);
     };
 
-    supabase.auth.getUser().then(({ data: { user } }) => loadUserData(user));
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      loadUserData(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    getCurrentClientUser().then(loadUserData);
+    return subscribeToAuthChanges(loadUserData);
   }, [pathname, router]);
 
   useEffect(() => {
@@ -91,16 +78,14 @@ export default function NavUserButton() {
 
   const handleSignOut = async () => {
     setOpen(false);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     router.push("/");
     router.refresh();
   };
 
   const handleSwitchAccount = async () => {
     setOpen(false);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     router.push("/login");
     router.refresh();
   };
@@ -120,8 +105,8 @@ export default function NavUserButton() {
     );
   }
 
-  const displayName = profile?.username || user.user_metadata?.username || user.user_metadata?.full_name || user.email?.split("@")[0] || "Perfil";
-  const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture;
+  const displayName = profile?.username || user.suggestedFullName || "Perfil";
+  const avatarUrl = profile?.avatar_url || user.suggestedAvatarUrl;
 
   return (
     <div ref={containerRef} className="relative select-none flex items-center">
