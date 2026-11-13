@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import ProfileView from "../ProfileView";
 
 export const instant = false;
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfileByHandlePage({ params }: { params: Promise<{ handle: string }> }) {
+  await connection();
   const { handle } = await params;
   return <ProfileView handle={handle} />;
 }

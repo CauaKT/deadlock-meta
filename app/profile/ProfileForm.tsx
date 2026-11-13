@@ -191,7 +191,7 @@ export default function ProfileForm({
     }
     setLookSaving(true);
     setLookError("");
-    const { error } = await createClient()
+    const { data, error } = await createClient()
       .from("profiles")
       .update({
         username: cleanName,
@@ -202,14 +202,17 @@ export default function ProfileForm({
         banner_image: bannerMode === "custom" ? bannerImage : null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", initialProfile.id);
+      .eq("id", initialProfile.id)
+      .select("id");
     setLookSaving(false);
-    if (error) {
-      console.error("saveLook:", error);
+    if (error || !data?.length) {
+      console.error("saveLook:", error ?? "0 linhas afetadas");
       setLookError(
-        error.code === "23505" && error.message.includes("handle")
+        error?.code === "23505" && error.message.includes("handle")
           ? "Esse @ já está em uso."
-          : "Não foi possível salvar. Tente novamente.",
+          : error
+            ? "Não foi possível salvar. Tente novamente."
+            : "Sem permissão para atualizar este perfil.",
       );
       return;
     }
@@ -235,7 +238,7 @@ export default function ProfileForm({
     setMessage(null);
 
     const supabase = createClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .update({
         username: username.trim(),
@@ -246,12 +249,18 @@ export default function ProfileForm({
         banner_image: bannerMode === "custom" ? bannerImage : null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", initialProfile.id);
+      .eq("id", initialProfile.id)
+      .select("id");
 
     setSaving(false);
 
     if (error) {
       setMessage({ type: "error", text: "Erro ao salvar alterações: " + error.message });
+      return;
+    }
+
+    if (!data?.length) {
+      setMessage({ type: "error", text: "Sem permissão para atualizar este perfil." });
       return;
     }
 
@@ -500,7 +509,7 @@ export default function ProfileForm({
                 />
               </div>
             </div>
-          ) : (
+          ) : !readOnly ? (
             <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-8 text-center space-y-3">
               <p className="font-deadlock text-lg font-black text-neutral-300">
                 Nenhum Herói Assinatura Selecionado
@@ -516,9 +525,8 @@ export default function ProfileForm({
                 Definir Herói Agora
               </button>
             </div>
-          )}
+          ) : null}
         </div>
-
         <aside className={`space-y-4 ${readOnly ? "hidden" : ""}`}>
           <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
             <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
