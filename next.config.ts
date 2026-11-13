@@ -16,6 +16,20 @@ const nextConfig: NextConfig = {
     ],
   },
   partialPrefetching: true,
+  async rewrites() {
+    const apiTarget = (
+      process.env.API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:3001"
+    ).replace(/\/+$/, "");
+
+    return [
+      {
+        source: "/api/backend/:path*",
+        destination: `${apiTarget}/:path*`,
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

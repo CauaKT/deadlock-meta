@@ -7,8 +7,7 @@ import type {
 const AUTH_EVENT = "lockpro-auth-changed";
 
 function apiUrl(path: string): string {
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001").replace(/\/+$/, "");
-  return `${base}${path}`;
+  return `/api/backend${path}`;
 }
 
 function notifyAuthChanged(): void {
