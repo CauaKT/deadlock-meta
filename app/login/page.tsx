@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ApiWakeOverlay } from "@/app/ApiWakeScreen";
 import ColdStartNotice from "@/app/ColdStartNotice";
 import {
   getCurrentClientUser,
   resendVerificationEmail,
   signInWithEmail,
   signInWithGoogle,
+  type ApiWakeStage,
 } from "@/lib/backend/client";
 import type { AuthUser } from "@/lib/backend/types";
 
@@ -30,6 +32,10 @@ function LoginForm() {
   const [resending, setResending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleWaking, setGoogleWaking] = useState(false);
+  const [googleStage, setGoogleStage] = useState<ApiWakeStage>("connecting");
+  const [googleElapsedMs, setGoogleElapsedMs] = useState(0);
+  const googleAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -73,10 +79,29 @@ function LoginForm() {
   const handleGoogleLogin = async () => {
     setErrorMsg("");
     setGoogleLoading(true);
-    const result = await signInWithGoogle(nextRoute);
+    setGoogleStage("connecting");
+    setGoogleElapsedMs(0);
+
+    const controller = new AbortController();
+    googleAbortRef.current = controller;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setGoogleElapsedMs(Date.now() - started);
+    }, 500);
+
+    const result = await signInWithGoogle(nextRoute, {
+      signal: controller.signal,
+      onSlowWake: () => setGoogleWaking(true),
+      onStage: setGoogleStage,
+    });
+
+    clearInterval(timer);
     if (!result.ok) {
-      setErrorMsg(result.message);
+      setGoogleWaking(false);
       setGoogleLoading(false);
+      if (!result.aborted && result.message) {
+        setErrorMsg(result.message);
+      }
     }
   };
 
@@ -263,7 +288,17 @@ function LoginForm() {
         </button>
       </form>
 
-      <ColdStartNotice active={loading || googleLoading} warmup />
+      <ColdStartNotice active={loading} warmup />
+      <ApiWakeOverlay
+        open={googleWaking}
+        stage={googleStage}
+        elapsedMs={googleElapsedMs}
+        onCancelAction={() => {
+          googleAbortRef.current?.abort();
+          setGoogleWaking(false);
+          setGoogleLoading(false);
+        }}
+      />
 
       {/* Divisor Visual */}
       <div className="relative my-5 flex items-center justify-center">

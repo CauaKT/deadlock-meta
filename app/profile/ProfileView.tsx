@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
-import Link from "next/link";
+import { ApiWakingAutoRefresh } from "@/app/ApiWakeScreen";
 import {
   getCommunityProfiles,
   getOwnFullProfile,
@@ -14,22 +14,7 @@ import fs from "fs";
 import path from "path";
 
 function ApiWakingCard() {
-  return (
-    <div className="mx-auto my-12 max-w-md rounded-2xl border border-amber-500/30 bg-neutral-950/90 p-6 text-center space-y-3">
-      <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-amber-400">
-        Servidor iniciando
-      </h2>
-      <p className="text-xs text-neutral-300 leading-relaxed">
-        A API está acordando após um período de inatividade. Aguarde alguns segundos e tente carregar a página novamente.
-      </p>
-      <Link
-        href="/profile"
-        className="inline-block rounded-lg bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
-      >
-        Tentar novamente
-      </Link>
-    </div>
-  );
+  return <ApiWakingAutoRefresh />;
 }
 
 export default async function ProfileView({ handle }: { handle?: string }) {

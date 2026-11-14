@@ -9,6 +9,7 @@ import type { SocialLinks, TierListItem } from "@/lib/backend/types";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
+import CommunitySearchModal from "./CommunitySearchModal";
 import FavoriteHeroSelect from "./FavoriteHeroSelect";
 import PlayerDeadlockStats from "./PlayerDeadlockStats";
 
@@ -331,8 +332,9 @@ export default function ProfileForm({
     const sb = b.favorite_hero_id != null && b.favorite_hero_id === favoriteHeroId ? 0 : 1;
     return sa - sb || (a.username ?? "").localeCompare(b.username ?? "", "pt-BR");
   });
-  const suggestions = sortedCommunity.slice(0, 3);
-  const otherAccounts = sortedCommunity.slice(3, 8);
+  const [communityModalOpen, setCommunityModalOpen] = useState(false);
+  const suggestions = sortedCommunity.slice(0, 5);
+  const hasMoreSuggestions = sortedCommunity.length > 5;
   const heroColor = profileColor ?? (selectedHero?.rgb ? `rgb(${selectedHero.rgb.join(",")})` : "#f59e0b");
   const avatarImage = avatarUrl || selectedHero?.image;
   const bannerHero = heroesById.get((bannerMode === "hero" ? bannerHeroId : favoriteHeroId) ?? -1) ?? null;
@@ -821,28 +823,31 @@ export default function ProfileForm({
               Sugestões de Amigos
             </h3>
             {suggestions.length > 0 ? (
-              <ul className="space-y-3">
-                {suggestions.map((p) => (
-                  <CommunityRow key={p.id} p={p} />
-                ))}
-              </ul>
+              <>
+                <ul className="space-y-3">
+                  {suggestions.map((p) => (
+                    <CommunityRow key={p.id} p={p} />
+                  ))}
+                </ul>
+                {hasMoreSuggestions && (
+                  <button
+                    type="button"
+                    onClick={() => setCommunityModalOpen(true)}
+                    className="mt-2 w-full cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900/70 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400 transition-colors hover:border-amber-500/60 hover:bg-neutral-900"
+                  >
+                    Ver mais sugestões
+                  </button>
+                )}
+              </>
             ) : (
               <p className="text-[11px] text-neutral-500">Ainda não há outras contas cadastradas.</p>
             )}
           </section>
 
-          {otherAccounts.length > 0 && (
-            <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
-              <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
-                Outras Contas do Site
-              </h3>
-              <ul className="space-y-3">
-                {otherAccounts.map((p) => (
-                  <CommunityRow key={p.id} p={p} />
-                ))}
-              </ul>
-            </section>
-          )}
+          <CommunitySearchModal
+            open={communityModalOpen}
+            onCloseAction={() => setCommunityModalOpen(false)}
+          />
         </aside>
         </div>
       )}

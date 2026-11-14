@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ApiWakeOverlay } from "@/app/ApiWakeScreen";
 import ColdStartNotice from "@/app/ColdStartNotice";
 import {
   getCurrentClientUser,
   resendVerificationEmail,
   signInWithGoogle,
   signUpWithEmail,
+  type ApiWakeStage,
 } from "@/lib/backend/client";
 
 function getPasswordStrength(pwd: string): { label: string; color: string; width: string } {
@@ -56,14 +58,37 @@ export default function RegisterPage() {
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
+  const [googleWaking, setGoogleWaking] = useState(false);
+  const [googleStage, setGoogleStage] = useState<ApiWakeStage>("connecting");
+  const [googleElapsedMs, setGoogleElapsedMs] = useState(0);
+  const googleAbortRef = useRef<AbortController | null>(null);
 
   const handleGoogleLogin = async () => {
     setErrorMsg("");
     setGoogleLoading(true);
-    const result = await signInWithGoogle("/");
+    setGoogleStage("connecting");
+    setGoogleElapsedMs(0);
+
+    const controller = new AbortController();
+    googleAbortRef.current = controller;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setGoogleElapsedMs(Date.now() - started);
+    }, 500);
+
+    const result = await signInWithGoogle("/", {
+      signal: controller.signal,
+      onSlowWake: () => setGoogleWaking(true),
+      onStage: setGoogleStage,
+    });
+
+    clearInterval(timer);
     if (!result.ok) {
-      setErrorMsg(result.message);
+      setGoogleWaking(false);
       setGoogleLoading(false);
+      if (!result.aborted && result.message) {
+        setErrorMsg(result.message);
+      }
     }
   };
 
@@ -312,7 +337,17 @@ export default function RegisterPage() {
           </form>
         )}
 
-        <ColdStartNotice active={loading || googleLoading} warmup />
+        <ColdStartNotice active={loading} warmup />
+        <ApiWakeOverlay
+          open={googleWaking}
+          stage={googleStage}
+          elapsedMs={googleElapsedMs}
+          onCancelAction={() => {
+            googleAbortRef.current?.abort();
+            setGoogleWaking(false);
+            setGoogleLoading(false);
+          }}
+        />
 
         {!successMsg && (
           <>

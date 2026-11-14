@@ -12,29 +12,40 @@ export default function ColdStartNotice({
   warmup?: boolean;
   delayMs?: number;
 }) {
-  const [visible, setVisible] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   useEffect(() => {
     if (warmup) warmUpApi();
   }, [warmup]);
 
   useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
-    const timer = setTimeout(() => setVisible(true), delayMs);
-    return () => clearTimeout(timer);
-  }, [active, delayMs]);
+    if (!active) return;
 
-  if (!visible) return null;
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setElapsedMs(Date.now() - startedAt);
+    }, 500);
+
+    return () => {
+      clearInterval(id);
+      setElapsedMs(0);
+    };
+  }, [active]);
+
+  if (!active || elapsedMs < delayMs) return null;
+
+  const seconds = Math.floor(elapsedMs / 1000);
 
   return (
     <div
       role="status"
-      className="mt-3 rounded-lg border border-amber-500/35 bg-amber-950/25 px-3.5 py-2.5 text-[11px] font-medium text-amber-200/90"
+      className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-950/25 px-3.5 py-2.5 text-[11px] font-medium text-amber-200/90"
     >
-      Sua conexão parece estar lenta ou instável no momento. Verifique sua internet e aguarde...
+      <span className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+      <span>
+        Acordando o servidor gratuito da API (<strong className="font-mono text-amber-300">{seconds}s</strong>) — após
+        períodos de inatividade ele leva cerca de 30 a 60 segundos para iniciar...
+      </span>
     </div>
   );
 }

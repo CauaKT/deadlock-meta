@@ -2,6 +2,7 @@ import type {
   AdminOverview,
   AdminUsersResponse,
   AuthUser,
+  CommunityProfileItem,
   OnboardingProfile,
   ProfileSummary,
   SavedAccount,
@@ -103,9 +104,98 @@ export async function signInWithEmail(
   }
 }
 
+export type ApiWakeStage = "connecting" | "waking" | "checking_db" | "ready";
+
+export async function waitForApiReady(options?: {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  onStage?: (stage: ApiWakeStage) => void;
+}): Promise<{ ready: boolean; aborted?: boolean }> {
+  const timeoutMs = options?.timeoutMs ?? 90_000;
+  const startedAt = Date.now();
+  let attempt = 0;
+
+  options?.onStage?.("connecting");
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (options?.signal?.aborted) {
+      return { ready: false, aborted: true };
+    }
+
+    attempt += 1;
+    if (attempt >= 1 && Date.now() - startedAt > 1200) {
+      options?.onStage?.("waking");
+    }
+
+    const attemptController = new AbortController();
+    const attemptTimer = setTimeout(() => attemptController.abort(), 8000);
+    const onExternalAbort = () => attemptController.abort();
+    options?.signal?.addEventListener("abort", onExternalAbort, { once: true });
+
+    try {
+      const res = await fetch(apiUrl("/health"), {
+        method: "GET",
+        cache: "no-store",
+        signal: attemptController.signal,
+      });
+
+      if (res.ok) {
+        options?.onStage?.("checking_db");
+        const data = (await res.json().catch(() => null)) as { status?: string; db?: string } | null;
+        if (data?.status === "ok" && data?.db === "up") {
+          options?.onStage?.("ready");
+          return { ready: true };
+        }
+      }
+    } catch {
+      // Render em cold start ou timeout curto desta tentativa; tenta novamente abaixo
+    } finally {
+      clearTimeout(attemptTimer);
+      options?.signal?.removeEventListener("abort", onExternalAbort);
+    }
+
+    if (options?.signal?.aborted) {
+      return { ready: false, aborted: true };
+    }
+
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+
+  return { ready: false };
+}
+
 export async function signInWithGoogle(
   nextRoute: string,
-): Promise<{ ok: true } | { ok: false; message: string }> {
+  options?: {
+    onSlowWake?: () => void;
+    onStage?: (stage: ApiWakeStage) => void;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: true } | { ok: false; message: string; aborted?: boolean }> {
+  const slowTimer = options?.onSlowWake
+    ? setTimeout(() => {
+        options.onSlowWake?.();
+      }, 700)
+    : null;
+
+  const { ready, aborted } = await waitForApiReady({
+    signal: options?.signal,
+    onStage: options?.onStage,
+  });
+
+  if (slowTimer) clearTimeout(slowTimer);
+
+  if (aborted) {
+    return { ok: false, message: "", aborted: true };
+  }
+
+  if (!ready) {
+    return {
+      ok: false,
+      message: "O servidor gratuito demorou para iniciar. Tente novamente em alguns segundos.",
+    };
+  }
+
   window.location.href = apiUrl(`/auth/google?next=${encodeURIComponent(nextRoute)}`);
   return { ok: true };
 }
@@ -702,5 +792,39 @@ export async function deleteAdminUser(
     return { ok: true };
   } catch {
     return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function searchCommunityProfiles(params?: {
+  search?: string;
+  limit?: number;
+}): Promise<CommunityProfileItem[]> {
+  try {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(params?.limit ?? 100));
+    if (params?.search?.trim()) {
+      qs.set("search", params.search.trim());
+    }
+    const res = await fetch(apiUrl(`/profiles/community?${qs.toString()}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const rows = (await res.json()) as Array<{
+      id: string;
+      username: string | null;
+      handle: string | null;
+      avatarUrl: string | null;
+      favoriteHeroId: number | null;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      handle: r.handle,
+      avatar_url: r.avatarUrl,
+      favorite_hero_id: r.favoriteHeroId,
+    }));
+  } catch {
+    return [];
   }
 }
