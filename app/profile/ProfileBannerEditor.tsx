@@ -5,9 +5,9 @@ import { useRef, useState, type ChangeEvent } from "react";
 import type { BannerHero, BannerMode } from "./ProfileBanner";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const MAX_WIDTH = 1600;
-// A imagem vai como Data URL para o banco da API; mantém ~450 KB no máximo
-export const MAX_DATA_URL_CHARS = 600_000;
+const MAX_WIDTH = 1280;
+// Comprime em WebP (~210 KB máx.) para economizar storage e egress no Neon
+export const MAX_DATA_URL_CHARS = 280_000;
 
 export function toBannerDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -24,11 +24,12 @@ export function toBannerDataUrl(file: File): Promise<string> {
       ctx.fillStyle = "#0a0d0c";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      let quality = 0.85;
-      let out = canvas.toDataURL("image/jpeg", quality);
-      while (out.length > MAX_DATA_URL_CHARS && quality > 0.4) {
-        quality -= 0.1;
-        out = canvas.toDataURL("image/jpeg", quality);
+      const mime = "image/jpeg";
+      let quality = 0.78;
+      let out = canvas.toDataURL(mime, quality);
+      while (out.length > MAX_DATA_URL_CHARS && quality > 0.35) {
+        quality -= 0.08;
+        out = canvas.toDataURL(mime, quality);
       }
       if (out.length > MAX_DATA_URL_CHARS) return reject(new Error("size"));
       resolve(out);

@@ -1,8 +1,12 @@
 import type {
+  AdminOverview,
+  AdminUsersResponse,
   AuthUser,
   OnboardingProfile,
   ProfileSummary,
+  SavedAccount,
   SaveTierListInput,
+  SocialLinks,
   TierListItem,
 } from "./types";
 
@@ -23,6 +27,7 @@ interface ApiUserPayload {
   email: string;
   role: "USER" | "ADMIN";
   emailVerified: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   profile: {
     username: string | null;
@@ -37,10 +42,21 @@ function mapApiUser(u: ApiUserPayload): AuthUser {
   return {
     id: u.id,
     email: u.email,
+    role: u.role === "ADMIN" ? "ADMIN" : "USER",
+    emailVerified: Boolean(u.emailVerified),
+    mustChangePassword: Boolean(u.mustChangePassword),
     createdAt: u.createdAt ?? null,
     suggestedUsername: u.profile?.username || fallbackName,
     suggestedFullName: u.profile?.username || fallbackName,
     suggestedAvatarUrl: u.profile?.avatarUrl ?? null,
+    profile: u.profile
+      ? {
+          username: u.profile.username,
+          handle: u.profile.handle,
+          avatar_url: u.profile.avatarUrl,
+          favorite_hero_id: u.profile.favoriteHeroId,
+        }
+      : null,
   };
 }
 
@@ -183,9 +199,10 @@ export async function resetPasswordWithToken(
   }
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(options?: { keepSavedAccount?: boolean }): Promise<void> {
+  const path = options?.keepSavedAccount ? "/auth/logout?keepAccount=1" : "/auth/logout";
   try {
-    await fetch(apiUrl("/auth/logout"), {
+    await fetch(apiUrl(path), {
       method: "POST",
       credentials: "include",
     });
@@ -317,6 +334,7 @@ export async function updateProfileLook(
     avatar_url: string | null;
     banner_hero_id: number | null;
     banner_image: string | null;
+    social_links?: SocialLinks | null;
   },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
@@ -331,6 +349,7 @@ export async function updateProfileLook(
         avatarUrl: input.avatar_url,
         bannerHeroId: input.banner_hero_id,
         bannerImage: input.banner_image,
+        ...(input.social_links !== undefined ? { socialLinks: input.social_links } : {}),
       }),
     });
     const data = await parseJsonSafe(res);
@@ -353,6 +372,7 @@ export async function updateProfileSettings(
     favorite_hero_id: number | null;
     banner_hero_id: number | null;
     banner_image: string | null;
+    social_links?: SocialLinks | null;
   },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
@@ -367,6 +387,7 @@ export async function updateProfileSettings(
         favoriteHeroId: input.favorite_hero_id,
         bannerHeroId: input.banner_hero_id,
         bannerImage: input.banner_image,
+        ...(input.social_links !== undefined ? { socialLinks: input.social_links } : {}),
       }),
     });
     const data = await parseJsonSafe(res);
@@ -475,6 +496,208 @@ export async function deleteTierList(
     if (!res.ok) {
       const data = await parseJsonSafe(res);
       return { ok: false, message: extractError(data, "Não foi possível excluir a tier list.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function getSavedAccounts(): Promise<SavedAccount[]> {
+  try {
+    const res = await fetch(apiUrl("/auth/accounts"), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { accounts?: SavedAccount[] };
+    return Array.isArray(data.accounts) ? data.accounts : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function switchAccount(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl("/auth/switch-account"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível trocar de conta.") };
+    }
+    notifyAuthChanged();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function removeSavedAccount(
+  userId: string,
+): Promise<{ ok: boolean; removedCurrent: boolean }> {
+  try {
+    const res = await fetch(apiUrl("/auth/accounts/remove"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) return { ok: false, removedCurrent: false };
+    const data = (await res.json()) as { removedCurrent?: boolean };
+    const removedCurrent = Boolean(data.removedCurrent);
+    if (removedCurrent) notifyAuthChanged();
+    return { ok: true, removedCurrent };
+  } catch {
+    return { ok: false, removedCurrent: false };
+  }
+}
+
+let lastWarmupAt = 0;
+
+export function warmUpApi(): void {
+  const now = Date.now();
+  if (now - lastWarmupAt < 30_000) return;
+  lastWarmupAt = now;
+  fetch(apiUrl("/health"), { method: "GET", cache: "no-store" }).catch(() => {});
+}
+
+export async function getAdminOverview(): Promise<AdminOverview | null> {
+  try {
+    const res = await fetch(apiUrl("/admin/overview"), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as AdminOverview;
+  } catch {
+    return null;
+  }
+}
+
+export async function getAdminUsers(params: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<AdminUsersResponse | null> {
+  const qs = new URLSearchParams();
+  if (params.search?.trim()) qs.set("search", params.search.trim());
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  const query = qs.toString();
+
+  try {
+    const res = await fetch(apiUrl(`/admin/users${query ? `?${query}` : ""}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as AdminUsersResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateAdminUserRole(
+  userId: string,
+  role: "USER" | "ADMIN",
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/admin/users/${encodeURIComponent(userId)}/role`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ role }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível alterar a permissão.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function resetAdminUserPassword(
+  userId: string,
+  options: { newPassword?: string; letUserChoose?: boolean },
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/admin/users/${encodeURIComponent(userId)}/password`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(options),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível redefinir a senha.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function changeOwnPassword(
+  newPassword: string,
+  currentPassword?: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl("/auth/change-password"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        newPassword,
+        ...(currentPassword ? { currentPassword } : {}),
+      }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível atualizar a senha.") };
+    }
+    notifyAuthChanged();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function deleteOwnAccount(): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl("/auth/me"), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível apagar a conta.") };
+    }
+    notifyAuthChanged();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function deleteAdminUser(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/admin/users/${encodeURIComponent(userId)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { ok: false, message: extractError(data, "Não foi possível apagar a conta.") };
     }
     return { ok: true };
   } catch {

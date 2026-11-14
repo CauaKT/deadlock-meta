@@ -1,6 +1,7 @@
 // app/profile/ProfileBanner.tsx
 /* eslint-disable @next/next/no-img-element */
 import type { CSSProperties } from "react";
+import NsfwBlurOverlay from "@/app/NsfwBlurOverlay";
 
 export type BannerMode = "default" | "hero" | "custom";
 
@@ -22,14 +23,16 @@ const TAG_ROTATIONS = ["-rotate-[3deg]", "rotate-[3deg]", "-rotate-[2deg]"];
 export default function ProfileBanner({
   hero,
   customImage,
+  nsfw = false,
   compact = false,
 }: {
   hero?: BannerHero | null;
   customImage?: string | null;
+  nsfw?: boolean;
   compact?: boolean;
 }) {
   if (customImage) {
-    return <img src={customImage} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />;
+    return <NsfwBlurOverlay src={customImage} nsfw={nsfw && !compact} />;
   }
   if (!hero) return null;
 

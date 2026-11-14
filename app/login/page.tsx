@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ColdStartNotice from "@/app/ColdStartNotice";
 import {
+  getCurrentClientUser,
   resendVerificationEmail,
   signInWithEmail,
   signInWithGoogle,
 } from "@/lib/backend/client";
+import type { AuthUser } from "@/lib/backend/types";
 
 function LoginForm() {
   const router = useRouter();
@@ -17,6 +20,7 @@ function LoginForm() {
   const errorParam = searchParams.get("error");
 
   const [mounted, setMounted] = useState(false);
+  const [verifiedUser, setVerifiedUser] = useState<AuthUser | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,17 +32,43 @@ function LoginForm() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    if (verifiedParam === "1") {
-      setInfoMsg("E-mail confirmado com sucesso! Já pode entrar na sua conta.");
-    } else if (errorParam === "invalid-verification-token") {
-      setErrorMsg("Link de confirmação inválido ou expirado.");
-    } else if (errorParam === "google-not-configured") {
-      setErrorMsg("Login com Google ainda não está configurado na API.");
-    } else if (errorParam === "auth-callback-failed") {
-      setErrorMsg("Não foi possível concluir o login com Google.");
-    }
-  }, [verifiedParam, errorParam]);
+    let active = true;
+    void getCurrentClientUser().then((u) => {
+      if (!active) return;
+      if (verifiedParam === "1") {
+        if (u) {
+          setVerifiedUser(u);
+        } else {
+          setInfoMsg("E-mail confirmado com sucesso! Já pode entrar na sua conta.");
+        }
+        setMounted(true);
+        return;
+      }
+
+      if (errorParam === "invalid-verification-token") {
+        setErrorMsg("Link de confirmação inválido ou expirado.");
+        setMounted(true);
+        return;
+      } else if (errorParam === "google-not-configured") {
+        setErrorMsg("Login com Google ainda não está configurado na API.");
+        setMounted(true);
+        return;
+      } else if (errorParam === "auth-callback-failed") {
+        setErrorMsg("Não foi possível concluir o login com Google.");
+        setMounted(true);
+        return;
+      }
+
+      if (u) {
+        router.replace("/");
+        return;
+      }
+      setMounted(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [verifiedParam, errorParam, router]);
 
   const handleGoogleLogin = async () => {
     setErrorMsg("");
@@ -85,6 +115,40 @@ function LoginForm() {
 
   if (!mounted) {
     return <div className="h-96 w-full max-w-md rounded-2xl bg-neutral-900/40 animate-pulse" />;
+  }
+
+  if (verifiedUser) {
+    return (
+      <div className="w-full max-w-md rounded-2xl border border-neutral-800/90 bg-neutral-950/90 p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-md text-center space-y-5">
+        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+          <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </div>
+        <div className="space-y-1">
+          <h1 className="font-deadlock text-2xl sm:text-3xl font-black uppercase tracking-tight text-[#f4efe6]">
+            Conta <span className="text-emerald-400">Verificada</span>
+          </h1>
+          <p className="text-xs text-neutral-400">
+            O e-mail <span className="font-semibold text-neutral-200">{verifiedUser.email}</span> foi confirmado com sucesso.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <Link
+            href="/profile"
+            className="flex-1 rounded-lg bg-amber-500 py-2.5 px-4 font-deadlock text-xs font-black uppercase tracking-wider text-black hover:brightness-110 transition-all"
+          >
+            Ir para o Perfil
+          </Link>
+          <Link
+            href="/"
+            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 py-2.5 px-4 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] hover:border-neutral-500 transition-colors"
+          >
+            Página Inicial
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -198,6 +262,8 @@ function LoginForm() {
           )}
         </button>
       </form>
+
+      <ColdStartNotice active={loading || googleLoading} warmup />
 
       {/* Divisor Visual */}
       <div className="relative my-5 flex items-center justify-center">

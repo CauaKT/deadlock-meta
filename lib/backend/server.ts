@@ -4,6 +4,7 @@ import type {
   CommunityProfileItem,
   FullProfile,
   PublicProfile,
+  SocialLinks,
   TierListItem,
 } from "./types";
 
@@ -27,39 +28,71 @@ async function getCookieHeader(): Promise<Record<string, string>> {
 interface ApiUserPayload {
   id: string;
   email: string;
+  role?: "USER" | "ADMIN";
+  emailVerified?: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   profile: {
     username: string | null;
     handle: string | null;
     avatarUrl: string | null;
+    favoriteHeroId?: number | null;
   } | null;
 }
 
-export async function getServerAuthUser(): Promise<AuthUser | null> {
+export async function getServerAuthState(): Promise<{
+  user: AuthUser | null;
+  apiUnavailable: boolean;
+}> {
   const headers = await getCookieHeader();
-  if (!headers.Cookie) return null;
+  if (!headers.Cookie) return { user: null, apiUnavailable: false };
 
   try {
     const res = await fetch(apiUrl("/auth/me"), {
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(12000),
     });
-    if (!res.ok) return null;
+    if (res.status === 401 || res.status === 403) {
+      return { user: null, apiUnavailable: false };
+    }
+    if (!res.ok) {
+      return { user: null, apiUnavailable: true };
+    }
     const data = (await res.json()) as { user?: ApiUserPayload };
     const u = data.user;
-    if (!u) return null;
+    if (!u) return { user: null, apiUnavailable: false };
     const fallbackName = u.email.split("@")[0] || "";
     return {
-      id: u.id,
-      email: u.email,
-      createdAt: u.createdAt ?? null,
-      suggestedUsername: u.profile?.username || fallbackName,
-      suggestedFullName: u.profile?.username || fallbackName,
-      suggestedAvatarUrl: u.profile?.avatarUrl ?? null,
+      apiUnavailable: false,
+      user: {
+        id: u.id,
+        email: u.email,
+        role: u.role === "ADMIN" ? "ADMIN" : "USER",
+        emailVerified: Boolean(u.emailVerified),
+        mustChangePassword: Boolean(u.mustChangePassword),
+        createdAt: u.createdAt ?? null,
+        suggestedUsername: u.profile?.username || fallbackName,
+        suggestedFullName: u.profile?.username || fallbackName,
+        suggestedAvatarUrl: u.profile?.avatarUrl ?? null,
+        profile: u.profile
+          ? {
+              username: u.profile.username,
+              handle: u.profile.handle,
+              avatar_url: u.profile.avatarUrl,
+              favorite_hero_id: u.profile.favoriteHeroId ?? null,
+            }
+          : null,
+      },
     };
   } catch {
-    return null;
+    return { user: null, apiUnavailable: true };
   }
+}
+
+export async function getServerAuthUser(): Promise<AuthUser | null> {
+  const { user } = await getServerAuthState();
+  return user;
 }
 
 interface ApiOwnProfileResponse {
@@ -73,7 +106,9 @@ interface ApiOwnProfileResponse {
     favoriteHeroId: number | null;
     bannerHeroId: number | null;
     bannerImage: string | null;
+    bannerNsfw?: boolean;
     profileColor: string | null;
+    socialLinks?: SocialLinks | null;
   } | null;
 }
 
@@ -102,7 +137,9 @@ export async function getOwnFullProfile(
       favorite_hero_id: p.favoriteHeroId,
       banner_hero_id: p.bannerHeroId,
       banner_image: p.bannerImage,
+      banner_nsfw: Boolean(p.bannerNsfw),
       profile_color: p.profileColor,
+      social_links: p.socialLinks ?? null,
     };
   } catch {
     return null;
@@ -150,35 +187,54 @@ interface ApiPublicProfileResponse {
   bio: string | null;
   bannerHeroId: number | null;
   bannerImage: string | null;
+  bannerNsfw?: boolean;
   profileColor: string | null;
+  socialLinks?: SocialLinks | null;
   createdAt?: string | null;
+}
+
+export async function getPublicProfileResult(
+  handle: string,
+): Promise<{ profile: PublicProfile | null; apiUnavailable: boolean }> {
+  try {
+    const res = await fetch(
+      apiUrl(`/profiles/by-handle/${encodeURIComponent(handle)}`),
+      { cache: "no-store", signal: AbortSignal.timeout(12000) },
+    );
+    if (res.status === 404) {
+      return { profile: null, apiUnavailable: false };
+    }
+    if (!res.ok) {
+      return { profile: null, apiUnavailable: true };
+    }
+    const p = (await res.json()) as ApiPublicProfileResponse;
+    return {
+      apiUnavailable: false,
+      profile: {
+        id: p.id,
+        username: p.username,
+        handle: p.handle,
+        avatar_url: p.avatarUrl,
+        favorite_hero_id: p.favoriteHeroId,
+        bio: p.bio,
+        banner_hero_id: p.bannerHeroId,
+        banner_image: p.bannerImage,
+        banner_nsfw: Boolean(p.bannerNsfw),
+        profile_color: p.profileColor,
+        social_links: p.socialLinks ?? null,
+        createdAt: p.createdAt ?? null,
+      },
+    };
+  } catch {
+    return { profile: null, apiUnavailable: true };
+  }
 }
 
 export async function getPublicProfileByHandle(
   handle: string,
 ): Promise<PublicProfile | null> {
-  try {
-    const res = await fetch(
-      apiUrl(`/profiles/by-handle/${encodeURIComponent(handle)}`),
-      { cache: "no-store" },
-    );
-    if (!res.ok) return null;
-    const p = (await res.json()) as ApiPublicProfileResponse;
-    return {
-      id: p.id,
-      username: p.username,
-      handle: p.handle,
-      avatar_url: p.avatarUrl,
-      favorite_hero_id: p.favoriteHeroId,
-      bio: p.bio,
-      banner_hero_id: p.bannerHeroId,
-      banner_image: p.bannerImage,
-      profile_color: p.profileColor,
-      createdAt: p.createdAt ?? null,
-    };
-  } catch {
-    return null;
-  }
+  const { profile } = await getPublicProfileResult(handle);
+  return profile;
 }
 
 export async function getServerTierLists(params?: {

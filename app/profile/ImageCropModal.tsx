@@ -129,12 +129,13 @@ export default function ImageCropModal({
     const sy = nat.height / 2 - view.y / scale - sh / 2;
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputWidth, outputHeight);
 
-    let quality = 0.9;
-    let out = canvas.toDataURL("image/jpeg", quality);
+    const mime = "image/jpeg";
+    let quality = 0.8;
+    let out = canvas.toDataURL(mime, quality);
     if (maxChars) {
-      while (out.length > maxChars && quality > 0.4) {
-        quality -= 0.1;
-        out = canvas.toDataURL("image/jpeg", quality);
+      while (out.length > maxChars && quality > 0.35) {
+        quality -= 0.08;
+        out = canvas.toDataURL(mime, quality);
       }
       if (out.length > maxChars) return setError("A imagem ficou grande demais. Dê mais zoom ou use outra imagem.");
     }

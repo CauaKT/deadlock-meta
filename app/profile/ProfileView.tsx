@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
+import Link from "next/link";
 import {
   getCommunityProfiles,
   getOwnFullProfile,
-  getPublicProfileByHandle,
-  getServerAuthUser,
+  getPublicProfileResult,
+  getServerAuthState,
   getServerTierLists,
 } from "@/lib/backend/server";
 import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
@@ -12,9 +13,32 @@ import ProfileForm from "./ProfileForm";
 import fs from "fs";
 import path from "path";
 
+function ApiWakingCard() {
+  return (
+    <div className="mx-auto my-12 max-w-md rounded-2xl border border-amber-500/30 bg-neutral-950/90 p-6 text-center space-y-3">
+      <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-amber-400">
+        Servidor iniciando
+      </h2>
+      <p className="text-xs text-neutral-300 leading-relaxed">
+        A API está acordando após um período de inatividade. Aguarde alguns segundos e tente carregar a página novamente.
+      </p>
+      <Link
+        href="/profile"
+        className="inline-block rounded-lg bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
+      >
+        Tentar novamente
+      </Link>
+    </div>
+  );
+}
+
 export default async function ProfileView({ handle }: { handle?: string }) {
   await connection();
-  const user = await getServerAuthUser();
+  const { user, apiUnavailable } = await getServerAuthState();
+
+  if (apiUnavailable) {
+    return <ApiWakingCard />;
+  }
 
   if (!user) {
     redirect("/login");
@@ -81,13 +105,16 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     favorite_hero_id: profile?.favorite_hero_id ?? null,
     banner_hero_id: profile?.banner_hero_id ?? null,
     banner_image: profile?.banner_image ?? null,
+    banner_nsfw: profile?.banner_nsfw ?? false,
     profile_color: profile?.profile_color ?? null,
+    social_links: profile?.social_links ?? null,
     createdAt: createdAtDate,
   };
 
   let shownProfile = initialProfile;
   if (!isOwner) {
-    const other = await getPublicProfileByHandle(handle);
+    const { profile: other, apiUnavailable: profileApiDown } = await getPublicProfileResult(handle);
+    if (profileApiDown) return <ApiWakingCard />;
     if (!other) notFound();
     shownProfile = {
       id: other.id,
@@ -99,7 +126,9 @@ export default async function ProfileView({ handle }: { handle?: string }) {
       favorite_hero_id: other.favorite_hero_id ?? null,
       banner_hero_id: other.banner_hero_id ?? null,
       banner_image: other.banner_image ?? null,
+      banner_nsfw: other.banner_nsfw ?? false,
       profile_color: other.profile_color ?? null,
+      social_links: other.social_links ?? null,
       createdAt: other.createdAt
         ? new Date(other.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
         : "Recentemente",
@@ -122,6 +151,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         readOnly={!isOwner}
         heroes={heroesList}
         userEmail={user.email}
+        emailVerified={user.emailVerified}
         community={community}
         initialTierLists={tierLists}
       />

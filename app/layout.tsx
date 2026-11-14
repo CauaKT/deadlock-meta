@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { RouteTracker } from "@/app/data-sources/SourcesAccordion";
+import EmailVerifyBanner from "./EmailVerifyBanner";
 import NavTierDropdown from "./NavTierDropdown";
 import NavUserButton from "./NavUserButton";
 import PageTransitionBar from "./PageTransitionBar";
@@ -78,6 +79,7 @@ export default function RootLayout({
               <NavUserButton />
             </div>
           </div>
+          <EmailVerifyBanner />
         </header>
 
         {/* CONTEÚDO DINÂMICO */}

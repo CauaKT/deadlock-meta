@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   getCurrentClientUser,
-  getOnboardingStatus,
   saveOnboardingProfile,
 } from "@/lib/backend/client";
 import type { AuthUser } from "@/lib/backend/types";
@@ -93,7 +92,7 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
       setUser(u);
 
       // Se já possui username e @ preenchidos, libera para a home
-      const profile = await getOnboardingStatus(u.id);
+      const profile = u.profile;
       if (profile?.username && profile.username.trim() !== "" && profile.handle) {
         router.push("/");
         return;
@@ -202,7 +201,15 @@ const BOX_SIZE = 300; // Tamanho do viewport de visualização expandido para 30
       outputSize
     );
 
-    const croppedBase64 = canvas.toDataURL("image/jpeg", 0.9);
+    const mime = canvas.toDataURL("image/webp", 0.78).startsWith("data:image/webp")
+      ? "image/webp"
+      : "image/jpeg";
+    let quality = 0.78;
+    let croppedBase64 = canvas.toDataURL(mime, quality);
+    while (croppedBase64.length > 100_000 && quality > 0.35) {
+      quality -= 0.08;
+      croppedBase64 = canvas.toDataURL(mime, quality);
+    }
     setAvatarPreview(croppedBase64);
     setCropModalOpen(false);
     setRawImageSrc(null);
