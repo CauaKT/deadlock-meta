@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useState, useLayoutEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { updateProfileLook, updateProfileSettings } from "@/lib/backend/client";
-import type { PublishedTierList } from "@/app/tier-maker/TierMakerClient";
+import { deleteTierList, updateProfileLook, updateProfileSettings } from "@/lib/backend/client";
+import type { TierListItem } from "@/lib/backend/types";
+import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
 import FavoriteHeroSelect from "./FavoriteHeroSelect";
@@ -47,8 +48,6 @@ interface ProfileData {
   createdAt: string;
 }
 
-const STORAGE_KEY = "lockpro_community_tierlists";
-
 function CommunityRow({ p }: { p: CommunityProfile }) {
   return (
     <li>
@@ -77,12 +76,14 @@ export default function ProfileForm({
   heroes,
   community = [],
   readOnly = false,
+  initialTierLists = [],
 }: {
   initialProfile: ProfileData;
   heroes: HeroOption[];
   userEmail: string;
   community?: CommunityProfile[];
   readOnly?: boolean;
+  initialTierLists?: TierListItem[];
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview" | "tierlists" | "settings">("overview");
@@ -124,15 +125,8 @@ export default function ProfileForm({
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
   }, [bio, editing]);
 
-  // Tier lists criadas pelo usuário (lidas do localStorage)
-  const [savedTierLists, setSavedTierLists] = useState<PublishedTierList[]>([]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setSavedTierLists(JSON.parse(saved));
-    } catch {}
-  }, []);
+  const [savedTierLists, setSavedTierLists] = useState<TierListItem[]>(initialTierLists);
+  const [exportingTierId, setExportingTierId] = useState<string | null>(null);
 
   const heroesById = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
   const selectedHero = heroesById.get(favoriteHeroId ?? -1);
@@ -214,7 +208,7 @@ export default function ProfileForm({
   };
 
   const tabClass = (tab: typeof activeTab) =>
-    `-mb-px ${readOnly && tab === "tierlists" ? "hidden" : "flex"} items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+    `-mb-px flex items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${ tab === "tierlists" ? "hidden" : "flex"} items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
       activeTab === tab
         ? "border-amber-500 text-[#f4efe6]"
         : "border-transparent text-neutral-400 hover:text-white"
@@ -436,7 +430,7 @@ export default function ProfileForm({
           onClick={() => setActiveTab("tierlists")}
           className={tabClass("tierlists")}
         >
-          <span>Minhas Tier Lists</span>
+          <span>{readOnly ? "Tier Lists" : "Minhas Tier Lists"}</span>
           <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
             {savedTierLists.length}
           </span>
@@ -525,7 +519,7 @@ export default function ProfileForm({
               </div>
             </dl>
             <p className="text-[11px] text-neutral-500">
-              As tier lists ficam salvas apenas neste navegador.
+              Tier lists sincronizadas com a conta.
             </p>
           </section>
 
@@ -565,19 +559,21 @@ export default function ProfileForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
             <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
-              Minhas Classificações Publicadas
+              {readOnly ? "Classificações Publicadas" : "Minhas Classificações Publicadas"}
             </h3>
-            <Link
-              href="/tier-maker"
-              className="rounded-xl border border-amber-500 bg-amber-500 px-4 py-1.5 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
-            >
-              Criar no TierMaker
-            </Link>
+            {!readOnly && (
+              <Link
+                href="/tier-maker"
+                className="rounded-xl border border-amber-500 bg-amber-500 px-4 py-1.5 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
+              >
+                Criar no TierMaker
+              </Link>
+            )}
           </div>
 
           {savedTierLists.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-12 text-center text-xs text-neutral-500">
-              Nenhuma tier list salva neste navegador. Monte sua lista e clique em &quot;Publicar no Site&quot;.
+              Nenhuma tier list publicada ainda.
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -586,23 +582,71 @@ export default function ProfileForm({
                   key={item.id}
                   className="rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5 space-y-3 shadow-xl"
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-2">
                     <p className="font-deadlock text-lg font-black text-[#f4efe6] truncate">
                       {item.title}
                     </p>
-                    <span className="text-[10px] text-neutral-500 font-mono">
-                      {item.createdAt}
+                    <span className="text-[10px] text-neutral-500 font-mono shrink-0">
+                      {new Date(item.createdAt).toLocaleDateString("pt-BR")}
                     </span>
                   </div>
                   <p className="text-xs text-neutral-400">
                     Contém {item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0)} heróis distribuídos.
                   </p>
-                  <Link
-                    href="/tier-maker"
-                    className="inline-block rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-amber-400 hover:border-amber-400 transition-colors"
-                  >
-                    Abrir no Editor
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={exportingTierId === item.id}
+                      onClick={async () => {
+                        setExportingTierId(item.id);
+                        try {
+                          await exportTierListToPng({
+                            title: item.title,
+                            author: item.author,
+                            dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+                            tiers: item.tiers.map((t) => ({
+                              label: t.label,
+                              color: t.color,
+                              heroes: (t.heroes || [])
+                                .map((hId) => heroesById.get(hId))
+                                .filter((h): h is HeroOption => Boolean(h))
+                                .map((h) => ({ id: h.id, name: h.name, image: h.image })),
+                            })),
+                          });
+                        } finally {
+                          setExportingTierId(null);
+                        }
+                      }}
+                      className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-amber-400 hover:border-amber-400 transition-colors disabled:opacity-50"
+                    >
+                      {exportingTierId === item.id ? "Gerando..." : "Exportar PNG"}
+                    </button>
+
+                    {item.canEdit && (
+                      <Link
+                        href={`/tier-maker?edit=${item.id}`}
+                        className="inline-block rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-[#f4efe6] hover:border-amber-400 hover:text-amber-400 transition-colors"
+                      >
+                        Abrir no Editor
+                      </Link>
+                    )}
+
+                    {item.canDelete && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!window.confirm("Deseja excluir esta tier list permanentemente?")) return;
+                          const res = await deleteTierList(item.id);
+                          if (res.ok) {
+                            setSavedTierLists((prev) => prev.filter((tl) => tl.id !== item.id));
+                          }
+                        }}
+                        className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-rose-300 hover:border-rose-500 transition-colors"
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

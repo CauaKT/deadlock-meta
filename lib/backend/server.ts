@@ -4,6 +4,7 @@ import type {
   CommunityProfileItem,
   FullProfile,
   PublicProfile,
+  TierListItem,
 } from "./types";
 
 const SESSION_COOKIE = "lockpro_session";
@@ -177,5 +178,28 @@ export async function getPublicProfileByHandle(
     };
   } catch {
     return null;
+  }
+}
+
+export async function getServerTierLists(params?: {
+  handle?: string | null;
+  userId?: string | null;
+}): Promise<TierListItem[]> {
+  const headers = await getCookieHeader();
+  const qs = new URLSearchParams();
+  if (params?.handle) qs.set("handle", params.handle);
+  else if (params?.userId) qs.set("userId", params.userId);
+  const query = qs.toString();
+
+  try {
+    const res = await fetch(apiUrl(`/tier-lists${query ? `?${query}` : ""}`), {
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as TierListItem[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
 }

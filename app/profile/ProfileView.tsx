@@ -5,6 +5,7 @@ import {
   getOwnFullProfile,
   getPublicProfileByHandle,
   getServerAuthUser,
+  getServerTierLists,
 } from "@/lib/backend/server";
 import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
 import ProfileForm from "./ProfileForm";
@@ -105,6 +106,14 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     };
   }
 
+  const tierLists = await getServerTierLists(
+    shownProfile.handle
+      ? { handle: shownProfile.handle }
+      : isOwner
+        ? { userId: user.id }
+        : undefined,
+  );
+
   return (
     <div className="max-w-6xl mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6">
 
@@ -114,6 +123,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         heroes={heroesList}
         userEmail={user.email}
         community={community}
+        initialTierLists={tierLists}
       />
     </div>
   );

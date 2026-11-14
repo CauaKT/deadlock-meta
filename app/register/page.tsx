@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signUpWithEmail } from "@/lib/backend/client";
+import { resendVerificationEmail, signUpWithEmail } from "@/lib/backend/client";
 
 function getPasswordStrength(pwd: string): { label: string; color: string; width: string } {
   if (!pwd) return { label: "", color: "", width: "0%" };
@@ -29,6 +29,10 @@ export default function RegisterPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   const strength = getPasswordStrength(password);
 
@@ -40,6 +44,17 @@ export default function RegisterPage() {
     setPassword("");
     setPasswordConfirm("");
     setShowPassword(false);
+    setSessionActive(false);
+    setRegisteredEmail("");
+    setResendMsg("");
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    setResendMsg("");
+    const res = await resendVerificationEmail(registeredEmail);
+    setResending(false);
+    setResendMsg(res.message);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -77,14 +92,14 @@ export default function RegisterPage() {
       return;
     }
 
-    // Se a confirmação de e-mail estiver desativada, redireciona imediatamente
-    if (result.sessionActive) {
-      router.push("/welcome");
-      router.refresh();
-    } else {
-      setSuccessMsg("Conta criada com sucesso! Caso tenha recebido um e-mail de confirmação, valide-o antes de logar.");
-      setLoading(false);
-    }
+    setRegisteredEmail(email.trim());
+    setSessionActive(result.sessionActive);
+    setSuccessMsg(
+      result.sessionActive
+        ? "Conta criada e sessão iniciada! Você já pode usar o site e confirmar o e-mail depois."
+        : "Conta criada com sucesso! Confirme o e-mail para poder entrar.",
+    );
+    setLoading(false);
   };
 
   return (
@@ -108,18 +123,43 @@ export default function RegisterPage() {
         {successMsg ? (
           <div className="mt-6 rounded-lg border border-emerald-500/40 bg-emerald-950/30 p-4 text-xs font-bold text-emerald-300 space-y-3">
             <p>{successMsg}</p>
+            <p className="font-medium text-emerald-200/90">
+              Enviamos o link para <strong>{registeredEmail}</strong>. Se não aparecer em alguns minutos, olhe a pasta de <strong>Spam</strong> ou promoções.
+            </p>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="cursor-pointer text-amber-400 underline hover:text-amber-300 disabled:opacity-50"
+            >
+              {resending ? "Reenviando..." : "Reenviar e-mail de confirmação"}
+            </button>
+            {resendMsg && <p className="font-medium text-emerald-200/90">{resendMsg}</p>}
             <div className="flex gap-2 pt-1">
+              {sessionActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm();
+                    router.push("/welcome");
+                    router.refresh();
+                  }}
+                  className="inline-block cursor-pointer rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
+                >
+                  Continuar
+                </button>
+              )}
               <Link
                 href="/login"
                 onClick={resetForm}
-                className="inline-block rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
+                className={`${sessionActive ? "hidden" : "inline-block"} rounded bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black`}
               >
                 Ir para o Login
               </Link>
               <button
                 type="button"
                 onClick={resetForm}
-                className="inline-block rounded border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase text-neutral-300 hover:text-white"
+                className={`${sessionActive ? "hidden" : "inline-block"} rounded border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase text-neutral-300 hover:text-white`}
               >
                 Novo Cadastro
               </button>

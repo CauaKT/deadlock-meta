@@ -108,6 +108,11 @@ function LoginForm() {
         <div className="mt-4 rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs font-bold text-rose-300 space-y-2">
           <p>{errorMsg}</p>
           {canResend && (
+            <p className="font-medium text-rose-200/80">
+              O link foi enviado ao e-mail cadastrado. Olhe também a pasta de Spam.
+            </p>
+          )}
+          {canResend && (
             <button
               type="button"
               onClick={handleResend}

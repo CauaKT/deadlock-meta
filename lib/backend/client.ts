@@ -2,6 +2,8 @@ import type {
   AuthUser,
   OnboardingProfile,
   ProfileSummary,
+  SaveTierListInput,
+  TierListItem,
 } from "./types";
 
 const AUTH_EVENT = "lockpro-auth-changed";
@@ -372,6 +374,108 @@ export async function updateProfileSettings(
       return { ok: false, message: extractError(data, "Erro ao salvar alterações.") };
     }
     notifyAuthChanged();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function getCommunityTierLists(): Promise<TierListItem[]> {
+  try {
+    const res = await fetch(apiUrl("/tier-lists"), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as TierListItem[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getTierListById(
+  id: string,
+): Promise<{ ok: true; data: TierListItem } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Tier list não encontrada.") };
+    }
+    const data = (await res.json()) as TierListItem;
+    return { ok: true, data };
+  } catch {
+    return { ok: false, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function createTierList(
+  input: SaveTierListInput,
+): Promise<{ ok: true; data: TierListItem } | { ok: false; status: number; message: string }> {
+  try {
+    const res = await fetch(apiUrl("/tier-lists"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return {
+        ok: false,
+        status: res.status,
+        message: extractError(data, "Não foi possível publicar a tier list."),
+      };
+    }
+    const data = (await res.json()) as TierListItem;
+    return { ok: true, data };
+  } catch {
+    return { ok: false, status: 0, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function updateTierList(
+  id: string,
+  input: SaveTierListInput,
+): Promise<{ ok: true; data: TierListItem } | { ok: false; status: number; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return {
+        ok: false,
+        status: res.status,
+        message: extractError(data, "Não foi possível atualizar a tier list."),
+      };
+    }
+    const data = (await res.json()) as TierListItem;
+    return { ok: true, data };
+  } catch {
+    return { ok: false, status: 0, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function deleteTierList(
+  id: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Não foi possível excluir a tier list.") };
+    }
     return { ok: true };
   } catch {
     return { ok: false, message: "Erro de conexão com a API." };

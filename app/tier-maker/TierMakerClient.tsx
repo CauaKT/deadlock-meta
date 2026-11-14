@@ -1,21 +1,25 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useMemo, useEffect, useRef, type CSSProperties, type DragEvent } from "react";
+import Link from "next/link";
+import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties, type DragEvent } from "react";
 import type { MakerHero } from "@/app/TierMaker";
+import {
+  createTierList,
+  deleteTierList,
+  getCommunityTierLists,
+  getCurrentClientUser,
+  getTierListById,
+  subscribeToAuthChanges,
+  updateTierList,
+} from "@/lib/backend/client";
+import type { AuthUser, TierListItem } from "@/lib/backend/types";
+import { exportTierListToPng } from "./exportTierListPng";
 
 export interface CustomTier {
   id: string;
   label: string;
   color: string;
-}
-
-export interface PublishedTierList {
-  id: string;
-  title: string;
-  author: string;
-  createdAt: string;
-  tiers: { label: string; color: string; heroes: number[] }[];
 }
 
 const DEFAULT_TIERS: CustomTier[] = [
@@ -32,7 +36,13 @@ const PRESET_COLORS = [
   "#d946ef", "#8b5cf6", "#ec4899", "#64748b",
 ];
 
-const STORAGE_KEY = "lockpro_community_tierlists";
+function createEmptyBoard(heroes: MakerHero[], targetTiers: CustomTier[]): Record<string, number[]> {
+  const b: Record<string, number[]> = { POOL: heroes.map((h) => h.id) };
+  targetTiers.forEach((t) => {
+    b[t.id] = [];
+  });
+  return b;
+}
 
 export default function TierMakerClient({
   heroes,
@@ -45,17 +55,26 @@ export default function TierMakerClient({
   const [title, setTitle] = useState("Minha Tier List");
   const [author, setAuthor] = useState("");
   const [tiers, setTiers] = useState<CustomTier[]>(DEFAULT_TIERS);
-  const [board, setBoard] = useState<Record<string, number[]>>(() => {
-    const b: Record<string, number[]> = { POOL: heroes.map((h) => h.id) };
-    DEFAULT_TIERS.forEach((t) => (b[t.id] = []));
-    return b;
-  });
+  const [board, setBoard] = useState<Record<string, number[]>>(() =>
+    createEmptyBoard(heroes, DEFAULT_TIERS),
+  );
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [publishedLists, setPublishedLists] = useState<TierListItem[]>([]);
+  const [loadingCommunity, setLoadingCommunity] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+    needsLogin?: boolean;
+  } | null>(null);
 
   const [selected, setSelected] = useState<number | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOverZone, setDragOverZone] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: number; position: "before" | "after" } | null>(null);
-  const [publishedLists, setPublishedLists] = useState<PublishedTierList[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const [dynamicExpressions, setDynamicExpressions] = useState(() => {
@@ -68,12 +87,123 @@ export default function TierMakerClient({
     return true;
   });
 
+  const byId = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
+
   const toggleDynamicExpressions = (val: boolean) => {
     setDynamicExpressions(val);
     try {
       localStorage.setItem("lockpro_dynamic_expressions", String(val));
     } catch {}
   };
+
+  const resetBuilder = useCallback(
+    (userOverride?: AuthUser | null) => {
+      const user = userOverride === undefined ? currentUser : userOverride;
+      setEditingId(null);
+      setTitle("Minha Tier List");
+      setAuthor(user?.suggestedUsername || "");
+      setTiers(DEFAULT_TIERS);
+      setBoard(createEmptyBoard(heroes, DEFAULT_TIERS));
+      setSelected(null);
+      if (typeof window !== "undefined" && window.location.search.includes("edit=")) {
+        window.history.replaceState(null, "", "/tier-maker");
+      }
+    },
+    [currentUser, heroes],
+  );
+
+  const applyListToBuilder = useCallback(
+    (pub: TierListItem) => {
+      setEditingId(pub.id);
+      setTitle(pub.title);
+      setAuthor(pub.author);
+      const newTiers: CustomTier[] = pub.tiers.map((t, i) => ({
+        id: `T${i + 1}`,
+        label: t.label,
+        color: t.color,
+      }));
+      setTiers(newTiers);
+
+      const next: Record<string, number[]> = { POOL: [] };
+      const used = new Set<number>();
+      pub.tiers.forEach((t, i) => {
+        const id = `T${i + 1}`;
+        next[id] = t.heroes;
+        t.heroes.forEach((hId) => used.add(hId));
+      });
+      next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
+      setBoard(next);
+      setSelected(null);
+      setFeedback(null);
+      setTab("builder");
+    },
+    [heroes],
+  );
+
+  const refreshCommunity = useCallback(async () => {
+    setLoadingCommunity(true);
+    const lists = await getCommunityTierLists();
+    setPublishedLists(lists);
+    setLoadingCommunity(false);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const init = async () => {
+      const [user, lists] = await Promise.all([
+        getCurrentClientUser(),
+        getCommunityTierLists(),
+      ]);
+      if (!active) return;
+
+      setCurrentUser(user);
+      if (user && !author) {
+        setAuthor(user.suggestedUsername);
+      }
+      setPublishedLists(lists);
+      setLoadingCommunity(false);
+
+      const editId =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("edit")
+          : null;
+
+      if (editId) {
+        const res = await getTierListById(editId);
+        if (!active) return;
+        if (!res.ok) {
+          setFeedback({ type: "error", text: res.message });
+          window.history.replaceState(null, "", "/tier-maker");
+        } else if (!res.data.canEdit) {
+          setFeedback({
+            type: "error",
+            text: "Apenas o criador desta tier list pode abri-la no editor.",
+            needsLogin: !user,
+          });
+          window.history.replaceState(null, "", "/tier-maker");
+        } else {
+          applyListToBuilder(res.data);
+        }
+      }
+    };
+
+    void init();
+
+    const unsubscribe = subscribeToAuthChanges((u) => {
+      setCurrentUser(u);
+      if (u && !editingId) {
+        setAuthor((prev) => prev || u.suggestedUsername);
+      }
+      void refreshCommunity();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -91,22 +221,11 @@ export default function TierMakerClient({
     };
   }, [settingsOpen]);
 
-  const byId = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setPublishedLists(JSON.parse(saved));
-    } catch {
-      // fallback
-    }
-  }, []);
-
   const moveHero = (
     heroId: number,
     targetTierId: string,
     refHeroId?: number,
-    position: "before" | "after" = "before"
+    position: "before" | "after" = "before",
   ) => {
     setBoard((prev) => {
       const next: Record<string, number[]> = {};
@@ -175,7 +294,10 @@ export default function TierMakerClient({
   };
 
   const deleteTier = (tierId: string) => {
-    if (tiers.length <= 1) return alert("A tier list precisa ter pelo menos uma categoria!");
+    if (tiers.length <= 1) {
+      setFeedback({ type: "error", text: "A tier list precisa ter pelo menos uma categoria." });
+      return;
+    }
     const heroesToFree = board[tierId] || [];
 
     setBoard((prev) => {
@@ -191,7 +313,6 @@ export default function TierMakerClient({
     const META_KEYS = ["META", "A", "B", "C", "D", "F"];
     const allRanked: number[] = [];
 
-    // Consolida todos os heróis com estatísticas ordenados pelo maior win rate
     META_KEYS.forEach((key) => {
       (metaTiers[key] || []).forEach((id) => {
         if (byId.has(id) && !allRanked.includes(id)) {
@@ -203,7 +324,6 @@ export default function TierMakerClient({
     const next: Record<string, number[]> = { POOL: [] };
     const used = new Set<number>();
 
-    // Se o usuário manteve exatamente os 6 tiers canônicos, preenche pelos limiares fixos
     const hasCanonicalTiers =
       tiers.length === 6 &&
       tiers.every((t) => META_KEYS.includes(t.label.trim().toUpperCase()));
@@ -216,7 +336,6 @@ export default function TierMakerClient({
         next[t.id] = list;
       });
     } else {
-      // Caso tenha menos ou mais tiers (ex: 5, 4, 3), distribui proporcionalmente todos os heróis ranqueados
       const total = allRanked.length;
       const numTiers = Math.max(tiers.length, 1);
 
@@ -229,38 +348,137 @@ export default function TierMakerClient({
       });
     }
 
-    // Apenas heróis sem partidas registradas no patch ficam na bandeja de disponíveis
     next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
     setBoard(next);
   };
 
   const clearBoard = () => {
-    const next: Record<string, number[]> = { POOL: heroes.map((h) => h.id) };
-    tiers.forEach((t) => (next[t.id] = []));
-    setBoard(next);
+    setBoard(createEmptyBoard(heroes, tiers));
   };
 
-  const publishCurrent = () => {
-    if (!title.trim()) return alert("Insira um título para sua tier list!");
-    const newList: PublishedTierList = {
-      id: String(Date.now()),
-      title: title.trim(),
-      author: author.trim() || "Anônimo",
-      createdAt: new Date().toLocaleDateString("pt-BR"),
+  const publishCurrent = async () => {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setFeedback({ type: "error", text: "Insira um título para sua tier list." });
+      return;
+    }
+
+    if (tiers.some((t) => !t.label.trim())) {
+      setFeedback({ type: "error", text: "Todas as categorias precisam ter um nome." });
+      return;
+    }
+
+    if (!currentUser) {
+      setFeedback({
+        type: "error",
+        text: "Entre na sua conta para publicar sua tier list na comunidade.",
+        needsLogin: true,
+      });
+      return;
+    }
+
+    setPublishing(true);
+    setFeedback(null);
+
+    const payload = {
+      title: cleanTitle,
+      authorName: author.trim() || currentUser.suggestedUsername || undefined,
       tiers: tiers.map((t) => ({
-        label: t.label,
+        label: t.label.trim(),
         color: t.color,
         heroes: board[t.id] || [],
       })),
     };
 
-    const updated = [newList, ...publishedLists];
-    setPublishedLists(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
-    alert("Tier list publicada com sucesso!");
+    const res = editingId
+      ? await updateTierList(editingId, payload)
+      : await createTierList(payload);
+
+    setPublishing(false);
+
+    if (!res.ok) {
+      setFeedback({
+        type: "error",
+        text: res.message,
+        needsLogin: res.status === 401,
+      });
+      return;
+    }
+
+    setPublishedLists((prev) => {
+      if (editingId) {
+        return prev.map((item) => (item.id === res.data.id ? res.data : item));
+      }
+      return [res.data, ...prev];
+    });
+
+    const wasEditing = Boolean(editingId);
+    resetBuilder(currentUser);
+    setFeedback({
+      type: "success",
+      text: wasEditing ? "Tier list atualizada com sucesso!" : "Tier list publicada na comunidade!",
+    });
     setTab("community");
+  };
+
+  const handleExportCurrentPng = async () => {
+    setExportingId("builder");
+    setFeedback(null);
+    try {
+      await exportTierListToPng({
+        title: title.trim() || "Minha Tier List",
+        author: author.trim() || currentUser?.suggestedUsername || "Comunidade",
+        dateLabel: new Date().toLocaleDateString("pt-BR"),
+        tiers: tiers.map((t, idx) => {
+          const isTopTier = dynamicExpressions && idx === 0;
+          const isBottomTier = dynamicExpressions && idx === tiers.length - 1;
+          return {
+            label: t.label,
+            color: t.color,
+            heroes: (board[t.id] || [])
+              .map((hId) => byId.get(hId))
+              .filter((h): h is MakerHero => Boolean(h))
+              .map((h) => ({
+                id: h.id,
+                name: h.name,
+                image: isTopTier
+                  ? h.gloatImage || h.image
+                  : isBottomTier
+                    ? h.critImage || h.image
+                    : h.image,
+              })),
+          };
+        }),
+      });
+    } catch {
+      setFeedback({ type: "error", text: "Não foi possível gerar o arquivo PNG." });
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  const handleExportItemPng = async (item: TierListItem) => {
+    setExportingId(item.id);
+    setFeedback(null);
+    try {
+      await exportTierListToPng({
+        title: item.title,
+        author: item.author,
+        dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+        tiers: item.tiers.map((t) => ({
+          label: t.label,
+          color: t.color,
+          heroes: (t.heroes || [])
+            .map((hId) => byId.get(hId))
+            .filter((h): h is MakerHero => Boolean(h))
+            .map((h) => ({ id: h.id, name: h.name, image: h.image })),
+        })),
+      });
+    } catch {
+      setFeedback({ type: "error", text: "Não foi possível gerar o arquivo PNG." });
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const [communityQuery, setCommunityQuery] = useState("");
@@ -269,40 +487,33 @@ export default function TierMakerClient({
     const q = communityQuery.trim().toLowerCase();
     if (!q) return publishedLists;
     return publishedLists.filter(
-      (l) => l.title.toLowerCase().includes(q) || l.author.toLowerCase().includes(q)
+      (l) => l.title.toLowerCase().includes(q) || l.author.toLowerCase().includes(q),
     );
   }, [publishedLists, communityQuery]);
 
-  const deletePublished = (id: string, e: React.MouseEvent) => {
+  const deletePublished = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Deseja remover esta tier list da sua galeria?")) return;
-    const updated = publishedLists.filter((l) => l.id !== id);
-    setPublishedLists(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
+    if (!window.confirm("Deseja excluir esta tier list permanentemente?")) return;
+
+    const res = await deleteTierList(id);
+    if (!res.ok) {
+      setFeedback({ type: "error", text: res.message });
+      return;
+    }
+
+    setPublishedLists((prev) => prev.filter((l) => l.id !== id));
+    if (editingId === id) {
+      resetBuilder(currentUser);
+    }
+    setFeedback({ type: "success", text: "Tier list removida." });
   };
 
-  const loadPublished = (pub: PublishedTierList) => {
-    setTitle(pub.title);
-    setAuthor(pub.author);
-    const newTiers: CustomTier[] = pub.tiers.map((t, i) => ({
-      id: `T${i + 1}`,
-      label: t.label,
-      color: t.color,
-    }));
-    setTiers(newTiers);
-
-    const next: Record<string, number[]> = { POOL: [] };
-    const used = new Set<number>();
-    pub.tiers.forEach((t, i) => {
-      const id = `T${i + 1}`;
-      next[id] = t.heroes;
-      t.heroes.forEach((hId) => used.add(hId));
-    });
-    next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
-    setBoard(next);
-    setTab("builder");
+  const loadPublished = (pub: TierListItem) => {
+    if (!pub.canEdit) {
+      setFeedback({ type: "error", text: "Apenas o criador pode abrir esta tier list no editor." });
+      return;
+    }
+    applyListToBuilder(pub);
   };
 
   const renderHeroChip = (id: number, currentTierId: string) => {
@@ -314,11 +525,10 @@ export default function TierMakerClient({
     const displayImage = isTopTier
       ? hero.gloatImage || hero.image
       : isBottomTier
-      ? hero.critImage || hero.image
-      : hero.image;
+        ? hero.critImage || hero.image
+        : hero.image;
 
     const isSelected = selected === id;
-
     const isTarget = dropTarget?.id === id && dragId !== null && dragId !== id;
     const isTargetBefore = isTarget && dropTarget?.position === "before";
     const isTargetAfter = isTarget && dropTarget?.position === "after";
@@ -340,7 +550,7 @@ export default function TierMakerClient({
             e.dataTransfer.setDragImage(
               e.currentTarget,
               e.currentTarget.offsetWidth / 2,
-              e.currentTarget.offsetHeight / 2
+              e.currentTarget.offsetHeight / 2,
             );
           }
           setDragId(id);
@@ -378,7 +588,6 @@ export default function TierMakerClient({
             : "border-neutral-800/70 hover:border-amber-500/80 hover:scale-105 hover:z-10"
         } ${dragId === id ? "opacity-25 scale-95 border-dashed border-amber-500/80 shadow-none" : ""}`}
       >
-        {/* Feixe de inserção absoluto no vão esquerdo (brilho sólido contínuo, sem piscar) */}
         {isTargetBefore && (
           <div
             aria-hidden
@@ -386,7 +595,6 @@ export default function TierMakerClient({
           />
         )}
 
-        {/* Imagem do Herói com pointer-events-none para eliminar disparos falsos de dragLeave */}
         <div className="hero-card-art pointer-events-none relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-t-xl">
           <img
             src={displayImage}
@@ -395,14 +603,12 @@ export default function TierMakerClient({
           />
         </div>
 
-        {/* Rótulo com pointer-events-none */}
         <div className="pointer-events-none w-full py-1.5 px-1 text-center bg-transparent">
           <p className="truncate text-[10.5px] font-bold leading-tight text-neutral-200 group-hover:text-amber-400 transition-colors">
             {hero.name}
           </p>
         </div>
 
-        {/* Feixe de inserção absoluto no vão direito (brilho sólido contínuo, sem piscar) */}
         {isTargetAfter && (
           <div
             aria-hidden
@@ -419,7 +625,10 @@ export default function TierMakerClient({
       <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900/80">
         <button
           type="button"
-          onClick={() => setTab("builder")}
+          onClick={() => {
+            setFeedback(null);
+            setTab("builder");
+          }}
           className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
             tab === "builder" ? "bg-amber-500 text-black" : "text-neutral-300 hover:bg-neutral-800"
           }`}
@@ -428,7 +637,10 @@ export default function TierMakerClient({
         </button>
         <button
           type="button"
-          onClick={() => setTab("community")}
+          onClick={() => {
+            setFeedback(null);
+            setTab("community");
+          }}
           className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
             tab === "community" ? "bg-amber-500 text-black" : "text-neutral-300 hover:bg-neutral-800"
           }`}
@@ -437,21 +649,58 @@ export default function TierMakerClient({
         </button>
       </div>
 
+      {feedback && (
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs font-bold ${
+            feedback.type === "success"
+              ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300"
+              : "border-rose-500/40 bg-rose-950/30 text-rose-300"
+          }`}
+        >
+          <span>{feedback.text}</span>
+          {feedback.needsLogin && (
+            <Link
+              href="/login?next=/tier-maker"
+              className="rounded-lg border border-amber-500 bg-amber-500 px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
+            >
+              Fazer Login
+            </Link>
+          )}
+        </div>
+      )}
+
       {tab === "builder" && (
         <div className="space-y-6">
+          {editingId && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs">
+              <span className="font-semibold text-amber-200">
+                Editando tier list publicada
+              </span>
+              <button
+                type="button"
+                onClick={() => resetBuilder(currentUser)}
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-300 hover:border-amber-400 hover:text-white transition-colors"
+              >
+                Cancelar Edição
+              </button>
+            </div>
+          )}
+
           {/* Cabeçalho do Editor */}
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-neutral-800 pb-4">
             <div className="space-y-2 flex-1 max-w-xl">
               <input
                 value={title}
+                maxLength={80}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Título da sua Tier List"
                 className="font-deadlock w-full border-b border-neutral-700 bg-transparent text-3xl font-black text-[#f4efe6] outline-none focus:border-amber-500"
               />
               <input
                 value={author}
+                maxLength={40}
                 onChange={(e) => setAuthor(e.target.value)}
-                placeholder="Seu Nickname / Autor"
+                placeholder={currentUser ? "Seu Nickname / Autor" : "Entre na conta para publicar com seu perfil"}
                 className="w-full text-xs font-semibold text-neutral-400 bg-transparent outline-none"
               />
             </div>
@@ -546,11 +795,34 @@ export default function TierMakerClient({
                 <span>Limpar</span>
               </button>
 
-              {/* Publicar no Site */}
+              {/* Exportar PNG */}
               <button
                 type="button"
+                disabled={exportingId === "builder"}
+                onClick={handleExportCurrentPng}
+                className="inline-flex items-center gap-1.5 rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 shadow transition-all duration-150 hover:border-amber-400 hover:bg-neutral-800 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                <svg
+                  aria-hidden
+                  viewBox="0 0 16 16"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
+                </svg>
+                <span>{exportingId === "builder" ? "Gerando..." : "Exportar PNG"}</span>
+              </button>
+
+              {/* Publicar / Salvar Alterações */}
+              <button
+                type="button"
+                disabled={publishing}
                 onClick={publishCurrent}
-                className="group inline-flex items-center gap-2 rounded-[5px] border border-emerald-400/80 bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(16,185,129,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_20px_rgba(16,185,129,0.55)] active:scale-[0.98]"
+                className="group inline-flex items-center gap-2 rounded-[5px] border border-emerald-400/80 bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(16,185,129,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_20px_rgba(16,185,129,0.55)] active:scale-[0.98] disabled:opacity-60"
               >
                 <svg
                   aria-hidden
@@ -564,7 +836,13 @@ export default function TierMakerClient({
                 >
                   <path d="M8 11V2M4 5l4-3 4 3M2 14h12" />
                 </svg>
-                <span>Publicar no Site</span>
+                <span>
+                  {publishing
+                    ? "Salvando..."
+                    : editingId
+                      ? "Salvar Alterações"
+                      : "Publicar no Site"}
+                </span>
               </button>
             </div>
           </div>
@@ -583,7 +861,6 @@ export default function TierMakerClient({
                     isFirst ? "rounded-t-2xl" : ""
                   } ${isLast ? "rounded-b-2xl" : ""}`}
                 >
-                  {/* Bloco Lateral Editável (Nome e Cor) com Cantos Arredondados */}
                   <div
                     style={{ backgroundColor: tier.color }}
                     className={`relative flex w-24 sm:w-36 md:w-40 shrink-0 flex-col items-center justify-center p-2 pb-7 text-center select-none ${
@@ -599,7 +876,7 @@ export default function TierMakerClient({
                         if (lines.length > 3) return;
                         updateTierLabel(tier.id, e.target.value);
                       }}
-                      className={`font-deadlock w-full bg-transparent text-center font-black uppercase text-black outline-none resize-none leading-tight [overflow-wrap:anywhere] break-words px-1 [field-sizing:content] ${
+                      className={`font-deadlock w-full bg-transparent text-center font-black uppercase text-black outline-none resize-none leading-tight [overflow-wrap:anywhere] px-1 [field-sizing:content] ${
                         tier.label.length > 14
                           ? "text-[11px] sm:text-xs"
                           : tier.label.length > 8
@@ -610,24 +887,19 @@ export default function TierMakerClient({
                       }`}
                     />
 
-                    {/* Botão de Pincel com a Estética do Deadlock */}
                     <label
                       title="Alterar cor deste tier"
                       className="group/brush absolute bottom-1.5 left-1.5 flex h-6 w-6 cursor-pointer items-center justify-center -skew-x-6 rounded-[3px] border border-black/50 bg-[#0d1210]/85 text-[#f4efe6] shadow-[0_2px_6px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all hover:border-amber-400/80 hover:bg-black hover:text-amber-400 hover:scale-110 active:scale-95"
                     >
-                      {/* Ícone Nítido de Pincel de Pintura (Cabo, Virola e Cerdas com Tinta) */}
                       <svg
                         aria-hidden
                         viewBox="0 0 16 16"
                         className="h-3.5 w-3.5 transition-transform group-hover/brush:rotate-12"
                         fill="currentColor"
                       >
-                        {/* Cabo e virola */}
                         <path d="M14.85 1.15a1.5 1.5 0 0 0-2.12 0L7.5 6.38l2.12 2.12 5.23-5.23a1.5 1.5 0 0 0 0-2.12z" />
-                        {/* Cerdas com ponta de tinta afunilada */}
                         <path d="M6.8 7.2 2.3 11.7c-.6.6-.9 1.4-1.1 2.2-.1.5.3.9.8.8.8-.2 1.6-.5 2.2-1.1l4.5-4.5-1.9-1.9z" />
                       </svg>
-                      {/* Input de cor nativo invisível sobreposto */}
                       <input
                         type="color"
                         value={tier.color}
@@ -637,13 +909,12 @@ export default function TierMakerClient({
                     </label>
                   </div>
 
-                  {/* Área de Soltar Heróis */}
-                    <div
+                  <div
                     onClick={() => selected !== null && moveHero(selected, tier.id)}
                     onDragOver={(e: DragEvent) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        if (dragId !== null && dragOverZone !== tier.id) setDragOverZone(tier.id);
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragId !== null && dragOverZone !== tier.id) setDragOverZone(tier.id);
                     }}
                     onDragLeave={(e: DragEvent) => {
                       if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -665,13 +936,11 @@ export default function TierMakerClient({
                     {list.map((id) => renderHeroChip(id, tier.id))}
                   </div>
 
-                  {/* Painel de Controles do Tier no Canto Direito */}
                   <div
                     className={`flex flex-col items-center justify-center gap-1 px-2 shrink-0 border-l border-neutral-800/80 bg-neutral-950/90 select-none ${
                       isFirst ? "rounded-tr-2xl" : ""
                     } ${isLast ? "rounded-br-2xl" : ""}`}
                   >
-                    {/* Seta para Cima */}
                     <button
                       type="button"
                       title="Mover categoria para cima"
@@ -687,7 +956,6 @@ export default function TierMakerClient({
                       </svg>
                     </button>
 
-                    {/* Adicionar Novo Tier Abaixo (+) */}
                     <button
                       type="button"
                       title="Adicionar novo tier abaixo"
@@ -702,7 +970,6 @@ export default function TierMakerClient({
                       </svg>
                     </button>
 
-                    {/* Apagar / Remover Tier (Lixeira) */}
                     <button
                       type="button"
                       title="Remover este tier (heróis voltam para a bandeja)"
@@ -717,7 +984,6 @@ export default function TierMakerClient({
                       </svg>
                     </button>
 
-                    {/* Seta para Baixo */}
                     <button
                       type="button"
                       title="Mover categoria para baixo"
@@ -782,14 +1048,13 @@ export default function TierMakerClient({
 
       {tab === "community" && (
         <div className="space-y-6">
-          {/* Barra de Filtros e Busca */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800/80 pb-4">
             <div>
               <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
                 Galeria da Comunidade
               </h3>
               <p className="text-xs text-neutral-400">
-                Tier lists salvas localmente no seu navegador.
+                Tier lists publicadas pelos jogadores do LockPro.
               </p>
             </div>
 
@@ -818,8 +1083,11 @@ export default function TierMakerClient({
             )}
           </div>
 
-          {/* Estado Vazio */}
-          {publishedLists.length === 0 ? (
+          {loadingCommunity ? (
+            <div className="rounded-2xl border border-neutral-800/80 bg-neutral-900/30 py-16 text-center text-xs text-neutral-400">
+              Carregando tier lists da comunidade...
+            </div>
+          ) : publishedLists.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-800/90 bg-neutral-900/20 py-16 px-4 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 mb-4 shadow-[0_0_24px_rgba(245,158,11,0.15)]">
                 <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -831,7 +1099,7 @@ export default function TierMakerClient({
                 Nenhuma Tier List na Galeria
               </h4>
               <p className="mt-1 text-xs text-neutral-400 max-w-sm leading-relaxed">
-                Monte sua classificação personalizada na aba anterior e clique em <strong className="text-neutral-200">&quot;Publicar no Site&quot;</strong> para salvá-la aqui.
+                Monte sua classificação personalizada na aba anterior e clique em <strong className="text-neutral-200">&quot;Publicar no Site&quot;</strong> para compartilhá-la aqui.
               </p>
               <button
                 type="button"
@@ -846,17 +1114,16 @@ export default function TierMakerClient({
               Nenhuma tier list encontrada para &quot;{communityQuery}&quot;.
             </div>
           ) : (
-            /* Grade de Cards com Mini-Pranchas Visuais */
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {filteredPublishedLists.map((item) => {
                 const totalPlaced = item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
+                const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
 
                 return (
                   <div
                     key={item.id}
                     className="flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-5 shadow-xl backdrop-blur-sm transition-all hover:border-neutral-700 space-y-4"
                   >
-                    {/* Cabeçalho do Card */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
@@ -864,30 +1131,40 @@ export default function TierMakerClient({
                         </h4>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                           <span>
-                            Por <strong className="text-neutral-200">{item.author}</strong>
+                            Por{" "}
+                            {item.authorHandle ? (
+                              <Link
+                                href={`/profile/${item.authorHandle}`}
+                                className="font-bold text-neutral-200 hover:text-amber-400 transition-colors"
+                              >
+                                {item.author}
+                              </Link>
+                            ) : (
+                              <strong className="text-neutral-200">{item.author}</strong>
+                            )}
                           </span>
                           <span>•</span>
-                          <span>{item.createdAt}</span>
+                          <span>{dateText}</span>
                           <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
                             {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
                           </span>
                         </div>
                       </div>
 
-                      {/* Botão de Excluir */}
-                      <button
-                        type="button"
-                        title="Excluir da galeria"
-                        onClick={(e) => deletePublished(item.id, e)}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
-                      >
-                        <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
-                        </svg>
-                      </button>
+                      {item.canDelete && (
+                        <button
+                          type="button"
+                          title="Excluir da galeria"
+                          onClick={(e) => deletePublished(item.id, e)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
+                        >
+                          <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
 
-                    {/* Mini-Prancha Visual com os Retratos dos Heróis */}
                     <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
                       {item.tiers.map((t, idx) => {
                         const tierHeroes = (t.heroes || [])
@@ -900,7 +1177,6 @@ export default function TierMakerClient({
 
                         return (
                           <div key={idx} className="flex min-h-[38px] items-stretch">
-                            {/* Letra/Nome do Tier */}
                             <div
                               style={{ backgroundColor: t.color }}
                               className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
@@ -913,7 +1189,6 @@ export default function TierMakerClient({
                               </span>
                             </div>
 
-                            {/* Miniaturas dos Heróis Lado a Lado */}
                             <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
                               {tierHeroes.length === 0 ? (
                                 <span className="text-[10px] text-neutral-600 italic px-1">—</span>
@@ -946,27 +1221,40 @@ export default function TierMakerClient({
                       })}
                     </div>
 
-                    {/* Ação: Abrir no Editor */}
-                    <div className="pt-1">
+                    <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => loadPublished(item)}
-                        className="group flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/80 py-2.5 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] transition-all hover:border-amber-500/80 hover:bg-neutral-800 hover:text-amber-400"
+                        disabled={exportingId === item.id}
+                        onClick={() => handleExportItemPng(item)}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900/90 py-2.5 px-3 font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 transition-all hover:border-amber-400 hover:bg-neutral-800 disabled:opacity-50"
                       >
-                        <svg
-                          aria-hidden
-                          viewBox="0 0 16 16"
-                          className="h-3.5 w-3.5 transition-transform group-hover:scale-110"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                        <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
                         </svg>
-                        <span>Abrir no Editor</span>
+                        <span>{exportingId === item.id ? "Gerando..." : "Exportar PNG"}</span>
                       </button>
+
+                      {item.canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => loadPublished(item)}
+                          className="group inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/80 py-2.5 px-3 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] transition-all hover:border-amber-500/80 hover:bg-neutral-800 hover:text-amber-400"
+                        >
+                          <svg
+                            aria-hidden
+                            viewBox="0 0 16 16"
+                            className="h-3.5 w-3.5 transition-transform group-hover:scale-110"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                          </svg>
+                          <span>Abrir no Editor</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

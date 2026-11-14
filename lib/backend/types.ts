@@ -53,3 +53,28 @@ export interface CommunityProfileItem {
   avatar_url: string | null;
   favorite_hero_id: number | null;
 }
+
+export interface TierRowData {
+  label: string;
+  color: string;
+  heroes: number[];
+}
+
+export interface TierListItem {
+  id: string;
+  title: string;
+  author: string;
+  authorHandle: string | null;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tiers: TierRowData[];
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export interface SaveTierListInput {
+  title: string;
+  authorName?: string;
+  tiers: TierRowData[];
+}
