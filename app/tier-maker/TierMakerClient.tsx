@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties, type DragEvent } from "react";
 import type { MakerHero } from "@/app/TierMaker";
 import {
@@ -51,9 +52,13 @@ export default function TierMakerClient({
   heroes: MakerHero[];
   metaTiers: Record<string, number[]>;
 }) {
-  const [tab, setTab] = useState<"builder" | "community">("builder");
+  const pathname = usePathname();
+  const tab: "builder" | "community" = pathname.startsWith("/tier-maker/comunidade") ? "community" : "builder";
+  // Troca só a URL, sem remontar o editor: o quadro em montagem não se perde ao ver a Comunidade
+  const setTab = useCallback((next: "builder" | "community") => {
+    window.history.pushState(null, "", next === "community" ? "/tier-maker/comunidade" : "/tier-maker");
+  }, []);
   const [title, setTitle] = useState("Minha Tier List");
-  const [author, setAuthor] = useState("");
   const [tiers, setTiers] = useState<CustomTier[]>(DEFAULT_TIERS);
   const [board, setBoard] = useState<Record<string, number[]>>(() =>
     createEmptyBoard(heroes, DEFAULT_TIERS),
@@ -61,6 +66,7 @@ export default function TierMakerClient({
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const author = currentUser?.suggestedUsername || "";
   const [publishedLists, setPublishedLists] = useState<TierListItem[]>([]);
   const [loadingCommunity, setLoadingCommunity] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -96,27 +102,21 @@ export default function TierMakerClient({
     } catch {}
   };
 
-  const resetBuilder = useCallback(
-    (userOverride?: AuthUser | null) => {
-      const user = userOverride === undefined ? currentUser : userOverride;
-      setEditingId(null);
-      setTitle("Minha Tier List");
-      setAuthor(user?.suggestedUsername || "");
-      setTiers(DEFAULT_TIERS);
-      setBoard(createEmptyBoard(heroes, DEFAULT_TIERS));
-      setSelected(null);
-      if (typeof window !== "undefined" && window.location.search.includes("edit=")) {
-        window.history.replaceState(null, "", "/tier-maker");
-      }
-    },
-    [currentUser, heroes],
-  );
+  const resetBuilder = useCallback(() => {
+    setEditingId(null);
+    setTitle("Minha Tier List");
+    setTiers(DEFAULT_TIERS);
+    setBoard(createEmptyBoard(heroes, DEFAULT_TIERS));
+    setSelected(null);
+    if (typeof window !== "undefined" && window.location.search.includes("edit=")) {
+      window.history.replaceState(null, "", "/tier-maker");
+    }
+  }, [heroes]);
 
   const applyListToBuilder = useCallback(
     (pub: TierListItem) => {
       setEditingId(pub.id);
       setTitle(pub.title);
-      setAuthor(pub.author);
       const newTiers: CustomTier[] = pub.tiers.map((t, i) => ({
         id: `T${i + 1}`,
         label: t.label,
@@ -137,7 +137,7 @@ export default function TierMakerClient({
       setFeedback(null);
       setTab("builder");
     },
-    [heroes],
+    [heroes, setTab],
   );
 
   const refreshCommunity = useCallback(async () => {
@@ -158,9 +158,6 @@ export default function TierMakerClient({
       if (!active) return;
 
       setCurrentUser(user);
-      if (user && !author) {
-        setAuthor(user.suggestedUsername);
-      }
       setPublishedLists(lists);
       setLoadingCommunity(false);
 
@@ -192,9 +189,6 @@ export default function TierMakerClient({
 
     const unsubscribe = subscribeToAuthChanges((u) => {
       setCurrentUser(u);
-      if (u && !editingId) {
-        setAuthor((prev) => prev || u.suggestedUsername);
-      }
       void refreshCommunity();
     });
 
@@ -382,7 +376,6 @@ export default function TierMakerClient({
 
     const payload = {
       title: cleanTitle,
-      authorName: author.trim() || currentUser.suggestedUsername || undefined,
       tiers: tiers.map((t) => ({
         label: t.label.trim(),
         color: t.color,
@@ -413,7 +406,7 @@ export default function TierMakerClient({
     });
 
     const wasEditing = Boolean(editingId);
-    resetBuilder(currentUser);
+    resetBuilder();
     setFeedback({
       type: "success",
       text: wasEditing ? "Tier list atualizada com sucesso!" : "Tier list publicada na comunidade!",
@@ -427,7 +420,7 @@ export default function TierMakerClient({
     try {
       await exportTierListToPng({
         title: title.trim() || "Minha Tier List",
-        author: author.trim() || currentUser?.suggestedUsername || "Comunidade",
+        author: author || "Comunidade",
         dateLabel: new Date().toLocaleDateString("pt-BR"),
         tiers: tiers.map((t, idx) => {
           const isTopTier = dynamicExpressions && idx === 0;
@@ -503,7 +496,7 @@ export default function TierMakerClient({
 
     setPublishedLists((prev) => prev.filter((l) => l.id !== id));
     if (editingId === id) {
-      resetBuilder(currentUser);
+      resetBuilder();
     }
     setFeedback({ type: "success", text: "Tier list removida." });
   };
@@ -678,7 +671,7 @@ export default function TierMakerClient({
               </span>
               <button
                 type="button"
-                onClick={() => resetBuilder(currentUser)}
+                onClick={() => resetBuilder()}
                 className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-300 hover:border-amber-400 hover:text-white transition-colors"
               >
                 Cancelar Edição
@@ -696,13 +689,9 @@ export default function TierMakerClient({
                 placeholder="Título da sua Tier List"
                 className="font-deadlock w-full border-b border-neutral-700 bg-transparent text-3xl font-black text-[#f4efe6] outline-none focus:border-amber-500"
               />
-              <input
-                value={author}
-                maxLength={40}
-                onChange={(e) => setAuthor(e.target.value)}
-                placeholder={currentUser ? "Seu Nickname / Autor" : "Entre na conta para publicar com seu perfil"}
-                className="w-full text-xs font-semibold text-neutral-400 bg-transparent outline-none"
-              />
+              <p className="text-xs font-semibold text-neutral-400">
+                {currentUser ? `Autor: ${author}` : "Entre na conta para publicar com seu perfil"}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Configurações da Prancha (Engrenagem) */}
@@ -1127,7 +1116,12 @@ export default function TierMakerClient({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
-                          {item.title}
+                          <Link
+                            href={`/tier-maker/comunidade/${item.id}`}
+                            className="transition-colors hover:text-amber-400"
+                          >
+                            {item.title}
+                          </Link>
                         </h4>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                           <span>

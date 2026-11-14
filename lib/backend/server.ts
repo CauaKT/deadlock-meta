@@ -203,3 +203,17 @@ export async function getServerTierLists(params?: {
     return [];
   }
 }
+
+export async function getPublicTierListById(
+  id: string,
+): Promise<TierListItem | null> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}`), {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as TierListItem;
+  } catch {
+    return null;
+  }
+}

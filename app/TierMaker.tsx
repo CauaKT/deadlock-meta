@@ -275,7 +275,7 @@ export default function TierMaker({ heroes, metaTiers, patchLabel }: Props) {
                   isFirst ? "rounded-tl-2xl" : ""
                 } ${isLast ? "rounded-bl-2xl" : ""}`}
               >
-                <span className="font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black leading-tight tracking-wider [overflow-wrap:anywhere] break-words max-w-full px-1">{tier.label}</span>
+                <span className="font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black leading-tight tracking-wider [overflow-wrap:anywhere] max-w-full px-1">{tier.label}</span>
               </button>
               <div
                 {...zoneHandlers(tier.key)}

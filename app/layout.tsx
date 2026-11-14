@@ -11,6 +11,7 @@ import PageTransitionBar from "./PageTransitionBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lockpro.vercel.app"),
   title: "LockPro • Heróis, Itens e Tier List de Deadlock",
   description: "Tier list por patch, atributos e habilidades dos heróis e catálogo de itens de Deadlock, com dados da Deadlock API e da Deadlock Wiki. Projeto não oficial.",
 };

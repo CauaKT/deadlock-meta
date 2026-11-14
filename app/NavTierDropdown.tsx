@@ -121,9 +121,6 @@ export default function NavTierDropdown() {
                 <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
                   TierMaker
                 </span>
-                <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[9px] font-black uppercase text-black">
-                  Novo
-                </span>
               </div>
               <span className="block text-[11px] font-medium leading-tight text-neutral-400 mt-0.5">
                 Monte, personalize e compartilhe a sua tier list
