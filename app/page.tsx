@@ -1,9 +1,10 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES, RANK_FILTERS } from "@/lib/deadlock";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import PatchSelect from "./PatchSelect";
+import RankSelect from "./RankSelect";
 import TierListTabs from "./TierListTabs";
 import type { MakerHero } from "./TierMaker";
 import { TIERS, TIER_BY_KEY, type TierKey } from "./tiers";
@@ -38,16 +39,19 @@ const fmt = (n: number) =>
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ patch?: string }>;
+  searchParams: Promise<{ patch?: string; rank?: string }>;
 }) {
-  const { patch: patchParam } = await searchParams;
+  const { patch: patchParam, rank: rankParam } = await searchParams;
   const selectedPatch = PATCHES.find((p) => p.id === patchParam) ?? PATCHES[0];
+  const selectedRank = RANK_FILTERS.find((r) => r.id === rankParam) ?? RANK_FILTERS[0];
+  const minMatchesForRank =
+    selectedRank.tier >= 9 ? 100 : selectedRank.tier >= 1 ? 300 : MIN_MATCHES;
   const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
   const patchUntil =
     selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
   const [heroesMap, stats, blurbs, wikiColors] = await Promise.all([
     fetchHeroesAssets(),
-    fetchHeroesAnalytics(selectedPatch.since, patchUntil),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil, selectedRank.minBadge),
     fetchHeroBlurbs(),
     fetchWikiColors(),
   ]);
@@ -116,7 +120,7 @@ export default async function Home({
         tier,
       };
     })
-    .filter((h) => h.matches >= MIN_MATCHES && !h.name.startsWith("hero_"))
+    .filter((h) => h.matches >= minMatchesForRank && !h.name.startsWith("hero_"))
     .sort((a, b) => b.winRate - a.winRate);
 
   const heroesByTier = TIERS.reduce((acc, tier) => {
@@ -178,10 +182,13 @@ export default async function Home({
               </svg>
             </span>
           </Link>
-          <PatchSelect
-            patches={PATCHES.map(({ id, label }) => ({ id, label }))}
-            selected={selectedPatch.id}
-          />
+          <div className="flex flex-wrap items-end justify-end gap-3">
+            <RankSelect ranks={RANK_FILTERS} selected={selectedRank.id} />
+            <PatchSelect
+              patches={PATCHES.map(({ id, label }) => ({ id, label }))}
+              selected={selectedPatch.id}
+            />
+          </div>
         </div>
       </header>
       
@@ -193,35 +200,27 @@ export default async function Home({
 
       {/* PRANCHA CONTÍNUA DA TIER LIST DO META */}
       {/* PRANCHA CONTÍNUA TIERMAKER */}
-      <div className="rounded-2xl border border-neutral-800/90 bg-neutral-900/50 backdrop-blur-sm divide-y divide-neutral-800/90 shadow-2xl">
-        {TIERS.map((tier, tierIndex) => {
+      <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 divide-y divide-neutral-800/90 shadow-[0_20px_50px_rgba(0,0,0,0.85)]">
+        {TIERS.map((tier) => {
           const heroesInTier = heroesByTier[tier.key] || [];
-          const isFirst = tierIndex === 0;
-          const isLast = tierIndex === TIERS.length - 1;
 
           return (
             <div
               key={tier.key}
-              className={`flex flex-row min-h-[105px] transition-colors ${
-                isFirst ? "rounded-t-2xl" : ""
-              } ${isLast ? "rounded-b-2xl" : ""}`}
+              className="flex flex-row min-h-[105px] transition-colors"
             >
               {/* Coluna da Letra do Tier à Esquerda */}
               <div
-                className={`w-24 sm:w-36 md:w-40 flex-shrink-0 flex items-center justify-center p-2 text-center select-none ${tier.badgeBg} ${tier.badgeText} ${
-                  isFirst ? "rounded-tl-2xl" : ""
-                } ${isLast ? "rounded-bl-2xl" : ""}`}
+                className={`dl-halftone relative w-24 sm:w-36 md:w-40 flex-shrink-0 flex items-center justify-center p-2 text-center select-none border-r border-black/40 ${tier.badgeBg} ${tier.badgeText}`}
               >
-                <span className="font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black tracking-wider leading-tight [overflow-wrap:anywhere] break-words max-w-full px-1">
+                <span className="relative z-10 font-deadlock text-xs sm:text-sm md:text-base lg:text-lg font-black tracking-wider leading-tight [overflow-wrap:anywhere] break-words max-w-full px-1">
                   {tier.label}
                 </span>
               </div>
 
               {/* Área dos Heróis à Direita */}
               <div
-                className={`flex-1 p-2 sm:p-3 flex flex-wrap items-center content-center gap-2 sm:gap-2.5 bg-neutral-950/75 ${
-                  isFirst ? "rounded-tr-2xl" : ""
-                } ${isLast ? "rounded-br-2xl" : ""}`}
+                className="flex-1 p-2 sm:p-3 flex flex-wrap items-center content-center gap-2 sm:gap-2.5 bg-[#070908]/90"
               >
                 {heroesInTier.length === 0 ? (
                   <span className="text-xs text-neutral-600 italic px-2">

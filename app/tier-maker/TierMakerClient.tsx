@@ -614,33 +614,6 @@ export default function TierMakerClient({
 
   return (
     <div className="space-y-6">
-      {/* Abas Superiores */}
-      <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900/80">
-        <button
-          type="button"
-          onClick={() => {
-            setFeedback(null);
-            setTab("builder");
-          }}
-          className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
-            tab === "builder" ? "bg-amber-500 text-black" : "text-neutral-300 hover:bg-neutral-800"
-          }`}
-        >
-          Montar Tier List
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setFeedback(null);
-            setTab("community");
-          }}
-          className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-colors ${
-            tab === "community" ? "bg-amber-500 text-black" : "text-neutral-300 hover:bg-neutral-800"
-          }`}
-        >
-          Comunidade ({publishedLists.length})
-        </button>
-      </div>
 
       {feedback && (
         <div

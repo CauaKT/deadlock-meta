@@ -171,7 +171,7 @@ export default function FeedClient({
       {initialUser ? (
         <form
           onSubmit={handleCreatePost}
-          className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 shadow-xl backdrop-blur-sm sm:p-5"
+          className="space-y-3 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 shadow-xl sm:p-5"
         >
           <textarea
             value={content}
@@ -204,7 +204,7 @@ export default function FeedClient({
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 text-sm text-neutral-300">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 text-sm text-neutral-300">
           <span>Entre na sua conta para publicar, curtir e comentar.</span>
           <div className="flex gap-2">
             <Link
@@ -236,7 +236,7 @@ export default function FeedClient({
           {posts.map((post) => (
             <article
               key={post.id}
-              className="space-y-4 rounded-xl border border-neutral-800/90 bg-neutral-900/50 p-4 shadow-lg backdrop-blur-sm sm:p-5"
+              className="space-y-4 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 shadow-lg sm:p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">

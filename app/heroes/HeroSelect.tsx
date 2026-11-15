@@ -178,7 +178,7 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
   const nameFail = nameFails[active.id] ?? 0;
 
   return (
-    <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-[calc(100svh-57px)]">
+    <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-svh">
       <GameTexture />
       <div className="relative z-10 flex min-h-0 flex-col p-4 md:p-8 lg:px-10 lg:py-8 wide:h-full wide:w-[51%] wide:max-w-[880px]">
         <div className="flex shrink-0 items-end justify-between gap-4">

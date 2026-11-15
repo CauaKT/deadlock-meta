@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { waitForApiReady, type ApiWakeStage } from "@/lib/backend/client";
 
 const STAGES: { id: ApiWakeStage; label: string }[] = [
-  { id: "connecting", label: "Requisição enviada ao servidor" },
-  { id: "waking", label: "Acordando instância gratuita da API (Render)" },
-  { id: "checking_db", label: "Verificando banco de dados PostgreSQL" },
-  { id: "ready", label: "API pronta • Redirecionando" },
+  { id: "connecting", label: "Conectando ao serviço" },
+  { id: "waking", label: "Inicializando servidor" },
+  { id: "checking_db", label: "Validando sessão" },
+  { id: "ready", label: "Pronto • Redirecionando" },
 ];
 
 function stageIndex(stage: ApiWakeStage): number {
@@ -26,8 +26,8 @@ function formatSeconds(ms: number): string {
 export function ApiWakePanel({
   stage,
   elapsedMs,
-  title = "Despertando Servidor",
-  subtitle = "A API gratuita hiberna após ~15 min sem uso e leva cerca de 30 a 60 segundos para iniciar.",
+  title = "Conectando ao Servidor",
+  subtitle = "Aguarde um instante enquanto preparamos sua sessão.",
   onCancelAction,
   onRetryAction,
 }: {

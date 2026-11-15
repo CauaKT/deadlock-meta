@@ -100,7 +100,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
         <button
           type="button"
           onClick={() => void loadData(page, search)}
-          className="cursor-pointer rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-200 hover:border-amber-500 hover:text-amber-400"
+          className="cursor-pointer rounded-[5px] border border-neutral-700 bg-[#0a0d0c] px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-200 hover:border-amber-500 hover:text-amber-400"
         >
           Atualizar
         </button>
@@ -127,7 +127,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
           { label: "Perfis", value: overview?.counts.profiles ?? "—" },
           { label: "Tier Lists", value: overview?.counts.tierLists ?? "—" },
         ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-4">
+          <div key={card.label} className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4">
             <p className="text-[10px] font-black uppercase tracking-wider text-neutral-500">{card.label}</p>
             <p className="mt-1 font-deadlock text-2xl font-black text-amber-400">{card.value}</p>
           </div>
@@ -135,7 +135,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
       </section>
 
       {/* Usuários */}
-      <section className="rounded-3xl border border-neutral-800 bg-[#0a0d0c] p-6 space-y-4">
+      <section className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-6 space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
             Usuários ({totalUsers})
@@ -146,11 +146,11 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar e-mail, nick ou @"
-              className="w-full sm:w-64 rounded-xl border border-neutral-800 bg-black/60 px-3.5 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
+              className="w-full sm:w-64 rounded-[4px] border border-neutral-700 bg-[#070908] px-3.5 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
             />
             <button
               type="submit"
-              className="cursor-pointer rounded-xl bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
+              className="cursor-pointer rounded-[4px] bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black"
             >
               Buscar
             </button>
@@ -252,7 +252,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
       </section>
 
       {/* Moderação de Tier Lists */}
-      <section className="rounded-3xl border border-neutral-800 bg-[#0a0d0c] p-6 space-y-4">
+      <section className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-6 space-y-4">
         <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
           Tier Lists Publicadas ({tierLists.length})
         </h2>
@@ -260,7 +260,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
           {tierLists.map((tl) => (
             <div
               key={tl.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800/80 bg-black/40 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-neutral-800/90 bg-[#070908] px-4 py-3"
             >
               <div className="min-w-0">
                 <Link

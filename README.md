@@ -1,24 +1,37 @@
-# LockPro
+# LockPro (`deadlock-meta`)
 
-Plataforma de estatísticas, análise do meta e perfis da comunidade para o jogo **Deadlock** (Valve Corporation). Os dados de jogo vêm de fontes comunitárias, **não oficiais**: Deadlock API e Deadlock Wiki.
+Plataforma de estatísticas, análise do meta e comunidade para o jogo **Deadlock** (Valve Corporation). Os dados de jogo vêm de fontes comunitárias, **não oficiais**: [Deadlock API](https://api.deadlock-api.com) e [Deadlock Wiki](https://deadlock.wiki).
 
-- **Site em produção:** https://lockpro.vercel.app
-- **API de contas e perfis:** [`deadlock-meta-api`](https://github.com/CauaKT/deadlock-meta-api) (NestJS + Prisma + PostgreSQL)
+- **Aplicação em produção:** https://lockpro.vercel.app
+- **Repositório da API:** [`deadlock-meta-api`](https://github.com/CauaKT/deadlock-meta-api) (NestJS + Prisma + PostgreSQL)
 
 ---
 
 ## Funcionalidades
 
-- **Tier list do meta (`/`)**: ranking de heróis por winrate e número de partidas, filtrado por patch, com tooltips detalhados.
-- **Tier Maker (`/tier-maker`)**: editor interativo de tier lists personalizadas (customização de tiers, cores e preenchimento com o meta atual).
-- **Seletor de heróis (`/heroes`)**: interface inspirada na tela "Criar escalação", com tags e habilidades temáticas.
-- **Página do herói (`/heroes/[id]`)**: atributos base com escala por bênçãos, arma, evolução por patch, simulador de habilidades (T1/T2/T3) e builds populares por fase.
-- **Catálogo de itens (`/items`)**: loja completa separada por categoria (Arma, Vitalidade e Espírito), com filtros por tier, busca, ordenação e tooltip dinâmico.
-- **Guia (`/guide`) & Fontes (`/data-sources`)**: guia introdutório com comparativo entre MOBAs e transparência dos endpoints consumidos.
-- **Contas e perfis (`/register`, `/login`, `/reset-password`, `/welcome`, `/profile`, `/profile/[handle]`)**:
+- **Tier List do Meta (`/`):** ranking de heróis por winrate e número de partidas, filtrado por patch, com tooltips detalhados e abas para visualização do meta e editor rápido.
+- **Tier Maker (`/tier-maker` e `/tier-maker/comunidade`):** editor interativo de tier lists (tiers e cores customizáveis, preenchimento com o meta atual, salvamento vinculado à conta), galeria da comunidade, página pública compartilhável por UUID (`/tier-maker/comunidade/[id]`) com `og:image` dinâmica e exportação em PNG.
+- **Seletor de Heróis (`/heroes`):** grade inspirada na tela "Criar escalação", com tags temáticas dinâmicas e habilidades.
+- **Página do Herói (`/heroes/[id]`):** atributos base com escala por bênçãos, dados da arma, evolução de winrate por patch, simulador de habilidades (T1/T2/T3), matchups (sinergias e counters) e builds populares por fase.
+- **Catálogo de Itens (`/items` e `/items/[className]`):** loja separada por categoria (Arma, Vitalidade e Espírito), busca por nome/atributos/descrições, filtros por tier/ativos/efeitos e página individual de cada item com componentes e upgrades.
+- **Feed da Comunidade (`/feed`):** microblog público com criação de postagens, anexo de imagens comprimidas em WebP, curtidas e comentários.
+- **Contas, Perfis e Amigos (`/register`, `/login`, `/reset-password`, `/change-password`, `/welcome`, `/profile`, `/profile/[handle]`):**
   - Cadastro e login por e-mail/senha (com confirmação de e-mail e recuperação de senha) e **Google OAuth 2.0**.
-  - Onboarding pós-cadastro (`/welcome`) com definição de nick, `@handle` e recorte de avatar.
-  - Perfil público e editável com herói favorito, banner personalizado ou temático por herói, cor de destaque e sugestões da comunidade.
+  - Troca rápida entre até 5 contas conectadas no menu do usuário.
+  - Onboarding (`/welcome`) com definição de nick, `@handle` e recorte de avatar.
+  - Perfil público e editável com herói favorito, banner temático ou personalizado (com detecção NSFW), cor de destaque, redes sociais, estatísticas do Deadlock por Steam ID, sistema de amizades e sugestões da comunidade.
+- **Guia (`/guide`) & Fontes (`/data-sources`):** guia introdutório de transição (LoL/Dota 2) e transparência dos endpoints externos consumidos.
+- **Painel Admin (`/admin`):** visão geral de métricas, listagem paginada de usuários e moderação de contas/tier lists para usuários com cargo `ADMIN`.
+
+---
+
+## Stack
+
+- **Framework:** Next.js 16.4.5 (App Router, Turbopack)
+- **UI & Linguagem:** React 19.3.0, TypeScript 5, Tailwind CSS v4
+- **Telemetria:** `@vercel/analytics`
+- **Lint:** ESLint 9 (`eslint-config-next`)
+- **Hospedagem:** Vercel (front-end) integrado à API `deadlock-meta-api` (Render + Neon PostgreSQL)
 
 ---
 
@@ -30,45 +43,59 @@ Navegador ──▶ Vercel (Next.js)
                  └── Server Components (SSR)  ──▶ API_URL (repassando cookie lockpro_session)
 ```
 
-- **Proxy first-party (`next.config.ts`):** chamadas do navegador vão para `/api/backend/:path*` e são reescritas para `API_URL`, permitindo que o cookie `httpOnly` `lockpro_session` permaneça no domínio do front-end.
-- **Camada isolada (`lib/backend/*`):** `client.ts`, `server.ts` e `types.ts` centralizam toda comunicação com a API de autenticação e perfis.
-- **Consumo de dados do jogo (`lib/deadlock.ts`):**
-  - Deadlock API REST (heróis, itens, estatísticas e builds) em `pt-BR`.
-  - Deadlock Wiki (MediaWiki API) para extração dinâmica das cores temáticas dos heróis, sem mapas de cores fixos no código.
+- **Proxy First-Party (`next.config.ts`):** chamadas do navegador vão para `/api/backend/:path*` e são reescritas para `API_URL`, mantendo o cookie `httpOnly` `lockpro_session` como first-party no domínio do front-end.
+- **Camada de Backend (`lib/backend/*`):** `client.ts`, `server.ts` e `types.ts` centralizam a comunicação com a `deadlock-meta-api`.
+- **Dados do Jogo (`lib/deadlock.ts`):**
+  - Deadlock API REST em `pt-BR` (`language=brazilian`).
+  - Deadlock Wiki (MediaWiki API) para extração dinâmica das cores temáticas dos heróis (`Template:Infobox_hero/themes.css`), sem mapas de cores fixos.
   - Cache em memória de 24h para respostas acima de 2 MB e revalidação via Next.js para os demais endpoints.
-- **Segurança:** sanitização de HTML externo antes de renderização e validação de origens permitidas para imagens externas.
+- **Segurança:** sanitização de HTML externo antes da renderização e validação de origens permitidas para imagens.
 
 ---
 
-## Tecnologias
+## Como Rodar Localmente
 
-- **Front-end:** Next.js 16 (App Router, Turbopack), React 19, TypeScript 5, Tailwind CSS v4
-- **Hospedagem:** Vercel (front-end) integrado à `deadlock-meta-api` (Render + Neon PostgreSQL + Brevo)
+### 1. Pré-requisitos
+- Node.js 20+ (recomendado Node 22)
+- Repositório [`deadlock-meta-api`](https://github.com/CauaKT/deadlock-meta-api) rodando localmente caso queira testar autenticação, perfis, feed, amizades e tier lists persistidas.
 
----
-
-## Como executar localmente
-
-### 1. Front-end (rotas públicas de estatísticas e catálogo)
+### 2. Instalação e execução
 
 ```bash
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
 Acesse `http://localhost:3000`.
 
-### 2. Com autenticação e perfis funcionando localmente
+### 3. Scripts disponíveis
 
-Para testar `/login`, `/register`, `/welcome` e `/profile` no seu PC:
-1. Suba o repositório [`deadlock-meta-api`](https://github.com/CauaKT/deadlock-meta-api) localmente na porta `3001` (seguindo o README da API).
-2. *(Opcional)* Se a API estiver em outra URL/porta, defina no `.env.local` do front-end:
+| Script | Descrição |
+| --- | --- |
+| `npm run dev` | Inicia o servidor de desenvolvimento com Turbopack |
+| `npm run build` | Gera o build de produção |
+| `npm run start` | Executa o build de produção |
+| `npm run lint` | Executa o ESLint no projeto |
 
-```env
-API_URL=http://localhost:3001
-```
+---
 
-Sem `.env.local`, o proxy `/api/backend/*` e `lib/backend/server.ts` já usam `http://localhost:3001` por padrão.
+## Variáveis de Ambiente
+
+Veja `.env.example`:
+
+| Variável | Obrigatória | Padrão | Descrição |
+| --- | --- | --- | --- |
+| `API_URL` | Não (local) / Sim (prod) | `http://localhost:3001` | URL base da `deadlock-meta-api` usada pelo rewrite `/api/backend/*` e pelo SSR |
+| `NEXT_PUBLIC_API_URL` | Não | `http://localhost:3001` | Fallback opcional caso `API_URL` não esteja definida |
+
+---
+
+## Deploy na Vercel
+
+1. Importe o repositório `CauaKT/deadlock-meta` na Vercel.
+2. Em **Environment Variables**, configure `API_URL` apontando para a URL pública da `deadlock-meta-api` (ex.: `https://deadlock-meta-api.onrender.com`).
+3. Faça o deploy. O arquivo `next.config.ts` aplicará o rewrite `/api/backend/:path*` automaticamente.
 
 ---
 

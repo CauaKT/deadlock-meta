@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type {
   AuthUser,
+  CommunityBuildItem,
   CommunityProfileItem,
   FeedResponse,
   FriendsOverview,
@@ -332,5 +333,60 @@ export async function getServerFriendsByHandle(
     return (await res.json()) as PublicFriendsResponse;
   } catch {
     return { friendsPublic: true, hidden: false, friends: [] };
+  }
+}
+
+export async function getServerBuilds(params?: {
+  heroId?: number;
+  handle?: string | null;
+  userId?: string | null;
+}): Promise<CommunityBuildItem[]> {
+  try {
+    const qs = new URLSearchParams();
+    if (params?.heroId) qs.set("heroId", String(params.heroId));
+    if (params?.handle) qs.set("handle", params.handle);
+    if (params?.userId) qs.set("userId", params.userId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+
+    const res = await fetch(apiUrl(`/builds${suffix}`), {
+      headers: await getCookieHeader(),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as CommunityBuildItem[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getPublicBuildById(
+  id: string,
+): Promise<CommunityBuildItem | null> {
+  try {
+    const res = await fetch(apiUrl(`/builds/${encodeURIComponent(id)}`), {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as CommunityBuildItem;
+  } catch {
+    return null;
+  }
+}
+
+export async function getPublicProfileHandleBySteam(
+  steamId: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      apiUrl(`/profiles/by-steam/${encodeURIComponent(steamId)}`),
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text) return null;
+    const data = JSON.parse(text) as { handle?: string | null };
+    return data?.handle ?? null;
+  } catch {
+    return null;
   }
 }

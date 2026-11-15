@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Props {
   patches: { id: string; label: string }[];
@@ -10,6 +10,7 @@ interface Props {
 
 export default function PatchSelect({ patches, selected }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,7 +36,9 @@ export default function PatchSelect({ patches, selected }: Props) {
   const selectPatch = (id: string) => {
     setOpen(false);
     if (id === selected) return;
-    startTransition(() => router.push(`/?patch=${id}`));
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("patch", id);
+    startTransition(() => router.push(`/?${params.toString()}`));
   };
 
   return (

@@ -2,7 +2,9 @@ import type {
   AdminOverview,
   AdminUsersResponse,
   AuthUser,
+  CommunityBuildItem,
   CommunityProfileItem,
+  SaveBuildInput,
   FeedComment,
   FeedPost,
   FeedResponse,
@@ -196,7 +198,7 @@ export async function signInWithGoogle(
   if (!ready) {
     return {
       ok: false,
-      message: "O servidor gratuito demorou para iniciar. Tente novamente em alguns segundos.",
+      message: "O servidor demorou para responder. Tente novamente em alguns segundos.",
     };
   }
 
@@ -1040,4 +1042,92 @@ export async function updateFriendsPrivacy(
   } catch {
     return { ok: false, message: "Erro de conexão ao salvar privacidade." };
   }
+}
+
+export async function getCommunityBuilds(params?: {
+  heroId?: number;
+  userId?: string;
+  handle?: string;
+}): Promise<CommunityBuildItem[]> {
+  try {
+    const qs = new URLSearchParams();
+    if (params?.heroId) qs.set("heroId", String(params.heroId));
+    if (params?.userId) qs.set("userId", params.userId);
+    if (params?.handle) qs.set("handle", params.handle);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+
+    const res = await fetch(apiUrl(`/builds${suffix}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as CommunityBuildItem[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getBuildById(
+  id: string,
+): Promise<CommunityBuildItem | null> {
+  try {
+    const res = await fetch(apiUrl(`/builds/${encodeURIComponent(id)}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as CommunityBuildItem;
+  } catch {
+    return null;
+  }
+}
+
+export async function createBuild(
+  input: SaveBuildInput,
+): Promise<{ ok: true; item: CommunityBuildItem } | { ok: false; message: string }> {
+  const res = await fetch(apiUrl("/builds"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok || !data) {
+    return { ok: false, message: extractError(data, "Erro ao publicar build.") };
+  }
+  return { ok: true, item: data as unknown as CommunityBuildItem };
+}
+
+export async function updateBuild(
+  id: string,
+  input: SaveBuildInput,
+): Promise<{ ok: true; item: CommunityBuildItem } | { ok: false; message: string }> {
+  const res = await fetch(apiUrl(`/builds/${encodeURIComponent(id)}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok || !data) {
+    return { ok: false, message: extractError(data, "Erro ao atualizar build.") };
+  }
+  return { ok: true, item: data as unknown as CommunityBuildItem };
+}
+
+export async function deleteBuild(
+  id: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const res = await fetch(apiUrl(`/builds/${encodeURIComponent(id)}`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) {
+    return { ok: false, message: extractError(data, "Erro ao remover build.") };
+  }
+  return { ok: true };
 }

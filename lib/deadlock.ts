@@ -286,12 +286,70 @@ export const PATCHES: Patch[] = [
   { id: "default", label: "Últimos 30 dias (padrão da API)" },
 ];
 
+export interface RankFilterOption {
+  id: string;
+  tier: number;
+  label: string;
+  minBadge?: number;
+  icon?: string;
+}
+
+export const RANK_FILTERS: RankFilterOption[] = [
+  { id: "all", tier: 0, label: "Todas as Patentes" },
+  { id: "1", tier: 1, label: "Iniciado+", minBadge: 11, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank01_lg.png" },
+  { id: "2", tier: 2, label: "Aspirante+", minBadge: 21, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank02_lg.png" },
+  { id: "3", tier: 3, label: "Acólito+", minBadge: 31, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank03_lg.png" },
+  { id: "4", tier: 4, label: "Sentinela+", minBadge: 41, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank04_lg.png" },
+  { id: "5", tier: 5, label: "Místico+", minBadge: 51, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank05_lg.png" },
+  { id: "6", tier: 6, label: "Ritualista+", minBadge: 61, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank06_lg.png" },
+  { id: "7", tier: 7, label: "Emissário+", minBadge: 71, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank07_lg.png" },
+  { id: "8", tier: 8, label: "Oráculo+", minBadge: 81, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank08_lg.png" },
+  { id: "9", tier: 9, label: "Fantasma+", minBadge: 91, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank09_lg.png" },
+  { id: "10", tier: 10, label: "Ascendente+", minBadge: 101, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank10_lg.png" },
+  { id: "11", tier: 11, label: "Eterno", minBadge: 111, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank11_lg.png" },
+];
+
 export async function fetchHeroesAnalytics(
   minUnixTimestamp?: number,
-  maxUnixTimestamp?: number
+  maxUnixTimestamp?: number,
+  minAverageBadge?: number,
 ): Promise<HeroAnalytics[]> {
   try {
     const url = new URL("https://api.deadlock-api.com/v1/analytics/hero-stats");
+    if (minUnixTimestamp) {
+      url.searchParams.set("min_unix_timestamp", String(minUnixTimestamp));
+    }
+    if (maxUnixTimestamp) {
+      url.searchParams.set("max_unix_timestamp", String(maxUnixTimestamp));
+    }
+    if (minAverageBadge) {
+      url.searchParams.set("min_average_badge", String(minAverageBadge));
+    }
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : Object.values(data);
+  } catch {
+    return [];
+  }
+}
+
+export interface ItemAnalytics {
+  item_id: number;
+  matches: number;
+  wins: number;
+  losses: number;
+}
+
+export async function fetchItemsAnalytics(
+  minUnixTimestamp?: number,
+  maxUnixTimestamp?: number,
+): Promise<ItemAnalytics[]> {
+  try {
+    const url = new URL("https://api.deadlock-api.com/v1/analytics/item-stats");
     if (minUnixTimestamp) {
       url.searchParams.set("min_unix_timestamp", String(minUnixTimestamp));
     }
@@ -304,7 +362,7 @@ export async function fetchHeroesAnalytics(
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data : Object.values(data);
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
@@ -804,6 +862,7 @@ export interface ItemComponent {
 }
 
 export interface ShopItem {
+  id: number;
   className: string;
   name: string;
   image: string | null;
@@ -969,6 +1028,7 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
           image,
           slot,
           tier,
+          id: Number(i.id) || 0,
           cost,
           isActive,
           isImbue,

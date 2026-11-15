@@ -208,7 +208,6 @@ const KNOWN_ROUTES: Record<string, string> = {
   "/": "a Tier List",
   "/heroes": "Heróis",
   "/items": "Itens",
-  "/guide": "o Guia",
   "/tier-maker": "o TierMaker",
 };
 

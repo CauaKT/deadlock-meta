@@ -27,6 +27,7 @@ import HeroGuide from "./HeroGuide";
 import HeroMatchups from "./HeroMatchups";
 import HeroAtmosphere from "./HeroAtmosphere";
 import HeroPatchEvolution from "./HeroPatchEvolution";
+import { getServerBuilds } from "@/lib/backend/server";
 import NavButton from "./NavButton";
 import fs from "fs";
 import path from "path";
@@ -81,6 +82,51 @@ function calculateTier(winRate: number) {
   if (winRate >= TIER_THRESHOLDS.C) return { label: "TIER C", bg: "bg-yellow-400 text-black border-yellow-300" };
   if (winRate >= TIER_THRESHOLDS.D) return { label: "TIER D", bg: "bg-orange-500 text-black border-orange-400" };
   return { label: "TIER F", bg: "bg-red-600 text-white border-red-500" };
+}
+
+async function CommunityHeroBuilds({
+  heroId,
+  heroName,
+}: {
+  heroId: number;
+  heroName: string;
+}) {
+  const builds = await getServerBuilds({ heroId });
+  return (
+    <section className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
+          Builds da Comunidade ({builds.length})
+        </h2>
+        <Link
+          href={`/builds?heroId=${heroId}`}
+          className="rounded-[4px] border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400 hover:bg-amber-500/20"
+        >
+          + Criar Build para {heroName}
+        </Link>
+      </div>
+      {builds.length === 0 ? (
+        <p className="text-xs text-neutral-500">
+          Nenhuma build publicada para {heroName} ainda.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {builds.slice(0, 6).map((b) => (
+            <Link
+              key={b.id}
+              href={`/builds/${b.id}`}
+              className="rounded-[4px] border border-neutral-800 bg-[#070908] p-3 hover:border-amber-500/60 transition-colors"
+            >
+              <p className="font-deadlock text-sm font-black text-[#f4efe6] truncate">{b.title}</p>
+              <p className="text-[11px] text-neutral-400">
+                por {b.authorHandle ? `@${b.authorHandle}` : b.author}
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default async function HeroPage({
@@ -330,6 +376,8 @@ export default async function HeroPage({
           accent={tagBg}
         />
       </section>
+
+      <CommunityHeroBuilds heroId={heroId} heroName={hero?.name || enName} />
 
       {(matchups.bestWith.length > 0 || matchups.bestAgainst.length > 0) && (
         <section className="space-y-4">

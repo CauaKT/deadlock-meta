@@ -15,7 +15,13 @@ import type { AuthUser, ProfileSummary, SavedAccount } from "@/lib/backend/types
 
 type UserStatus = "online" | "dnd" | "invisible";
 
-export default function NavUserButton() {
+export default function NavUserButton({
+  placement = "header",
+  compact = false,
+}: {
+  placement?: "header" | "sidebar";
+  compact?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -185,6 +191,25 @@ export default function NavUserButton() {
   }
 
   if (!user) {
+    if (placement === "sidebar") {
+      return (
+        <Link
+          href="/login"
+          title="Entrar"
+          className={`flex items-center justify-center gap-2 rounded-lg border border-amber-300/80 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-deadlock text-xs font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] transition-all hover:brightness-110 active:scale-95 ${
+            compact ? "h-9 w-full px-0" : "w-full px-4 py-2"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+            <polyline points="10 17 15 12 10 7" />
+            <line x1="15" y1="12" x2="3" y2="12" />
+          </svg>
+          {!compact && <span>Entrar</span>}
+        </Link>
+      );
+    }
+
     return (
       <Link
         href="/login"
@@ -199,14 +224,19 @@ export default function NavUserButton() {
   const avatarUrl = profile?.avatar_url || user.suggestedAvatarUrl;
 
   return (
-    <div ref={containerRef} className="relative select-none flex items-center">
-      <div className="relative">
+    <div
+      ref={containerRef}
+      className={`relative select-none flex items-center ${
+        placement === "sidebar" ? "w-full" : ""
+      } ${placement === "sidebar" && compact ? "justify-center" : ""}`}
+    >
+      <div className={`relative ${placement === "sidebar" && !compact ? "flex w-full items-center gap-2.5" : ""}`}>
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-label={`Menu de ${displayName}`}
           aria-expanded={open}
-          className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border transition-all cursor-pointer ${
+          className={`relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-all cursor-pointer ${
             open
               ? "border-amber-400 ring-2 ring-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.4)]"
               : "border-neutral-700 bg-neutral-900 hover:border-amber-500/80 hover:scale-105"
@@ -243,11 +273,30 @@ export default function NavUserButton() {
         {status === "invisible" && (
           <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-neutral-400 bg-[#070807]" />
         )}
+
+        {placement === "sidebar" && !compact && (
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            className="min-w-0 flex-1 text-left cursor-pointer"
+          >
+            <p className="truncate text-xs font-bold text-[#f4efe6]">{displayName}</p>
+            <p className="truncate font-mono text-[10px] text-neutral-400">
+              {profile?.handle ? `@${profile.handle}` : user.email}
+            </p>
+          </button>
+        )}
       </div>
 
       {/* Menu Suspenso Redesenhado */}
       <div
-        className={`absolute right-0 top-full mt-2 w-[270px] origin-top-right rounded-2xl border border-neutral-800/90 bg-[#0a0d0c]/98 p-2 shadow-[0_24px_50px_rgba(0,0,0,0.95)] backdrop-blur-md transition-all duration-200 z-50 ${
+        className={`absolute w-[270px] rounded-2xl border border-neutral-800/90 bg-[#0a0d0c]/98 p-2 shadow-[0_24px_50px_rgba(0,0,0,0.95)] backdrop-blur-md transition-all duration-200 z-50 ${
+          placement === "sidebar"
+            ? compact
+              ? "left-full bottom-0 ml-2 origin-bottom-left"
+              : "left-0 bottom-full mb-2 origin-bottom-left"
+            : "right-0 top-full mt-2 origin-top-right"
+        } ${
           open ? "scale-100 opacity-100 pointer-events-auto" : "scale-95 opacity-0 pointer-events-none"
         }`}
       >

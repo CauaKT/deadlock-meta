@@ -197,3 +197,30 @@ export interface PublicFriendsResponse {
   hidden: boolean;
   friends: FriendUser[];
 }
+
+export interface BuildPhases {
+  early: string[];
+  mid: string[];
+  late: string[];
+  situational: string[];
+}
+
+export interface CommunityBuildItem {
+  id: string;
+  heroId: number;
+  title: string;
+  author: string;
+  authorHandle: string | null;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  phases: BuildPhases;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export interface SaveBuildInput {
+  heroId: number;
+  title: string;
+  phases: BuildPhases;
+}
