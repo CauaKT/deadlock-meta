@@ -144,7 +144,11 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   ]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6">
+    <div
+      className={`${
+        shownProfile.steam_id.trim() ? "max-w-[1600px]" : "max-w-6xl"
+      } mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6`}
+    >
 
       <ProfileForm
         initialProfile={shownProfile}

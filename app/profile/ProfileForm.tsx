@@ -28,8 +28,23 @@ import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
 import CommunitySearchModal from "./CommunitySearchModal";
+import HeroAtmosphere from "@/app/heroes/[id]/HeroAtmosphere";
 import FavoriteHeroSelect from "./FavoriteHeroSelect";
 import PlayerDeadlockStats from "./PlayerDeadlockStats";
+
+function parseColorRgb(color: string): [number, number, number] {
+  const hex = color.trim().match(/^#([0-9a-f]{6})$/i);
+  if (hex) {
+    return [
+      parseInt(hex[1].slice(0, 2), 16),
+      parseInt(hex[1].slice(2, 4), 16),
+      parseInt(hex[1].slice(4, 6), 16),
+    ];
+  }
+  const rgb = color.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  return [245, 158, 11];
+}
 
 type SocialKey = keyof SocialLinks;
 
@@ -495,6 +510,7 @@ export default function ProfileForm({
   const suggestions = sortedCommunity.slice(0, 5);
   const hasMoreSuggestions = sortedCommunity.length > 5;
   const heroColor = profileColor ?? (selectedHero?.rgb ? `rgb(${selectedHero.rgb.join(",")})` : "#f59e0b");
+  const heroRgb = parseColorRgb(heroColor);
   const avatarImage = avatarUrl || selectedHero?.image;
   const bannerHero = heroesById.get((bannerMode === "hero" ? bannerHeroId : favoriteHeroId) ?? -1) ?? null;
   const bannerNode =
@@ -655,8 +671,151 @@ export default function ProfileForm({
         : "border-transparent text-neutral-400 hover:text-white"
     }`;
 
+  const hasTrackerStats = Boolean(steamId.trim());
+
+  const accountSidebar = !readOnly ? (
+    <>
+      {hasTrackerStats && (
+        selectedHero ? (
+          <section
+            className="rounded-2xl border bg-[#0a0d0c]/95 p-4 space-y-3"
+            style={{ borderColor: `color-mix(in srgb, ${heroColor} 24%, #262626)` }}
+          >
+            <div className="flex items-center gap-3">
+              <img
+                src={selectedHero.image}
+                alt={selectedHero.name}
+                className="h-14 w-14 shrink-0 rounded-xl border border-neutral-800 object-cover"
+              />
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: heroColor }}>
+                  Herói Assinatura
+                </span>
+                <h3 className="truncate font-deadlock text-lg font-black text-[#f4efe6]">
+                  {selectedHero.name}
+                </h3>
+              </div>
+            </div>
+            <Link
+              href={`/heroes/${selectedHero.id}`}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border bg-neutral-900 px-3 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6] transition-opacity hover:opacity-90"
+              style={{ borderColor: `color-mix(in srgb, ${heroColor} 35%, #333333)` }}
+            >
+              <span>Ver Habilidades & Builds</span>
+              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 12 12 4M6 4h6v6" />
+              </svg>
+            </Link>
+          </section>
+        ) : (
+          <section
+            className="rounded-2xl border border-dashed bg-neutral-900/30 p-4 text-center space-y-2.5"
+            style={{ borderColor: `color-mix(in srgb, ${heroColor} 35%, #262626)` }}
+          >
+            <p className="font-deadlock text-sm font-black text-neutral-300">
+              Sem Herói Assinatura
+            </p>
+            <p className="text-[11px] text-neutral-500">
+              Defina um herói favorito para personalizar capa e tema.
+            </p>
+            <button
+              type="button"
+              onClick={() => startEdit()}
+              className="w-full cursor-pointer rounded-lg border px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-transform hover:scale-[1.02]"
+              style={{ backgroundColor: heroColor, borderColor: heroColor }}
+            >
+              Definir Herói Agora
+            </button>
+          </section>
+        )
+      )}
+
+      <section
+        className="space-y-3 rounded-2xl border bg-[#0a0d0c]/95 p-5"
+        style={{ borderColor: `color-mix(in srgb, ${heroColor} 22%, #262626)` }}
+      >
+        <h3
+          className="border-l-2 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]"
+          style={{ borderColor: heroColor }}
+        >
+          Atividade
+        </h3>
+        <dl className="space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <dt className="text-neutral-400">Tier lists salvas</dt>
+            <dd className="font-deadlock text-base font-black" style={{ color: heroColor }}>
+              {savedTierLists.length}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-neutral-400">Heróis classificados</dt>
+            <dd className="font-deadlock text-base font-black" style={{ color: heroColor }}>
+              {savedTierLists.reduce(
+                (acc, tl) => acc + tl.tiers.reduce((sum, t) => sum + (t.heroes?.length || 0), 0),
+                0
+              )}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-[11px] text-neutral-500">
+          Tier lists sincronizadas com a conta.
+        </p>
+      </section>
+
+      <section
+        className="space-y-3 rounded-2xl border bg-[#0a0d0c]/95 p-5"
+        style={{ borderColor: `color-mix(in srgb, ${heroColor} 22%, #262626)` }}
+      >
+        <h3
+          className="border-l-2 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]"
+          style={{ borderColor: heroColor }}
+        >
+          Sugestões de Amigos
+        </h3>
+        {suggestions.length > 0 ? (
+          <>
+            <ul className="space-y-3">
+              {suggestions.map((p) => (
+                <CommunityRow
+                  key={p.id}
+                  p={p}
+                  relation={relationOf(p.user_id)}
+                  busy={friendBusy}
+                  onSend={(uid) => void handleSendFriendRequest(uid)}
+                  onAccept={(fid) => void handleAcceptFriend(fid)}
+                  onRemove={(fid) => void handleRemoveFriend(fid)}
+                />
+              ))}
+            </ul>
+            {hasMoreSuggestions && (
+              <button
+                type="button"
+                onClick={() => setCommunityModalOpen(true)}
+                className="mt-2 w-full cursor-pointer rounded-lg border bg-neutral-900/70 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider transition-opacity hover:opacity-90"
+                style={{
+                  borderColor: `color-mix(in srgb, ${heroColor} 32%, #262626)`,
+                  color: heroColor,
+                }}
+              >
+                Ver mais sugestões
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="text-[11px] text-neutral-500">Ainda não há outras contas cadastradas.</p>
+        )}
+      </section>
+
+      <CommunitySearchModal
+        open={communityModalOpen}
+        onCloseAction={() => setCommunityModalOpen(false)}
+      />
+    </>
+  ) : null;
+
   return (
-    <div className={editing ? "space-y-0" : "space-y-6"}>
+    <div className={`relative ${editing ? "space-y-0" : "space-y-6"}`}>
+      <HeroAtmosphere rgb={heroRgb} />
       {/* ========================================================================= */}
       {/* 1. HEADER CINEMÁTICO GAMER (IDÊNTICO À REFERÊNCIA)                       */}
       {/* ========================================================================= */}
@@ -666,9 +825,17 @@ export default function ProfileForm({
             ? "rounded-none border-b-0 shadow-none"
             : "rounded-b-3xl shadow-[0_25px_60px_rgba(0,0,0,0.95)]"
         }`}
+        style={
+          !editing
+            ? {
+                borderColor: `color-mix(in srgb, ${heroColor} 32%, #262626)`,
+                boxShadow: `0 25px 60px rgba(0,0,0,0.95), 0 0 36px color-mix(in srgb, ${heroColor} 14%, transparent)`,
+              }
+            : undefined
+        }
       >
         {/* Banner Panorâmico */}
-        <div className="relative aspect-[4/1] min-h-40 w-full overflow-hidden bg-neutral-900">
+        <div className="relative h-40 sm:h-48 lg:h-52 w-full overflow-hidden bg-neutral-900">
 {bannerNode ? (
             bannerNode
           ) : selectedHero?.banner ? (
@@ -978,6 +1145,7 @@ export default function ProfileForm({
             type="button"
             onClick={() => setActiveTab("overview")}
             className={tabClass("overview")}
+            style={activeTab === "overview" ? { borderColor: heroColor } : undefined}
           >
             <span>Visão Geral</span>
           </button>
@@ -986,6 +1154,7 @@ export default function ProfileForm({
             type="button"
             onClick={() => setActiveTab("tierlists")}
             className={tabClass("tierlists")}
+            style={activeTab === "tierlists" ? { borderColor: heroColor } : undefined}
           >
             <span>{readOnly ? "Tier Lists" : "Minhas Tier Lists"}</span>
             <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
@@ -997,6 +1166,7 @@ export default function ProfileForm({
             type="button"
             onClick={() => setActiveTab("friends")}
             className={tabClass("friends")}
+            style={activeTab === "friends" ? { borderColor: heroColor } : undefined}
           >
             <span>Amigos</span>
             {!shownFriends.hidden && (
@@ -1005,7 +1175,10 @@ export default function ProfileForm({
               </span>
             )}
             {!readOnly && friendsOverview.incoming.length > 0 && (
-              <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-black text-black">
+              <span
+                className="rounded-full px-1.5 py-0.2 text-[10px] font-black text-black"
+                style={{ backgroundColor: heroColor }}
+              >
                 +{friendsOverview.incoming.length}
               </span>
             )}
@@ -1019,7 +1192,15 @@ export default function ProfileForm({
 
       {/* ABA 1: VISÃO GERAL */}
       {activeTab === "overview" && (
-        <div className={`grid grid-cols-1 gap-6 ${readOnly ? "" : "lg:grid-cols-[minmax(0,1fr)_320px]"}`}>
+        hasTrackerStats ? (
+          <PlayerDeadlockStats
+            steamId={steamId}
+            heroes={heroes}
+            heroColor={heroColor}
+            accountSidebar={accountSidebar}
+          />
+        ) : (
+          <div className={`grid grid-cols-1 gap-6 ${readOnly ? "" : "lg:grid-cols-[minmax(0,1fr)_320px]"}`}>
         <div className="space-y-6">
           {/* Card Destaque do Herói Favorito */}
           {selectedHero ? (
@@ -1074,73 +1255,10 @@ export default function ProfileForm({
             </div>
           ) : null}
 
-          <PlayerDeadlockStats steamId={steamId} heroes={heroes} heroColor={heroColor} />
+          </div>
+        {!readOnly && <aside className="space-y-4">{accountSidebar}</aside>}
         </div>
-        <aside className={`space-y-4 ${readOnly ? "hidden" : ""}`}>
-          <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
-            <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
-              Atividade
-            </h3>
-            <dl className="space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-400">Tier lists salvas</dt>
-                <dd className="font-deadlock text-base font-black text-amber-400">{savedTierLists.length}</dd>
-              </div>
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-400">Heróis classificados</dt>
-                <dd className="font-deadlock text-base font-black text-amber-400">
-                  {savedTierLists.reduce(
-                    (acc, tl) => acc + tl.tiers.reduce((sum, t) => sum + (t.heroes?.length || 0), 0),
-                    0
-                  )}
-                </dd>
-              </div>
-            </dl>
-            <p className="text-[11px] text-neutral-500">
-              Tier lists sincronizadas com a conta.
-            </p>
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5">
-            <h3 className="border-l-2 border-amber-500 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
-              Sugestões de Amigos
-            </h3>
-            {suggestions.length > 0 ? (
-              <>
-                <ul className="space-y-3">
-                  {suggestions.map((p) => (
-                    <CommunityRow
-                      key={p.id}
-                      p={p}
-                      relation={relationOf(p.user_id)}
-                      busy={friendBusy}
-                      onSend={(uid) => void handleSendFriendRequest(uid)}
-                      onAccept={(fid) => void handleAcceptFriend(fid)}
-                      onRemove={(fid) => void handleRemoveFriend(fid)}
-                    />
-                  ))}
-                </ul>
-                {hasMoreSuggestions && (
-                  <button
-                    type="button"
-                    onClick={() => setCommunityModalOpen(true)}
-                    className="mt-2 w-full cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900/70 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400 transition-colors hover:border-amber-500/60 hover:bg-neutral-900"
-                  >
-                    Ver mais sugestões
-                  </button>
-                )}
-              </>
-            ) : (
-              <p className="text-[11px] text-neutral-500">Ainda não há outras contas cadastradas.</p>
-            )}
-          </section>
-
-          <CommunitySearchModal
-            open={communityModalOpen}
-            onCloseAction={() => setCommunityModalOpen(false)}
-          />
-        </aside>
-        </div>
+        )
       )}
 
       {/* ABA 2: MINHAS TIER LISTS */}

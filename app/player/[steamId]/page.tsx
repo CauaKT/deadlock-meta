@@ -84,23 +84,31 @@ export default async function PublicPlayerPage({
         h.in_development !== true &&
         !h.name.startsWith("hero_"),
     )
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image:
-        h.images?.icon_image_small ||
-        h.images?.minimap_image ||
-        h.images?.icon_hero_card ||
-        "",
-      rgb: extractColor(h, wikiColors) ?? undefined,
-    }));
+    .map((h) => {
+      const file = h.name.trim().replace(/ /g, "_");
+      return {
+        id: h.id,
+        name: h.name,
+        image:
+          h.images?.icon_hero_card ||
+          h.images?.icon_image_small ||
+          h.images?.minimap_image ||
+          "",
+        banner:
+          h.images?.background_image_webp ||
+          h.images?.background_image ||
+          "",
+        art: `https://cdn.deadlock.wiki/thumb/${file}_Render.png/400px-${file}_Render.png`,
+        rgb: extractColor(h, wikiColors) ?? undefined,
+      };
+    });
 
   const displayName = steam?.personaname || `Jogador #${accountId}`;
   const avatar = steam?.avatarfull || steam?.avatar || null;
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-10 space-y-6">
-      <header className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+    <div className="max-w-[1600px] mx-auto px-4 py-5 md:px-8 md:py-6 space-y-5">
+      <header className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-4 min-w-0">
           {avatar ? (
             <img
