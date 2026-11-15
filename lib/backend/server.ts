@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import type {
   AuthUser,
   CommunityProfileItem,
+  FeedResponse,
+  FriendsOverview,
   FullProfile,
+  PublicFriendsResponse,
   PublicProfile,
   SocialLinks,
   TierListItem,
@@ -109,6 +112,7 @@ interface ApiOwnProfileResponse {
     bannerNsfw?: boolean;
     profileColor: string | null;
     socialLinks?: SocialLinks | null;
+    friendsPublic?: boolean;
   } | null;
 }
 
@@ -140,6 +144,7 @@ export async function getOwnFullProfile(
       banner_nsfw: Boolean(p.bannerNsfw),
       profile_color: p.profileColor,
       social_links: p.socialLinks ?? null,
+      friends_public: p.friendsPublic ?? true,
     };
   } catch {
     return null;
@@ -148,10 +153,12 @@ export async function getOwnFullProfile(
 
 interface ApiCommunityItem {
   id: string;
+  userId?: string;
   username: string | null;
   handle: string | null;
   avatarUrl: string | null;
   favoriteHeroId: number | null;
+  mutualFriendsCount?: number;
 }
 
 export async function getCommunityProfiles(
@@ -168,10 +175,12 @@ export async function getCommunityProfiles(
     const rows = (await res.json()) as ApiCommunityItem[];
     return rows.map((r) => ({
       id: r.id,
+      user_id: r.userId,
       username: r.username,
       handle: r.handle,
       avatar_url: r.avatarUrl,
       favorite_hero_id: r.favoriteHeroId,
+      mutual_friends_count: r.mutualFriendsCount ?? 0,
     }));
   } catch {
     return [];
@@ -180,6 +189,7 @@ export async function getCommunityProfiles(
 
 interface ApiPublicProfileResponse {
   id: string;
+  userId?: string;
   username: string | null;
   handle: string | null;
   avatarUrl: string | null;
@@ -190,6 +200,7 @@ interface ApiPublicProfileResponse {
   bannerNsfw?: boolean;
   profileColor: string | null;
   socialLinks?: SocialLinks | null;
+  friendsPublic?: boolean;
   createdAt?: string | null;
 }
 
@@ -212,6 +223,7 @@ export async function getPublicProfileResult(
       apiUnavailable: false,
       profile: {
         id: p.id,
+        user_id: p.userId,
         username: p.username,
         handle: p.handle,
         avatar_url: p.avatarUrl,
@@ -222,6 +234,7 @@ export async function getPublicProfileResult(
         banner_nsfw: Boolean(p.bannerNsfw),
         profile_color: p.profileColor,
         social_links: p.socialLinks ?? null,
+        friends_public: p.friendsPublic ?? true,
         createdAt: p.createdAt ?? null,
       },
     };
@@ -271,5 +284,53 @@ export async function getPublicTierListById(
     return (await res.json()) as TierListItem;
   } catch {
     return null;
+  }
+}
+
+export async function getServerFeedPosts(
+  page = 1,
+  limit = 20,
+): Promise<FeedResponse> {
+  try {
+    const headers = await getCookieHeader();
+    const res = await fetch(apiUrl(`/feed?page=${page}&limit=${limit}`), {
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) return { items: [], page, hasMore: false };
+    return (await res.json()) as FeedResponse;
+  } catch {
+    return { items: [], page, hasMore: false };
+  }
+}
+
+export async function getServerFriendsOverview(): Promise<FriendsOverview> {
+  const headers = await getCookieHeader();
+  if (!headers.Cookie) return { friends: [], incoming: [], outgoing: [] };
+  try {
+    const res = await fetch(apiUrl("/friends/me"), {
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) return { friends: [], incoming: [], outgoing: [] };
+    return (await res.json()) as FriendsOverview;
+  } catch {
+    return { friends: [], incoming: [], outgoing: [] };
+  }
+}
+
+export async function getServerFriendsByHandle(
+  handle: string,
+): Promise<PublicFriendsResponse> {
+  try {
+    const headers = await getCookieHeader();
+    const res = await fetch(apiUrl(`/friends/by-handle/${encodeURIComponent(handle)}`), {
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) return { friendsPublic: true, hidden: false, friends: [] };
+    return (await res.json()) as PublicFriendsResponse;
+  } catch {
+    return { friendsPublic: true, hidden: false, friends: [] };
   }
 }

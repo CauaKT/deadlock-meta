@@ -16,7 +16,7 @@ export default function GuidePage() {
           Deadlock <span className="text-amber-500">Guia & Transição</span>
         </h1>
         <p className="text-neutral-400 text-xs md:text-sm max-w-2xl font-medium tracking-wide mt-2">
-          Domine os fundamentos da Cidade Amaldiçoada: rotação pelas rotas, mecânica de almas e paralelos diretos com os conceitos de League of Legends e Dota 2.
+          Progressão completa desde o início da partida (Básico, Intermediário e Avançado) e paralelos diretos com League of Legends e Dota 2.
         </p>
       </header>
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiWakeOverlay } from "@/app/ApiWakeScreen";
-import ColdStartNotice from "@/app/ColdStartNotice";
+import ApiWarmup from "@/app/ApiWarmup";
 import {
   getCurrentClientUser,
   resendVerificationEmail,
@@ -337,7 +337,7 @@ export default function RegisterPage() {
           </form>
         )}
 
-        <ColdStartNotice active={loading} warmup />
+        <ApiWarmup />
         <ApiWakeOverlay
           open={googleWaking}
           stage={googleStage}

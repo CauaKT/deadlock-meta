@@ -6,6 +6,8 @@ import {
   getOwnFullProfile,
   getPublicProfileResult,
   getServerAuthState,
+  getServerFriendsByHandle,
+  getServerFriendsOverview,
   getServerTierLists,
 } from "@/lib/backend/server";
 import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
@@ -28,6 +30,9 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   if (!user) {
     redirect("/login");
   }
+
+  // Sem @handle o onboarding em /welcome é obrigatório (mesma regra do NavUserButton, agora também no servidor)
+  if (!user.profile?.handle) redirect("/welcome");
 
   const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     getOwnFullProfile(user.id),
@@ -82,6 +87,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
 
   const initialProfile = {
     id: user.id,
+    user_id: user.id,
     username: profile?.username || user.suggestedUsername || "",
     bio: profile?.bio ?? "",
     handle: ownHandle ?? "",
@@ -93,6 +99,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     banner_nsfw: profile?.banner_nsfw ?? false,
     profile_color: profile?.profile_color ?? null,
     social_links: profile?.social_links ?? null,
+    friends_public: profile?.friends_public ?? true,
     createdAt: createdAtDate,
   };
 
@@ -103,6 +110,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     if (!other) notFound();
     shownProfile = {
       id: other.id,
+      user_id: other.user_id ?? "",
       username: other.username ?? "",
       bio: other.bio ?? "",
       handle: other.handle ?? "",
@@ -114,19 +122,26 @@ export default async function ProfileView({ handle }: { handle?: string }) {
       banner_nsfw: other.banner_nsfw ?? false,
       profile_color: other.profile_color ?? null,
       social_links: other.social_links ?? null,
+      friends_public: other.friends_public ?? true,
       createdAt: other.createdAt
         ? new Date(other.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
         : "Recentemente",
     };
   }
 
-  const tierLists = await getServerTierLists(
+  const [tierLists, myFriendsOverview, shownFriends] = await Promise.all([
+    getServerTierLists(
+      shownProfile.handle
+        ? { handle: shownProfile.handle }
+        : isOwner
+          ? { userId: user.id }
+          : undefined,
+    ),
+    getServerFriendsOverview(),
     shownProfile.handle
-      ? { handle: shownProfile.handle }
-      : isOwner
-        ? { userId: user.id }
-        : undefined,
-  );
+      ? getServerFriendsByHandle(shownProfile.handle)
+      : Promise.resolve({ friendsPublic: true, hidden: false, friends: [] }),
+  ]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 pb-4 md:px-8 md:pb-8 space-y-6">
@@ -139,6 +154,8 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         emailVerified={user.emailVerified}
         community={community}
         initialTierLists={tierLists}
+        initialFriendsOverview={myFriendsOverview}
+        initialShownFriends={shownFriends}
       />
     </div>
   );

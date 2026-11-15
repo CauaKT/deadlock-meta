@@ -1,5 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "./ItemTooltip";
@@ -62,6 +63,47 @@ const SLOT_ORDER: ItemSlot[] = ["weapon", "vitality", "spirit"];
 
 const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+const SEARCH_ALIASES: Record<string, string[]> = {
+  escudo: ["escudo", "barreira", "protecao", "shield", "barrier"],
+  barreira: ["barreira", "escudo", "barrier", "shield"],
+  lifesteal: ["lifesteal", "roubo de vida"],
+  stamina: ["stamina", "vigor"],
+  silencio: ["silencio", "silenciar", "silence"],
+  cura: ["cura", "curar", "heal", "healing", "regeneracao"],
+};
+
+const EFFECT_FILTERS = [
+  { key: "cura", label: "Cura" },
+  { key: "escudo", label: "Escudo" },
+  { key: "stamina", label: "Stamina" },
+  { key: "lifesteal", label: "Lifesteal" },
+  { key: "silencio", label: "Silêncio" },
+] as const;
+
+function itemSearchHaystack(item: ShopItem): string {
+  if (item.searchText) return item.searchText;
+  const secText = item.sections
+    .map((s) => `${s.html} ${s.stats.map((st) => st.label).join(" ")}`)
+    .join(" ");
+  return normalize(`${item.name} ${item.sortName} ${item.descriptionHtml} ${secText}`);
+}
+
+function matchesSearch(item: ShopItem, q: string): boolean {
+  if (!q) return true;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const text = itemSearchHaystack(item);
+  return tokens.every((t) => {
+    const aliases = SEARCH_ALIASES[t];
+    return aliases ? aliases.some((a) => text.includes(a)) : text.includes(t);
+  });
+}
+
+function matchesEffects(item: ShopItem, effects: string[]): boolean {
+  if (effects.length === 0) return true;
+  return effects.every((eff) => matchesSearch(item, eff));
+}
+
 // O jogo mostra um custo por tier; usamos o custo mais comum entre os itens do tier
 function tierCost(items: ShopItem[]) {
   const count = new Map<number, number>();
@@ -91,14 +133,14 @@ const chipClass = (active: boolean) =>
 
 function Tile({ item, vendor, tierIndex, last, dim, onTip }: { item: ShopItem; vendor: Vendor; tierIndex: number; last: boolean; dim: boolean; onTip: (item: ShopItem | null, el?: HTMLElement) => void }) {
   return (
-    <div
-      tabIndex={0}
+    <Link
+      href={`/items/${encodeURIComponent(item.className)}`}
       aria-label={item.name}
       onMouseEnter={(e) => onTip(item, e.currentTarget)}
       onMouseLeave={() => onTip(null)}
       onFocus={(e) => onTip(item, e.currentTarget)}
       onBlur={() => onTip(null)}
-      className={`overflow-hidden rounded-[3px] shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-opacity ${dim ? "opacity-20" : ""}`}
+      className={`block overflow-hidden rounded-[3px] shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-opacity hover:ring-1 hover:ring-amber-400/80 ${dim ? "opacity-20" : ""}`}
       style={{ background: last ? "rgba(0,0,0,0.55)" : "#e2d2b9" }}
     >
       <div
@@ -130,7 +172,7 @@ function Tile({ item, vendor, tierIndex, last, dim, onTip }: { item: ShopItem; v
       >
         {item.name}
       </p>
-    </div>
+    </Link>
   );
 }
 
@@ -140,6 +182,7 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
   const [sort, setSort] = useState<SortKey>("game");
   const [filterOpen, setFilterOpen] = useState(false);
   const [onlyActive, setOnlyActive] = useState(false);
+  const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const [tip, setTip] = useState<{ item: ShopItem; x: number; y: number } | null>(null);
   useEffect(() => {
     if (!tip) return;
@@ -162,7 +205,8 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
   };
   const allTiers = useMemo(() => Array.from(new Set(items.map((i) => i.tier))).sort((a, b) => a - b), [items]);
   const [shownTiers, setShownTiers] = useState<number[]>(() => allTiers.filter((t) => t <= EXPERT_TIER));
-  const activeFilters = allTiers.length - shownTiers.length + (onlyActive ? 1 : 0);
+  const activeFilters =
+    allTiers.length - shownTiers.length + (onlyActive ? 1 : 0) + selectedEffects.length;
 
   const boards = useMemo(() => {
     const q = normalize(query.trim());
@@ -170,16 +214,22 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
     return [key]
       .map((s) => {
         const own = items
-          .filter((i) => (s === "all" || i.slot === s) && shownTiers.includes(i.tier) && (!onlyActive || i.isActive))
+          .filter(
+            (i) =>
+              (s === "all" || i.slot === s) &&
+              shownTiers.includes(i.tier) &&
+              (!onlyActive || i.isActive) &&
+              matchesEffects(i, selectedEffects),
+          )
           .sort((SORTS.find((o) => o.key === sort) ?? SORTS[0]).fn);
         const tiers = Array.from(new Set(own.map((i) => i.tier)))
           .sort((a, b) => a - b)
           .map((t) => ({ tier: t, items: own.filter((i) => i.tier === t) }));
-        const hits = own.filter((i) => normalize(i.name).includes(q)).length;
+        const hits = own.filter((i) => matchesSearch(i, q)).length;
         return { key: s, tiers, hits };
       })
       .filter((b) => b.hits > 0);
-  }, [items, slot, query, sort, onlyActive, shownTiers]);
+  }, [items, slot, query, sort, onlyActive, shownTiers, selectedEffects]);
 
   const q = normalize(query.trim());
 
@@ -190,8 +240,8 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar item pelo nome"
-          className="w-full max-w-sm rounded-[3px] border border-neutral-800 bg-black/50 px-4 py-2.5 text-sm text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
+          placeholder="Buscar por nome, atributo ou efeito (ex: cura, escudo, stamina)"
+          className="w-full max-w-md rounded-[3px] border border-neutral-800 bg-black/50 px-4 py-2.5 text-sm text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
         />
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setSlot(null)} className={chipClass(slot === null)}>
@@ -253,6 +303,29 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
             >
               Somente ativos
             </button>
+            <div className="flex w-full flex-wrap items-center gap-2 border-t border-neutral-800/80 pt-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                Efeitos
+              </span>
+              {EFFECT_FILTERS.map((ef) => {
+                const on = selectedEffects.includes(ef.key);
+                return (
+                  <button
+                    key={ef.key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setSelectedEffects((cur) =>
+                        on ? cur.filter((x) => x !== ef.key) : [...cur, ef.key],
+                      )
+                    }
+                    className={chipClass(on)}
+                  >
+                    {ef.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -316,7 +389,7 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
                           tierIndex={g.tier - 1}
                           last={last}
                           onTip={showTip}
-                          dim={q !== "" && !normalize(item.name).includes(q)}
+                          dim={q !== "" && !matchesSearch(item, q)}
                         />
                       ))}
                     </div>

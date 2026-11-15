@@ -1,10 +1,20 @@
+"use client";
 /* eslint-disable @next/next/no-img-element */
-import type { ReactNode } from "react";
-import { PATCHES, type HeroBuild, type PopularItem } from "@/lib/deadlock";
+import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { PATCHES, type HeroBuild, type ItemSlot, type PopularItem, type ShopItem } from "@/lib/deadlock";
+import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
 import SlantFrame from "./SlantFrame";
 
 const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
 const MAX_COMPLEXITY = 4;
+
+const SLOT_ACCENTS: Record<ItemSlot, string> = {
+  weapon: "#e2a23f",
+  vitality: "#8fc43a",
+  spirit: "#c79af0",
+};
 
 // Tradução minha dos valores de hero_type da API
 const HERO_TYPE_LABELS: Record<string, string> = {
@@ -30,9 +40,16 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ItemRow({ item }: { item: PopularItem }) {
-  return (
-    <div className={`flex items-center gap-3 px-3 py-2 ${PLATE}`}>
+function ItemRow({
+  item,
+  onTip,
+}: {
+  item: PopularItem;
+  onTip: (shopItem: ShopItem | null, el?: HTMLElement) => void;
+}) {
+  const shop = item.shopItem;
+  const content = (
+    <>
       {item.image ? (
         <img src={item.image} alt="" className="h-9 w-9 shrink-0 object-contain" />
       ) : (
@@ -40,7 +57,24 @@ function ItemRow({ item }: { item: PopularItem }) {
       )}
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4efe6]">{item.name}</span>
       <span className="font-deadlock text-sm font-black text-[#f4efe6]">{Math.round(item.pickPct)}%</span>
-    </div>
+    </>
+  );
+
+  if (!shop) {
+    return <div className={`flex items-center gap-3 px-3 py-2 ${PLATE}`}>{content}</div>;
+  }
+
+  return (
+    <Link
+      href={`/items/${encodeURIComponent(item.className)}`}
+      onMouseEnter={(e) => onTip(shop, e.currentTarget)}
+      onMouseLeave={() => onTip(null)}
+      onFocus={(e) => onTip(shop, e.currentTarget)}
+      onBlur={() => onTip(null)}
+      className={`flex cursor-pointer items-center gap-3 px-3 py-2 ${PLATE} transition-colors hover:border-white/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40`}
+    >
+      {content}
+    </Link>
   );
 }
 
@@ -66,8 +100,37 @@ export default function HeroGuide({
     : undefined;
   const titleColor = `color-mix(in srgb, ${accent} 55%, #ffffff)`;
 
+  const [tip, setTip] = useState<{ item: ShopItem; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener("scroll", hide, { passive: true });
+    return () => window.removeEventListener("scroll", hide);
+  }, [tip]);
+
+  const showTip = (item: ShopItem | null, el?: HTMLElement) => {
+    if (!item || !el) {
+      setTip(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const fitsRight = r.right + 8 + TIP_WIDTH <= window.innerWidth;
+    setTip({
+      item,
+      x: fitsRight ? r.right + 8 : Math.max(8, r.left - 8 - TIP_WIDTH),
+      y: Math.max(8, Math.min(r.top, window.innerHeight - 420)),
+    });
+  };
+
   return (
-    <SlantFrame
+    <>
+      {tip &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <ItemTooltip item={tip.item} accent={SLOT_ACCENTS[tip.item.slot]} x={tip.x} y={tip.y} />,
+          document.body,
+        )}
+      <SlantFrame
       shape="narrowTop"
       border={`color-mix(in srgb, ${accent} 45%, #1b2621)`}
       background={`linear-gradient(135deg, color-mix(in srgb, ${accent} 30%, #0e1512), #0e1512 75%)`}
@@ -109,7 +172,7 @@ export default function HeroGuide({
                   {minutes && <span className="text-xs">({minutes})</span>}
                 </div>
                 {build[key].map((item) => (
-                  <ItemRow key={item.className} item={item} />
+                  <ItemRow key={item.className} item={item} onTip={showTip} />
                 ))}
               </div>
             ))}
@@ -124,6 +187,7 @@ export default function HeroGuide({
       ) : (
         <p className="text-sm font-semibold text-[#d6c9b4]/80">Ainda não há dados de itens para este herói.</p>
       )}
-    </SlantFrame>
+      </SlantFrame>
+    </>
   );
 }

@@ -9,6 +9,9 @@ import {
   fetchHeroWeapon,
   fetchHeroBuild,
   fetchHeroPatchHistory,
+  fetchHeroSynergyStats,
+  fetchHeroCounterStats,
+  buildHeroMatchups,
   extractColor,
   extractHeroTheme,
   ensureVibrantTextColor,
@@ -21,6 +24,7 @@ import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
+import HeroMatchups from "./HeroMatchups";
 import HeroAtmosphere from "./HeroAtmosphere";
 import HeroPatchEvolution from "./HeroPatchEvolution";
 import NavButton from "./NavButton";
@@ -96,13 +100,16 @@ export default async function HeroPage({
   const patchUntil =
     selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
 
-  const [heroDetails, heroesMap, stats, wikiColors] = await Promise.all([
+  const [heroDetails, heroesMap, stats, wikiColors, synergyStats, counterStats] = await Promise.all([
     fetchHeroDetails(heroId),
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil),
     fetchWikiColors(),
+    fetchHeroSynergyStats(selectedPatch.since, patchUntil),
+    fetchHeroCounterStats(selectedPatch.since, patchUntil),
     new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
+  const matchups = buildHeroMatchups(heroId, heroesMap, synergyStats, counterStats);
 
   const hero = heroDetails || heroesMap[heroId];
   const stat = stats.find((s) => s.hero_id === heroId);
@@ -323,6 +330,15 @@ export default async function HeroPage({
           accent={tagBg}
         />
       </section>
+
+      {(matchups.bestWith.length > 0 || matchups.bestAgainst.length > 0) && (
+        <section className="space-y-4">
+          <h2 className="text-xl md:text-2xl font-black text-[#f4efe6]">
+            Melhores & Piores Matchups
+          </h2>
+          <HeroMatchups heroName={enName} matchups={matchups} accent={tagBg} />
+        </section>
+      )}
 
       {/* Histórico de Patches & Mudança do Win Rate */}
       {patchHistory.length > 1 && (

@@ -8,14 +8,16 @@ import {
   getAdminOverview,
   getAdminUsers,
   getCommunityTierLists,
-  resetAdminUserPassword,
-  updateAdminUserRole,
 } from "@/lib/backend/client";
 import type {
   AdminOverview,
   AdminUserItem,
   TierListItem,
 } from "@/lib/backend/types";
+
+// O e-mail já chega mascarado da API; o nick ajuda a distinguir contas parecidas
+const accountLabel = (u: AdminUserItem) =>
+  u.profile?.username ? `${u.profile.username} (${u.email})` : u.email;
 
 export default function AdminClient({ currentUserId }: { currentUserId: string }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
@@ -26,9 +28,6 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
   const [tierLists, setTierLists] = useState<TierListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [resetTarget, setResetTarget] = useState<AdminUserItem | null>(null);
-  const [newPassword, setNewPassword] = useState("");
-  const [resetSaving, setResetSaving] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   const loadData = async (nextPage = page, nextSearch = search) => {
@@ -58,64 +57,8 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
     void loadData(1, search);
   };
 
-  const handleRoleToggle = async (u: AdminUserItem) => {
-    const nextRole = u.role === "ADMIN" ? "USER" : "ADMIN";
-    setFeedback(null);
-    const res = await updateAdminUserRole(u.id, nextRole);
-    if (!res.ok) {
-      setFeedback({ type: "error", text: res.message });
-      return;
-    }
-    setFeedback({
-      type: "success",
-      text: `Permissão de ${u.email} alterada para ${nextRole}.`,
-    });
-    void loadData(page, search);
-  };
-
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetTarget) return;
-    if (newPassword.length < 8) {
-      setFeedback({ type: "error", text: "A nova senha deve ter pelo menos 8 caracteres." });
-      return;
-    }
-    setResetSaving(true);
-    setFeedback(null);
-    const res = await resetAdminUserPassword(resetTarget.id, { newPassword });
-    setResetSaving(false);
-    if (!res.ok) {
-      setFeedback({ type: "error", text: res.message });
-      return;
-    }
-    setFeedback({
-      type: "success",
-      text: `Senha de ${resetTarget.email} redefinida. Sessões anteriores foram encerradas.`,
-    });
-    setResetTarget(null);
-    setNewPassword("");
-  };
-
-  const handleLetUserChoose = async () => {
-    if (!resetTarget) return;
-    setResetSaving(true);
-    setFeedback(null);
-    const res = await resetAdminUserPassword(resetTarget.id, { letUserChoose: true });
-    setResetSaving(false);
-    if (!res.ok) {
-      setFeedback({ type: "error", text: res.message });
-      return;
-    }
-    setFeedback({
-      type: "success",
-      text: `${resetTarget.email} terá que definir uma nova senha no próximo acesso.`,
-    });
-    setResetTarget(null);
-    setNewPassword("");
-  };
-
   const handleDeleteUser = async (u: AdminUserItem) => {
-    if (!window.confirm(`Tem certeza que deseja apagar permanentemente a conta ${u.email}?`)) {
+    if (!window.confirm(`Tem certeza que deseja apagar permanentemente a conta ${accountLabel(u)}?`)) {
       return;
     }
     setDeletingUserId(u.id);
@@ -126,7 +69,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
       setFeedback({ type: "error", text: res.message });
       return;
     }
-    setFeedback({ type: "success", text: `Conta ${u.email} apagada permanentemente.` });
+    setFeedback({ type: "success", text: `Conta ${accountLabel(u)} apagada permanentemente.` });
     void loadData(page, search);
   };
 
@@ -151,7 +94,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
             Painel <span className="text-amber-500">Admin</span>
           </h1>
           <p className="mt-1 text-xs text-neutral-400">
-            Visão geral de saúde, permissões de contas e moderação de tier lists.
+            Visão geral de saúde, contas e moderação de tier lists.
           </p>
         </div>
         <button
@@ -259,34 +202,14 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
                     </td>
                     <td className="py-3 pr-4 font-deadlock font-black text-neutral-200">{u.role}</td>
                     <td className="py-3 text-right">
-                      <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          disabled={u.id === currentUserId}
-                          onClick={() => void handleRoleToggle(u)}
-                          className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1 text-[11px] font-bold text-neutral-200 hover:border-amber-500 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {u.role === "ADMIN" ? "Rebaixar para USER" : "Promover a ADMIN"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetTarget(u);
-                            setNewPassword("");
-                          }}
-                          className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1 text-[11px] font-bold text-neutral-200 hover:border-cyan-500 hover:text-cyan-300"
-                        >
-                          Redefinir senha
-                        </button>
-                        <button
-                          type="button"
-                          disabled={u.id === currentUserId || deletingUserId === u.id}
-                          onClick={() => void handleDeleteUser(u)}
-                          className="cursor-pointer rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {deletingUserId === u.id ? "Apagando..." : "Apagar"}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        disabled={u.id === currentUserId || deletingUserId === u.id}
+                        onClick={() => void handleDeleteUser(u)}
+                        className="cursor-pointer rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {deletingUserId === u.id ? "Apagando..." : "Apagar"}
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -362,70 +285,6 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
           ))}
         </div>
       </section>
-
-      {resetTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => !resetSaving && setResetTarget(null)}
-        >
-          <form
-            onSubmit={handleResetPasswordSubmit}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md space-y-4 rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-6 shadow-2xl"
-          >
-            <div>
-              <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
-                Redefinir Senha
-              </h3>
-              <p className="mt-1 text-xs text-neutral-400">
-                Conta: <span className="font-mono text-amber-400">{resetTarget.email}</span>
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300">
-                Nova Senha
-              </label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                maxLength={128}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                className="w-full rounded-xl border border-neutral-800 bg-black/60 px-3.5 py-2.5 text-sm text-[#f4efe6] placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                disabled={resetSaving}
-                onClick={() => setResetTarget(null)}
-                className="cursor-pointer rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={resetSaving}
-                onClick={() => void handleLetUserChoose()}
-                className="cursor-pointer rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 font-deadlock text-xs font-black uppercase text-cyan-300 hover:bg-cyan-500/20 disabled:opacity-50"
-              >
-                Deixar usuário escolher
-              </button>
-              <button
-                type="submit"
-                disabled={resetSaving}
-                className="cursor-pointer rounded-xl bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase text-black hover:brightness-110 disabled:opacity-50"
-              >
-                {resetSaving ? "Salvando..." : "Salvar Senha"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

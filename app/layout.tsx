@@ -72,6 +72,12 @@ export default function RootLayout({
               >
                 Guia
               </Link>
+              <Link
+                href="/feed"
+                className="text-[#f4efe6] hover:text-amber-400 transition-colors"
+              >
+                Feed
+              </Link>
             </nav>
 
             {/* Usuário / Login */}

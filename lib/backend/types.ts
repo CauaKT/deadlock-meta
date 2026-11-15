@@ -55,10 +55,12 @@ export interface FullProfile {
   banner_nsfw?: boolean;
   profile_color: string | null;
   social_links?: SocialLinks | null;
+  friends_public?: boolean;
 }
 
 export interface PublicProfile {
   id: string;
+  user_id?: string;
   username: string | null;
   handle: string | null;
   avatar_url: string | null;
@@ -69,15 +71,18 @@ export interface PublicProfile {
   banner_nsfw?: boolean;
   profile_color: string | null;
   social_links?: SocialLinks | null;
+  friends_public?: boolean;
   createdAt?: string | null;
 }
 
 export interface CommunityProfileItem {
   id: string;
+  user_id?: string;
   username: string | null;
   handle: string | null;
   avatar_url: string | null;
   favorite_hero_id: number | null;
+  mutual_friends_count?: number;
 }
 
 export interface TierRowData {
@@ -133,4 +138,62 @@ export interface AdminUsersResponse {
   limit: number;
   total: number;
   items: AdminUserItem[];
+}
+
+export interface FeedAuthor {
+  id: string;
+  username: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  favoriteHeroId: number | null;
+}
+
+export interface FeedComment {
+  id: string;
+  postId: string;
+  content: string;
+  createdAt: string;
+  author: FeedAuthor;
+  canDelete: boolean;
+}
+
+export interface FeedPost {
+  id: string;
+  content: string;
+  mediaUrl: string | null;
+  createdAt: string;
+  author: FeedAuthor;
+  likesCount: number;
+  commentsCount: number;
+  likedByMe: boolean;
+  canDelete: boolean;
+  comments: FeedComment[];
+}
+
+export interface FeedResponse {
+  items: FeedPost[];
+  page: number;
+  hasMore: boolean;
+}
+
+export interface FriendUser {
+  friendshipId: string;
+  userId: string;
+  username: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  favoriteHeroId: number | null;
+  createdAt: string;
+}
+
+export interface FriendsOverview {
+  friends: FriendUser[];
+  incoming: FriendUser[];
+  outgoing: FriendUser[];
+}
+
+export interface PublicFriendsResponse {
+  friendsPublic: boolean;
+  hidden: boolean;
+  friends: FriendUser[];
 }

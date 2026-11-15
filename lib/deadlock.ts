@@ -701,6 +701,7 @@ export interface PopularItem {
   name: string;
   image: string | null;
   pickPct: number;
+  shopItem: ShopItem | null;
 }
 
 export interface HeroBuild {
@@ -712,7 +713,7 @@ export interface HeroBuild {
 
 const ITEMS_PER_PHASE = 4;
 
-// A lista de heróis só traz o class_name dos itens; nome e ícone vêm de /items/{class_name}
+// Cruza com o catálogo em cache para trazer os atributos completos; busca individual fica só de fallback
 export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
   if (!popular || typeof popular !== "object") return null;
 
@@ -736,31 +737,41 @@ export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
   );
   if (classNames.length === 0) return null;
 
-  const details = new Map<string, { name: string; image: string | null }>();
-  await Promise.all(
-    classNames.map(async (className) => {
-      try {
-        const res = await fetch(
-          `https://api.deadlock-api.com/v1/assets/items/${encodeURIComponent(className)}?language=brazilian`,
-          { headers: { Accept: "application/json" }, next: { revalidate: 86400 } },
-        );
-        if (!res.ok) return;
-        const item = await res.json();
-        if (typeof item?.name !== "string") return;
-        details.set(className, {
-          name: item.name,
-          image: typeof item.shop_image_webp === "string" ? item.shop_image_webp : null,
-        });
-      } catch {
-        return;
-      }
-    }),
-  );
+  const shopItems = await fetchShopItems();
+  const shopMap = new Map<string, ShopItem>(shopItems.map((item) => [item.className, item]));
+
+  const missingClassNames = classNames.filter((c) => !shopMap.has(c));
+  const fallbackDetails = new Map<string, { name: string; image: string | null }>();
+  if (missingClassNames.length > 0) {
+    await Promise.all(
+      missingClassNames.map(async (className) => {
+        try {
+          const res = await fetch(
+            `https://api.deadlock-api.com/v1/assets/items/${encodeURIComponent(className)}?language=brazilian`,
+            { headers: { Accept: "application/json" }, next: { revalidate: 86400 } },
+          );
+          if (!res.ok) return;
+          const item = await res.json();
+          if (typeof item?.name !== "string") return;
+          fallbackDetails.set(className, {
+            name: item.name,
+            image: typeof item.shop_image_webp === "string" ? item.shop_image_webp : null,
+          });
+        } catch {
+          return;
+        }
+      }),
+    );
+  }
 
   const resolve = (list: { className: string; pickPct: number }[]): PopularItem[] =>
-    list.flatMap((p) => {
-      const d = details.get(p.className);
-      return d ? [{ className: p.className, pickPct: p.pickPct, ...d }] : [];
+    list.flatMap((p): PopularItem[] => {
+      const shopItem = shopMap.get(p.className);
+      if (shopItem) {
+        return [{ className: p.className, pickPct: p.pickPct, name: shopItem.name, image: shopItem.image, shopItem }];
+      }
+      const d = fallbackDetails.get(p.className);
+      return d ? [{ className: p.className, pickPct: p.pickPct, ...d, shopItem: null }] : [];
     });
 
   return {
@@ -769,7 +780,9 @@ export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
     mid: resolve(picks.mid),
     late: resolve(picks.late),
   };
-}export type ItemSlot = "weapon" | "vitality" | "spirit";
+}
+
+export type ItemSlot = "weapon" | "vitality" | "spirit";
 
 export interface ItemTipStat {
   label: string;
@@ -785,6 +798,7 @@ export interface ItemTipSection {
 }
 
 export interface ItemComponent {
+  className: string;
   name: string;
   image: string | null;
 }
@@ -802,6 +816,7 @@ export interface ShopItem {
   descriptionHtml: string;
   sections: ItemTipSection[];
   components: ItemComponent[];
+  searchText: string;
 }
 
 const numberPt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
@@ -843,6 +858,42 @@ function buildItemSections(item: any): ItemTipSection[] {
   return sections;
 }
 
+function normalizeSearchText(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function buildItemSearchText(
+  pt: {
+    name: string;
+    sortName: string;
+    isActive: boolean;
+    isImbue: boolean;
+    descriptionHtml: string;
+    sections: ItemTipSection[];
+  },
+  enRaw?: any,
+): string {
+  const parts: string[] = [
+    pt.name,
+    pt.sortName,
+    pt.isActive ? "ativo active" : "passivo passive",
+    pt.isImbue ? "imbue" : "",
+    stripHtml(pt.descriptionHtml),
+  ];
+  for (const s of pt.sections) {
+    parts.push(s.kind, stripHtml(s.html));
+    for (const st of s.stats) parts.push(st.label, st.value);
+  }
+  if (enRaw) {
+    parts.push(stripHtml(enRaw.description?.desc));
+    for (const s of buildItemSections(enRaw)) {
+      parts.push(stripHtml(s.html));
+      for (const st of s.stats) parts.push(st.label);
+    }
+  }
+  return normalizeSearchText(parts.filter(Boolean).join(" "));
+}
+
 const ITEM_SLOTS: ItemSlot[] = ["weapon", "vitality", "spirit"];
 let shopItemsCache: { data: ShopItem[]; at: number } | null = null;
 
@@ -870,10 +921,14 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
 
     // O jogo ordena a loja pelo nome em inglês; sem ele, cai no nome em português
     const namesEn = new Map<string, string>();
+    const enByClass = new Map<string, any>();
     if (resEn?.ok) {
       const rawEn: any[] = await resEn.json();
       for (const e of rawEn) {
-        if (typeof e?.class_name === "string" && typeof e?.name === "string") namesEn.set(e.class_name, e.name);
+        if (typeof e?.class_name === "string") {
+          enByClass.set(e.class_name, e);
+          if (typeof e?.name === "string") namesEn.set(e.class_name, e.name);
+        }
       }
     }
 
@@ -902,6 +957,11 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
           : typeof i.image_webp === "string"
             ? i.image_webp
             : null;
+      const isActive = i.is_active_item === true;
+      const isImbue = typeof i.imbue === "string" && i.imbue !== "";
+      const sortName = namesEn.get(i.class_name) ?? i.name;
+      const descriptionHtml = sanitizeHtml(i.description?.desc);
+      const sections = buildItemSections(i);
       return [
         {
           className: i.class_name,
@@ -910,17 +970,21 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
           slot,
           tier,
           cost,
-          isActive: i.is_active_item === true,
-          isImbue: typeof i.imbue === "string" && i.imbue !== "",
-          sortName: namesEn.get(i.class_name) ?? i.name,
-          descriptionHtml: sanitizeHtml(i.description?.desc),
-          sections: buildItemSections(i),
+          isActive,
+          isImbue,
+          sortName,
+          descriptionHtml,
+          sections,
           components: (Array.isArray(i.component_items) ? i.component_items : []).flatMap((c: unknown) => {
             const ci = byClass.get(String(c));
-            if (typeof ci?.name !== "string") return [];
+            if (typeof ci?.name !== "string" || typeof ci?.class_name !== "string") return [];
             const img = ci.shop_image_webp ?? ci.image_webp;
-            return [{ name: ci.name, image: typeof img === "string" ? img : null }];
+            return [{ className: ci.class_name, name: ci.name, image: typeof img === "string" ? img : null }];
           }),
+          searchText: buildItemSearchText(
+            { name: i.name, sortName, isActive, isImbue, descriptionHtml, sections },
+            enByClass.get(i.class_name),
+          ),
         },
       ];
     });
@@ -931,6 +995,11 @@ export async function fetchShopItems(): Promise<ShopItem[]> {
     console.error("❌ Falha ao buscar itens:", err);
     return shopItemsCache?.data ?? [];
   }
+}
+
+export async function fetchShopItemByClassName(className: string): Promise<ShopItem | null> {
+  const items = await fetchShopItems();
+  return items.find((item) => item.className === className) ?? null;
 }
 
 export interface PatchWinRatePoint {
@@ -989,4 +1058,134 @@ export async function fetchHeroPatchHistory(heroId: number, count = 6): Promise<
       delta,
     };
   });
+}
+
+export interface HeroSynergyStat {
+  hero_id1: number;
+  hero_id2: number;
+  wins: number;
+  matches_played: number;
+}
+
+export interface HeroCounterStat {
+  hero_id: number;
+  enemy_hero_id: number;
+  wins: number;
+  matches_played: number;
+}
+
+export interface HeroMatchupEntry {
+  heroId: number;
+  name: string;
+  image: string;
+  winRate: number;
+  matches: number;
+}
+
+export interface HeroMatchups {
+  bestWith: HeroMatchupEntry[];
+  worstWith: HeroMatchupEntry[];
+  bestAgainst: HeroMatchupEntry[];
+  worstAgainst: HeroMatchupEntry[];
+}
+
+async function fetchAnalyticsList<T>(
+  endpoint: string,
+  minUnixTimestamp?: number,
+  maxUnixTimestamp?: number,
+): Promise<T[]> {
+  const query = (withWindow: boolean) => {
+    const params = new URLSearchParams({ min_matches: withWindow && minUnixTimestamp ? "50" : "150" });
+    if (withWindow && minUnixTimestamp) params.set("min_unix_timestamp", String(minUnixTimestamp));
+    if (withWindow && maxUnixTimestamp) params.set("max_unix_timestamp", String(maxUnixTimestamp));
+    return `https://api.deadlock-api.com/v1/analytics/${endpoint}?${params.toString()}`;
+  };
+
+  try {
+    const res = await fetch(query(true), {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 3600 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+    if (minUnixTimestamp) {
+      const fallbackRes = await fetch(query(false), {
+        headers: { Accept: "application/json" },
+        next: { revalidate: 3600 },
+      });
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        if (Array.isArray(fallbackData)) return fallbackData;
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function fetchHeroSynergyStats(
+  minUnixTimestamp?: number,
+  maxUnixTimestamp?: number,
+): Promise<HeroSynergyStat[]> {
+  return fetchAnalyticsList<HeroSynergyStat>("hero-synergy-stats", minUnixTimestamp, maxUnixTimestamp);
+}
+
+export function fetchHeroCounterStats(
+  minUnixTimestamp?: number,
+  maxUnixTimestamp?: number,
+): Promise<HeroCounterStat[]> {
+  return fetchAnalyticsList<HeroCounterStat>("hero-counter-stats", minUnixTimestamp, maxUnixTimestamp);
+}
+
+export function buildHeroMatchups(
+  heroId: number,
+  heroesMap: Record<number, HeroAsset>,
+  synergyStats: HeroSynergyStat[],
+  counterStats: HeroCounterStat[],
+  limit = 4,
+): HeroMatchups {
+  const toEntry = (otherId: number, wins: number, matches: number): HeroMatchupEntry | null => {
+    if (otherId === heroId || matches <= 0) return null;
+    const h = heroesMap[otherId];
+    if (!h) return null;
+    const image = h.images?.icon_image_small || h.images?.icon_hero_card || "";
+    return {
+      heroId: otherId,
+      name: h.name,
+      image,
+      winRate: (wins / matches) * 100,
+      matches,
+    };
+  };
+
+  const allies = synergyStats
+    .filter((s) => s.hero_id1 === heroId || s.hero_id2 === heroId)
+    .map((s) => toEntry(s.hero_id1 === heroId ? s.hero_id2 : s.hero_id1, s.wins, s.matches_played))
+    .filter((e): e is HeroMatchupEntry => e !== null)
+    .sort((a, b) => b.winRate - a.winRate);
+
+  const counters = counterStats
+    .filter((c) => c.hero_id === heroId)
+    .map((c) => toEntry(c.enemy_hero_id, c.wins, c.matches_played))
+    .filter((e): e is HeroMatchupEntry => e !== null)
+    .sort((a, b) => b.winRate - a.winRate);
+
+  const bestWith = allies.slice(0, limit);
+  const bestWithIds = new Set(bestWith.map((e) => e.heroId));
+  const worstWith = [...allies]
+    .reverse()
+    .filter((e) => !bestWithIds.has(e.heroId))
+    .slice(0, limit);
+
+  const bestAgainst = counters.slice(0, limit);
+  const bestAgainstIds = new Set(bestAgainst.map((e) => e.heroId));
+  const worstAgainst = [...counters]
+    .reverse()
+    .filter((e) => !bestAgainstIds.has(e.heroId))
+    .slice(0, limit);
+
+  return { bestWith, worstWith, bestAgainst, worstAgainst };
 }

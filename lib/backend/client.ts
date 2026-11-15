@@ -3,6 +3,10 @@ import type {
   AdminUsersResponse,
   AuthUser,
   CommunityProfileItem,
+  FeedComment,
+  FeedPost,
+  FeedResponse,
+  FriendsOverview,
   OnboardingProfile,
   ProfileSummary,
   SavedAccount,
@@ -693,42 +697,45 @@ export async function getAdminUsers(params: {
   }
 }
 
-export async function updateAdminUserRole(
-  userId: string,
-  role: "USER" | "ADMIN",
-): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function requestEmailChange(
+  newEmail: string,
+  password: string,
+): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
   try {
-    const res = await fetch(apiUrl(`/admin/users/${encodeURIComponent(userId)}/role`), {
-      method: "PATCH",
+    const res = await fetch(apiUrl("/auth/email-change/request"), {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ newEmail, password }),
     });
     const data = await parseJsonSafe(res);
     if (!res.ok) {
-      return { ok: false, message: extractError(data, "Não foi possível alterar a permissão.") };
+      return { ok: false, message: extractError(data, "Não foi possível enviar o código.") };
     }
-    return { ok: true };
+    return {
+      ok: true,
+      message: typeof data?.message === "string" ? data.message : "Código enviado para o novo e-mail.",
+    };
   } catch {
     return { ok: false, message: "Erro de conexão com a API." };
   }
 }
 
-export async function resetAdminUserPassword(
-  userId: string,
-  options: { newPassword?: string; letUserChoose?: boolean },
+export async function confirmEmailChange(
+  code: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
-    const res = await fetch(apiUrl(`/admin/users/${encodeURIComponent(userId)}/password`), {
-      method: "PATCH",
+    const res = await fetch(apiUrl("/auth/email-change/confirm"), {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(options),
+      body: JSON.stringify({ code }),
     });
     const data = await parseJsonSafe(res);
     if (!res.ok) {
-      return { ok: false, message: extractError(data, "Não foi possível redefinir a senha.") };
+      return { ok: false, message: extractError(data, "Não foi possível confirmar o código.") };
     }
+    notifyAuthChanged();
     return { ok: true };
   } catch {
     return { ok: false, message: "Erro de conexão com a API." };
@@ -812,19 +819,225 @@ export async function searchCommunityProfiles(params?: {
     if (!res.ok) return [];
     const rows = (await res.json()) as Array<{
       id: string;
+      userId?: string;
       username: string | null;
       handle: string | null;
       avatarUrl: string | null;
       favoriteHeroId: number | null;
+      mutualFriendsCount?: number;
     }>;
     return rows.map((r) => ({
       id: r.id,
+      user_id: r.userId,
       username: r.username,
       handle: r.handle,
       avatar_url: r.avatarUrl,
       favorite_hero_id: r.favoriteHeroId,
+      mutual_friends_count: r.mutualFriendsCount ?? 0,
     }));
   } catch {
     return [];
+  }
+}
+
+export async function getFeedPosts(page = 1, limit = 20): Promise<FeedResponse> {
+  try {
+    const res = await fetch(apiUrl(`/feed?page=${page}&limit=${limit}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return { items: [], page, hasMore: false };
+    return (await res.json()) as FeedResponse;
+  } catch {
+    return { items: [], page, hasMore: false };
+  }
+}
+
+export async function createFeedPost(input: {
+  content: string;
+  mediaUrl?: string | null;
+}): Promise<{ post: FeedPost | null; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl("/feed"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { post: null, error: extractError(data, "Não foi possível publicar.") };
+    }
+    return { post: data as unknown as FeedPost, error: null };
+  } catch {
+    return { post: null, error: "Erro de conexão ao publicar." };
+  }
+}
+
+export async function deleteFeedPost(
+  id: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/feed/${encodeURIComponent(id)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, error: extractError(data, "Não foi possível excluir a postagem.") };
+    }
+    return { ok: true, error: null };
+  } catch {
+    return { ok: false, error: "Erro de conexão ao excluir." };
+  }
+}
+
+export async function toggleFeedPostLike(
+  id: string,
+): Promise<{ liked: boolean; likesCount: number; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/feed/${encodeURIComponent(id)}/like`), {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { liked: false, likesCount: 0, error: extractError(data, "Erro ao curtir.") };
+    }
+    return {
+      liked: Boolean(data?.liked),
+      likesCount: Number(data?.likesCount ?? 0),
+      error: null,
+    };
+  } catch {
+    return { liked: false, likesCount: 0, error: "Erro de conexão." };
+  }
+}
+
+export async function createFeedComment(
+  postId: string,
+  content: string,
+): Promise<{ comment: FeedComment | null; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/feed/${encodeURIComponent(postId)}/comments`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ content }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return { comment: null, error: extractError(data, "Não foi possível comentar.") };
+    }
+    return { comment: data as unknown as FeedComment, error: null };
+  } catch {
+    return { comment: null, error: "Erro de conexão ao comentar." };
+  }
+}
+
+export async function deleteFeedComment(
+  commentId: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/feed/comments/${encodeURIComponent(commentId)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, error: extractError(data, "Não foi possível excluir o comentário.") };
+    }
+    return { ok: true, error: null };
+  } catch {
+    return { ok: false, error: "Erro de conexão ao excluir." };
+  }
+}
+
+export async function getMyFriendsOverview(): Promise<FriendsOverview> {
+  try {
+    const res = await fetch(apiUrl("/friends/me"), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return { friends: [], incoming: [], outgoing: [] };
+    return (await res.json()) as FriendsOverview;
+  } catch {
+    return { friends: [], incoming: [], outgoing: [] };
+  }
+}
+
+export async function sendFriendRequest(
+  targetUserId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(apiUrl("/friends/requests"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ targetUserId }),
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Não foi possível enviar pedido.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão ao enviar pedido." };
+  }
+}
+
+export async function acceptFriendRequest(
+  friendshipId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(apiUrl(`/friends/requests/${encodeURIComponent(friendshipId)}/accept`), {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Não foi possível aceitar pedido.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão ao aceitar pedido." };
+  }
+}
+
+export async function removeFriendship(
+  friendshipId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(apiUrl(`/friends/${encodeURIComponent(friendshipId)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Não foi possível remover vínculo.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão ao remover vínculo." };
+  }
+}
+
+export async function updateFriendsPrivacy(
+  friendsPublic: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(apiUrl("/friends/privacy"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ friendsPublic }),
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, message: extractError(data, "Erro ao salvar privacidade.") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Erro de conexão ao salvar privacidade." };
   }
 }

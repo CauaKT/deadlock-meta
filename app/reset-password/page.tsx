@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import ColdStartNotice from "@/app/ColdStartNotice";
+import ApiWarmup from "@/app/ApiWarmup";
 import {
   requestPasswordReset,
   resetPasswordWithToken,
@@ -152,7 +152,7 @@ function ResetPasswordForm() {
         </form>
       )}
 
-      <ColdStartNotice active={loading} warmup />
+      <ApiWarmup />
     </div>
   );
 }

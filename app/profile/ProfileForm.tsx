@@ -3,9 +3,27 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ColdStartNotice from "@/app/ColdStartNotice";
-import { changeOwnPassword, deleteOwnAccount, deleteTierList, resendVerificationEmail, updateProfileLook, updateProfileSettings } from "@/lib/backend/client";
-import type { SocialLinks, TierListItem } from "@/lib/backend/types";
+import {
+  acceptFriendRequest,
+  changeOwnPassword,
+  confirmEmailChange,
+  deleteOwnAccount,
+  deleteTierList,
+  getMyFriendsOverview,
+  removeFriendship,
+  requestEmailChange,
+  resendVerificationEmail,
+  sendFriendRequest,
+  updateFriendsPrivacy,
+  updateProfileLook,
+  updateProfileSettings,
+} from "@/lib/backend/client";
+import type {
+  FriendsOverview,
+  PublicFriendsResponse,
+  SocialLinks,
+  TierListItem,
+} from "@/lib/backend/types";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
@@ -55,14 +73,17 @@ interface HeroOption {
 
 interface CommunityProfile {
   id: string;
+  user_id?: string;
   username: string | null;
   handle: string | null;
   avatar_url: string | null;
   favorite_hero_id: number | null;
+  mutual_friends_count?: number;
 }
 
 interface ProfileData {
   id: string;
+  user_id?: string;
   username: string;
   bio?: string | null;
   handle?: string | null;
@@ -74,28 +95,98 @@ interface ProfileData {
   banner_nsfw?: boolean;
   profile_color?: string | null;
   social_links?: SocialLinks | null;
+  friends_public?: boolean;
   createdAt: string;
 }
 
-function CommunityRow({ p }: { p: CommunityProfile }) {
+type RelationState =
+  | { kind: "none" }
+  | { kind: "friend"; friendshipId: string }
+  | { kind: "outgoing"; friendshipId: string }
+  | { kind: "incoming"; friendshipId: string };
+
+function CommunityRow({
+  p,
+  relation,
+  busy,
+  onSend,
+  onAccept,
+  onRemove,
+}: {
+  p: CommunityProfile;
+  relation: RelationState;
+  busy: boolean;
+  onSend: (targetUserId: string) => void;
+  onAccept: (friendshipId: string) => void;
+  onRemove: (friendshipId: string) => void;
+}) {
   return (
-    <li>
+    <li className="flex items-center gap-2">
       <Link
         href={`/profile/${p.handle}`}
-        className="-m-1 flex items-center gap-3 rounded-lg p-1 transition-colors hover:bg-neutral-800/60"
+        className="-m-1 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 transition-colors hover:bg-neutral-800/60"
       >
-      {p.avatar_url ? (
-        <img src={p.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full border border-neutral-700 object-cover" />
-      ) : (
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800 font-deadlock text-sm font-black text-neutral-300">
-          {(p.username || "?").charAt(0).toUpperCase()}
-        </span>
-      )}
-      <div className="min-w-0">
-        <p className="truncate text-sm font-bold text-[#f4efe6]">{p.username}</p>
-        <p className="truncate text-[11px] text-neutral-500">{p.handle ? `@${p.handle}` : ""}</p>
-      </div>
+        {p.avatar_url ? (
+          <img src={p.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full border border-neutral-700 object-cover" />
+        ) : (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800 font-deadlock text-sm font-black text-neutral-300">
+            {(p.username || "?").charAt(0).toUpperCase()}
+          </span>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-[#f4efe6]">{p.username}</p>
+          <p className="truncate text-[11px] text-neutral-500">
+            {p.mutual_friends_count === 1
+              ? "1 amigo em comum"
+              : `${p.mutual_friends_count ?? 0} amigos em comum`}
+          </p>
+        </div>
       </Link>
+      {p.user_id && (
+        relation.kind === "friend" ? (
+          <span
+            title="Já é seu amigo"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-950/40 text-xs text-emerald-300"
+          >
+            ✓
+          </span>
+        ) : relation.kind === "outgoing" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onRemove(relation.friendshipId)}
+            title="Pedido enviado (clique para cancelar)"
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-amber-500/40 bg-amber-950/30 text-xs text-amber-300 hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
+          >
+            ⏳
+          </button>
+        ) : relation.kind === "incoming" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAccept(relation.friendshipId)}
+            title="Aceitar pedido de amizade"
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-emerald-500/60 bg-emerald-500/20 text-xs font-black text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+          >
+            ✓
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onSend(p.user_id!)}
+            title="Enviar pedido de amizade"
+            aria-label={`Adicionar ${p.username || p.handle}`}
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 transition-colors hover:border-amber-400 hover:text-amber-400 disabled:opacity-50"
+          >
+            <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M19 8v6M22 11h-6" />
+            </svg>
+          </button>
+        )
+      )}
     </li>
   );
 }
@@ -193,6 +284,8 @@ export default function ProfileForm({
   community = [],
   readOnly = false,
   initialTierLists = [],
+  initialFriendsOverview = { friends: [], incoming: [], outgoing: [] },
+  initialShownFriends = { friendsPublic: true, hidden: false, friends: [] },
 }: {
   initialProfile: ProfileData;
   heroes: HeroOption[];
@@ -201,9 +294,64 @@ export default function ProfileForm({
   community?: CommunityProfile[];
   readOnly?: boolean;
   initialTierLists?: TierListItem[];
+  initialFriendsOverview?: FriendsOverview;
+  initialShownFriends?: PublicFriendsResponse;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"overview" | "tierlists" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "tierlists" | "friends" | "settings">("overview");
+  const [friendsOverview, setFriendsOverview] = useState<FriendsOverview>(initialFriendsOverview);
+  const [shownFriends, setShownFriends] = useState<PublicFriendsResponse>(initialShownFriends);
+  const [friendsPublic, setFriendsPublic] = useState<boolean>(initialProfile.friends_public ?? true);
+  const [friendBusy, setFriendBusy] = useState(false);
+
+  const relationOf = (targetUserId?: string): RelationState => {
+    if (!targetUserId) return { kind: "none" };
+    const f = friendsOverview.friends.find((x) => x.userId === targetUserId);
+    if (f) return { kind: "friend", friendshipId: f.friendshipId };
+    const out = friendsOverview.outgoing.find((x) => x.userId === targetUserId);
+    if (out) return { kind: "outgoing", friendshipId: out.friendshipId };
+    const inc = friendsOverview.incoming.find((x) => x.userId === targetUserId);
+    if (inc) return { kind: "incoming", friendshipId: inc.friendshipId };
+    return { kind: "none" };
+  };
+
+  const refreshFriends = async () => {
+    const next = await getMyFriendsOverview();
+    setFriendsOverview(next);
+    if (!readOnly) {
+      setShownFriends({ friendsPublic, hidden: false, friends: next.friends });
+    }
+  };
+
+  const handleSendFriendRequest = async (targetUserId: string) => {
+    if (friendBusy) return;
+    setFriendBusy(true);
+    const res = await sendFriendRequest(targetUserId);
+    if (res.ok) await refreshFriends();
+    setFriendBusy(false);
+  };
+
+  const handleAcceptFriend = async (friendshipId: string) => {
+    if (friendBusy) return;
+    setFriendBusy(true);
+    const res = await acceptFriendRequest(friendshipId);
+    if (res.ok) {
+      await refreshFriends();
+      router.refresh();
+    }
+    setFriendBusy(false);
+  };
+
+  const handleRemoveFriend = async (friendshipId: string) => {
+    if (friendBusy) return;
+    setFriendBusy(true);
+    const res = await removeFriendship(friendshipId);
+    if (res.ok) {
+      await refreshFriends();
+      router.refresh();
+    }
+    setFriendBusy(false);
+  };
 
   // Estados do formulário de edição
   const [username, setUsername] = useState(initialProfile.username || "");
@@ -249,6 +397,11 @@ export default function ProfileForm({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [emailStep, setEmailStep] = useState<"idle" | "form" | "code">("idle");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
@@ -327,11 +480,17 @@ export default function ProfileForm({
 
   const heroesById = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
   const selectedHero = heroesById.get(favoriteHeroId ?? -1);
-  const sortedCommunity = [...community].sort((a, b) => {
-    const sa = a.favorite_hero_id != null && a.favorite_hero_id === favoriteHeroId ? 0 : 1;
-    const sb = b.favorite_hero_id != null && b.favorite_hero_id === favoriteHeroId ? 0 : 1;
-    return sa - sb || (a.username ?? "").localeCompare(b.username ?? "", "pt-BR");
-  });
+  const acceptedFriendUserIds = new Set(friendsOverview.friends.map((f) => f.userId));
+  const sortedCommunity = [...community]
+    .filter((p) => !p.user_id || !acceptedFriendUserIds.has(p.user_id))
+    .sort((a, b) => {
+      const ma = a.mutual_friends_count ?? 0;
+      const mb = b.mutual_friends_count ?? 0;
+      if (mb !== ma) return mb - ma;
+      const sa = a.favorite_hero_id != null && a.favorite_hero_id === favoriteHeroId ? 0 : 1;
+      const sb = b.favorite_hero_id != null && b.favorite_hero_id === favoriteHeroId ? 0 : 1;
+      return sa - sb || (a.username ?? "").localeCompare(b.username ?? "", "pt-BR");
+    });
   const [communityModalOpen, setCommunityModalOpen] = useState(false);
   const suggestions = sortedCommunity.slice(0, 5);
   const hasMoreSuggestions = sortedCommunity.length > 5;
@@ -429,9 +588,16 @@ export default function ProfileForm({
       banner_image: bannerMode === "custom" ? bannerImage : null,
       social_links: socialLinks,
     });
-    setLookSaving(false);
     if (!settingsResult.ok) {
+      setLookSaving(false);
       setLookError(settingsResult.message);
+      return;
+    }
+
+    const privacyResult = await updateFriendsPrivacy(friendsPublic);
+    setLookSaving(false);
+    if (!privacyResult.ok) {
+      setLookError(privacyResult.message ?? "Erro ao salvar privacidade dos amigos.");
       return;
     }
 
@@ -446,8 +612,44 @@ export default function ProfileForm({
     else router.refresh();
   };
 
+    const resetEmailChange = () => {
+    setEmailStep("idle");
+    setNewEmail("");
+    setEmailPassword("");
+    setEmailCode("");
+  };
+
+  const handleRequestEmailChange = async () => {
+    setEmailBusy(true);
+    setVerifyFeedback(null);
+    const res = await requestEmailChange(newEmail.trim(), emailPassword);
+    setEmailBusy(false);
+    if (!res.ok) {
+      setVerifyFeedback({ type: "error", text: res.message });
+      return;
+    }
+    setEmailPassword("");
+    setEmailCode("");
+    setEmailStep("code");
+    setVerifyFeedback({ type: "success", text: res.message });
+  };
+
+  const handleConfirmEmailChange = async () => {
+    setEmailBusy(true);
+    setVerifyFeedback(null);
+    const res = await confirmEmailChange(emailCode.trim());
+    setEmailBusy(false);
+    if (!res.ok) {
+      setVerifyFeedback({ type: "error", text: res.message });
+      return;
+    }
+    resetEmailChange();
+    setVerifyFeedback({ type: "success", text: "E-mail alterado e confirmado com sucesso!" });
+    router.refresh();
+  };
+
   const tabClass = (tab: typeof activeTab) =>
-    `-mb-px flex items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${ tab === "tierlists" ? "hidden" : "flex"} items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+    `-mb-px flex items-center gap-2 border-b-2 px-4 py-3 font-deadlock text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
       activeTab === tab
         ? "border-amber-500 text-[#f4efe6]"
         : "border-transparent text-neutral-400 hover:text-white"
@@ -697,8 +899,71 @@ export default function ProfileForm({
               </div>
             </div>
 
-            {/* Ação Rápida: Alternar para aba de Configurações */}
+            {/* Ação Rápida: Botão de amizade no perfil público */}
             <div className="flex justify-center sm:justify-end sm:self-start sm:mt-[5.75rem]">
+              {readOnly && !editing && initialProfile.user_id && (() => {
+                const rel = relationOf(initialProfile.user_id);
+                if (rel.kind === "friend") {
+                  return (
+                    <button
+                      type="button"
+                      disabled={friendBusy}
+                      onClick={() => {
+                        if (window.confirm("Desfazer amizade com este jogador?")) {
+                          void handleRemoveFriend(rel.friendshipId);
+                        }
+                      }}
+                      className="cursor-pointer rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-emerald-300 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
+                    >
+                      Amigos ✓
+                    </button>
+                  );
+                }
+                if (rel.kind === "outgoing") {
+                  return (
+                    <button
+                      type="button"
+                      disabled={friendBusy}
+                      onClick={() => void handleRemoveFriend(rel.friendshipId)}
+                      className="cursor-pointer rounded-xl border border-amber-500/50 bg-amber-950/30 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-amber-300 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
+                    >
+                      Pedido enviado
+                    </button>
+                  );
+                }
+                if (rel.kind === "incoming") {
+                  return (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={friendBusy}
+                        onClick={() => void handleAcceptFriend(rel.friendshipId)}
+                        className="cursor-pointer rounded-xl border border-emerald-500 bg-emerald-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                      >
+                        Aceitar amigo
+                      </button>
+                      <button
+                        type="button"
+                        disabled={friendBusy}
+                        onClick={() => void handleRemoveFriend(rel.friendshipId)}
+                        className="cursor-pointer rounded-xl border border-neutral-700 bg-black/60 px-3 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 transition-colors hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    type="button"
+                    disabled={friendBusy}
+                    onClick={() => void handleSendFriendRequest(initialProfile.user_id!)}
+                    className="cursor-pointer rounded-xl border border-amber-500 bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-colors hover:bg-amber-400 disabled:opacity-50"
+                  >
+                    + Adicionar amigo
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -726,6 +991,24 @@ export default function ProfileForm({
             <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
               {savedTierLists.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("friends")}
+            className={tabClass("friends")}
+          >
+            <span>Amigos</span>
+            {!shownFriends.hidden && (
+              <span className="rounded bg-black/30 px-1.5 py-0.2 text-[10px] font-black">
+                {readOnly ? shownFriends.friends.length : friendsOverview.friends.length}
+              </span>
+            )}
+            {!readOnly && friendsOverview.incoming.length > 0 && (
+              <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-black text-black">
+                +{friendsOverview.incoming.length}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -826,7 +1109,15 @@ export default function ProfileForm({
               <>
                 <ul className="space-y-3">
                   {suggestions.map((p) => (
-                    <CommunityRow key={p.id} p={p} />
+                    <CommunityRow
+                      key={p.id}
+                      p={p}
+                      relation={relationOf(p.user_id)}
+                      busy={friendBusy}
+                      onSend={(uid) => void handleSendFriendRequest(uid)}
+                      onAccept={(fid) => void handleAcceptFriend(fid)}
+                      onRemove={(fid) => void handleRemoveFriend(fid)}
+                    />
                   ))}
                 </ul>
                 {hasMoreSuggestions && (
@@ -952,6 +1243,151 @@ export default function ProfileForm({
         </div>
       )}
 
+     {/* ABA DE AMIGOS */}
+      {activeTab === "friends" && (
+        <div className="space-y-6">
+          {!readOnly && (friendsOverview.incoming.length > 0 || friendsOverview.outgoing.length > 0) && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {friendsOverview.incoming.length > 0 && (
+                <section className="space-y-3 rounded-2xl border border-amber-500/30 bg-[#0a0d0c] p-5">
+                  <h3 className="font-deadlock text-sm font-black uppercase tracking-wider text-amber-400">
+                    Pedidos Recebidos ({friendsOverview.incoming.length})
+                  </h3>
+                  <ul className="space-y-2.5">
+                    {friendsOverview.incoming.map((f) => (
+                      <li key={f.friendshipId} className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800 bg-black/40 p-2.5">
+                        <Link href={f.handle ? `/profile/${f.handle}` : "#"} className="flex min-w-0 items-center gap-2.5">
+                          {f.avatarUrl ? (
+                            <img src={f.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-xs font-black text-amber-400">
+                              {f.username.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-[#f4efe6]">{f.username}</p>
+                            {f.handle && <p className="truncate text-[11px] text-neutral-500">@{f.handle}</p>}
+                          </div>
+                        </Link>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button
+                            type="button"
+                            disabled={friendBusy}
+                            onClick={() => void handleAcceptFriend(f.friendshipId)}
+                            className="cursor-pointer rounded-lg bg-emerald-500 px-2.5 py-1 text-[11px] font-black uppercase text-black hover:bg-emerald-400"
+                          >
+                            Aceitar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={friendBusy}
+                            onClick={() => void handleRemoveFriend(f.friendshipId)}
+                            className="cursor-pointer rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-bold uppercase text-neutral-300 hover:border-rose-500 hover:text-rose-300"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {friendsOverview.outgoing.length > 0 && (
+                <section className="space-y-3 rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-5">
+                  <h3 className="font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+                    Pedidos Enviados ({friendsOverview.outgoing.length})
+                  </h3>
+                  <ul className="space-y-2.5">
+                    {friendsOverview.outgoing.map((f) => (
+                      <li key={f.friendshipId} className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800 bg-black/40 p-2.5">
+                        <Link href={f.handle ? `/profile/${f.handle}` : "#"} className="flex min-w-0 items-center gap-2.5">
+                          {f.avatarUrl ? (
+                            <img src={f.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-xs font-black text-amber-400">
+                              {f.username.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-[#f4efe6]">{f.username}</p>
+                            {f.handle && <p className="truncate text-[11px] text-neutral-500">@{f.handle}</p>}
+                          </div>
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={friendBusy}
+                          onClick={() => void handleRemoveFriend(f.friendshipId)}
+                          className="shrink-0 cursor-pointer rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-bold uppercase text-neutral-300 hover:border-rose-500 hover:text-rose-300"
+                        >
+                          Cancelar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+          )}
+
+          {readOnly && shownFriends.hidden ? (
+            <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-10 text-center text-xs text-neutral-400">
+              Este usuário optou por manter a lista de amigos privada.
+            </div>
+          ) : (() => {
+            const list = readOnly ? shownFriends.friends : friendsOverview.friends;
+            if (list.length === 0) {
+              return (
+                <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-10 text-center text-xs text-neutral-500">
+                  Nenhum amigo adicionado ainda.
+                </div>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {list.map((f) => (
+                  <div
+                    key={f.friendshipId}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-[#0a0d0c] p-4"
+                  >
+                    <Link
+                      href={f.handle ? `/profile/${f.handle}` : "#"}
+                      className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-90"
+                    >
+                      {f.avatarUrl ? (
+                        <img src={f.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full border border-neutral-700 object-cover" />
+                      ) : (
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800 font-deadlock text-sm font-black text-amber-400">
+                          {f.username.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-[#f4efe6]">{f.username}</p>
+                        {f.handle && <p className="truncate text-xs text-neutral-500">@{f.handle}</p>}
+                      </div>
+                    </Link>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        disabled={friendBusy}
+                        onClick={() => {
+                          if (window.confirm(`Remover ${f.username} da sua lista de amigos?`)) {
+                            void handleRemoveFriend(f.friendshipId);
+                          }
+                        }}
+                        className="shrink-0 cursor-pointer rounded-lg border border-neutral-800 px-2.5 py-1 text-[10px] font-bold uppercase text-neutral-400 hover:border-rose-500/60 hover:text-rose-300"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
      {/* ABA 3: CONFIGURAÇÕES E FORMULÁRIO DE EDIÇÃO */}
       {!readOnly && activeTab === "settings" && (
         <div
@@ -1010,7 +1446,7 @@ export default function ProfileForm({
                           : "border-amber-500/40 bg-amber-950/40 text-amber-300"
                       }`}
                     >
-                      {emailVerified ? "Confirmado" : "Pendente"}
+                      {emailVerified ? "Conta verificada" : "Não verificada"}
                     </span>
                   </div>
                   {!emailVerified && (
@@ -1038,6 +1474,121 @@ export default function ProfileForm({
                 >
                   {verifyFeedback.text}
                 </p>
+              )}
+              {emailStep === "idle" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVerifyFeedback(null);
+                    setEmailStep("form");
+                  }}
+                  className="mt-3 cursor-pointer text-[11px] font-bold uppercase tracking-wider text-neutral-400 underline-offset-4 transition-colors hover:text-white hover:underline"
+                >
+                  Trocar e-mail
+                </button>
+              ) : (
+                <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
+                  {emailStep === "form" ? (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-400">
+                          Novo e-mail
+                        </label>
+                        <input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          autoComplete="email"
+                          className="w-full rounded-xl border border-neutral-800 bg-black/60 px-4 py-3 font-mono text-sm text-[#f4efe6] transition-colors placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-400">
+                          Senha atual
+                        </label>
+                        <input
+                          type="password"
+                          value={emailPassword}
+                          onChange={(e) => setEmailPassword(e.target.value)}
+                          autoComplete="current-password"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleRequestEmailChange();
+                            }
+                          }}
+                          className="w-full rounded-xl border border-neutral-800 bg-black/60 px-4 py-3 text-sm text-[#f4efe6] transition-colors focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleRequestEmailChange()}
+                          disabled={emailBusy || !newEmail.trim() || !emailPassword}
+                          className="cursor-pointer rounded-lg bg-amber-500 px-4 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {emailBusy ? "Enviando..." : "Enviar código"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetEmailChange}
+                          className="cursor-pointer text-[11px] font-bold uppercase tracking-wider text-neutral-400 transition-colors hover:text-white"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-neutral-400">
+                        Digite o código de 6 dígitos enviado para <span className="font-mono text-[#f4efe6]">{newEmail.trim()}</span>.
+                      </p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={emailCode}
+                        onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleConfirmEmailChange();
+                          }
+                        }}
+                        placeholder="000000"
+                        className="w-40 rounded-xl border border-neutral-800 bg-black/60 px-4 py-3 text-center font-mono text-lg tracking-[0.4em] text-[#f4efe6] transition-colors placeholder:text-neutral-700 focus:border-amber-500 focus:outline-none"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleConfirmEmailChange()}
+                          disabled={emailBusy || emailCode.length !== 6}
+                          className="cursor-pointer rounded-lg bg-amber-500 px-4 py-2 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {emailBusy ? "Confirmando..." : "Confirmar troca"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVerifyFeedback(null);
+                            setEmailStep("form");
+                          }}
+                          className="cursor-pointer text-[11px] font-bold uppercase tracking-wider text-neutral-400 transition-colors hover:text-white"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetEmailChange}
+                          className="cursor-pointer text-[11px] font-bold uppercase tracking-wider text-neutral-400 transition-colors hover:text-white"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </section>
@@ -1125,6 +1676,27 @@ export default function ProfileForm({
                 Utilizado para sincronização de estatísticas táticas e win rate individual nas próximas atualizações.
               </p>
             </div>
+          </section>
+
+         <section className="space-y-3">
+            <h3 className="flex items-center gap-2.5 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+              <span className="h-4 w-1 rounded-full" style={{ backgroundColor: heroColor }} />
+              Privacidade
+            </h3>
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-black/40 p-4">
+              <div>
+                <p className="text-xs font-bold text-[#f4efe6]">Lista de amigos pública</p>
+                <p className="text-[11px] text-neutral-500">
+                  Quando desativado, outros jogadores não poderão ver quem está na sua lista de amigos.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={friendsPublic}
+                onChange={(e) => setFriendsPublic(e.target.checked)}
+                className="h-4 w-4 accent-amber-500"
+              />
+            </label>
           </section>
 
          <section className="space-y-4">
@@ -1251,7 +1823,6 @@ export default function ProfileForm({
             </section>
           </div>
 
-          <ColdStartNotice active={lookSaving} />
           </div>
         </div>
       )}
