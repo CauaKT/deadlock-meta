@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import {
   getCurrentClientUser,
@@ -66,7 +67,11 @@ export default function NavUserButton({
         setProfile(u.profile);
         if (u.mustChangePassword && pathname !== "/change-password") {
           router.replace("/change-password");
-        } else if (!u.profile?.handle && pathname !== "/welcome" && pathname !== "/change-password") {
+        } else if (
+          (!u.profile?.handle || !u.profile?.handle_confirmed) &&
+          pathname !== "/welcome" &&
+          pathname !== "/change-password"
+        ) {
           router.replace("/welcome");
         }
       } else {
@@ -169,23 +174,26 @@ export default function NavUserButton({
       <>
         <div className="h-8 w-8 rounded-full bg-neutral-800/40 animate-pulse" />
 
-        {slowApi && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="fixed right-4 top-16 z-40 flex max-w-[260px] items-start gap-2.5 rounded-xl border border-amber-500/35 bg-[#0a0d0c]/95 px-3 py-2.5 shadow-[0_12px_30px_rgba(0,0,0,0.85)] backdrop-blur-md"
-          >
-            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-            <div className="space-y-0.5 text-left">
-              <p className="font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400">
-                Acordando servidor...
-              </p>
-              <p className="text-[11px] leading-snug text-neutral-300">
-                A API entra em repouso após inatividade e pode levar até 1 min para carregar.
-              </p>
-            </div>
-          </div>
-        )}
+        {slowApi &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="status"
+              aria-live="polite"
+              className="fixed left-1/2 top-3 z-50 flex w-[calc(100%-2rem)] max-w-xs -translate-x-1/2 items-center gap-2 rounded-lg border border-amber-500/35 bg-[#0a0d0c]/95 px-3 py-2 shadow-[0_10px_24px_rgba(0,0,0,0.85)] backdrop-blur-md"
+            >
+              <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <div className="min-w-0 text-left">
+                <p className="font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400">
+                  Acordando servidor...
+                </p>
+                <p className="text-[10px] leading-tight text-neutral-300">
+                  A API entra em repouso após inatividade e pode levar até 1 min.
+                </p>
+              </div>
+            </div>,
+            document.body,
+          )}
       </>
     );
   }

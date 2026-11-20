@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useState } from "react";
+import SlantFrame from "@/app/heroes/[id]/SlantFrame";
 import {
   createFeedComment,
   createFeedPost,
@@ -169,58 +170,66 @@ export default function FeedClient({
   return (
     <div className="space-y-6">
       {initialUser ? (
-        <form
-          onSubmit={handleCreatePost}
-          className="space-y-3 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 shadow-xl sm:p-5"
+        <SlantFrame
+          shape="narrowTop"
+          border="#c97a2e"
+          background="linear-gradient(160deg, rgba(44,28,12,0.88), rgba(8,10,10,0.96))"
         >
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={500}
-            rows={3}
-            placeholder="Compartilhe algo sobre Deadlock..."
-            className="w-full resize-y rounded-lg border border-neutral-800 bg-black/50 p-3 text-sm text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
-          />
-          <input
-            type="url"
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            maxLength={400}
-            placeholder="Link de imagem opcional (https://... — sem base64)"
-            className="w-full rounded-lg border border-neutral-800 bg-black/50 px-3 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
-          />
-          {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] font-semibold text-neutral-500">
-              {content.length}/500 caracteres
-            </span>
-            <button
-              type="submit"
-              disabled={posting || !content.trim()}
-              className="cursor-pointer rounded-lg bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {posting ? "Publicando..." : "Publicar"}
-            </button>
-          </div>
-        </form>
+          <form onSubmit={handleCreatePost} className="space-y-3">
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="Compartilhe algo sobre Deadlock..."
+              className="w-full resize-y rounded-[4px] border border-white/15 bg-black/50 p-3 text-sm text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
+            />
+            <input
+              type="url"
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              maxLength={400}
+              placeholder="Link de imagem opcional (https://... — sem base64)"
+              className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500/60 focus:outline-none"
+            />
+            {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-neutral-400">
+                {content.length}/500 caracteres
+              </span>
+              <button
+                type="submit"
+                disabled={posting || !content.trim()}
+                className="cursor-pointer rounded-[4px] bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {posting ? "Publicando..." : "Publicar"}
+              </button>
+            </div>
+          </form>
+        </SlantFrame>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 text-sm text-neutral-300">
+        <SlantFrame
+          shape="narrowTop"
+          border="#c97a2e"
+          background="linear-gradient(160deg, rgba(44,28,12,0.88), rgba(8,10,10,0.96))"
+          className="flex flex-wrap items-center justify-between gap-3 text-sm text-neutral-200"
+        >
           <span>Entre na sua conta para publicar, curtir e comentar.</span>
           <div className="flex gap-2">
             <Link
               href="/login"
-              className="rounded-lg bg-amber-500 px-4 py-1.5 font-deadlock text-xs font-black uppercase text-black hover:bg-amber-400"
+              className="rounded-[4px] bg-amber-500 px-4 py-1.5 font-deadlock text-xs font-black uppercase text-black hover:bg-amber-400"
             >
               Entrar
             </Link>
             <Link
               href="/register"
-              className="rounded-lg border border-neutral-700 px-4 py-1.5 font-deadlock text-xs font-black uppercase text-[#f4efe6] hover:border-neutral-500"
+              className="rounded-[4px] border border-white/20 bg-black/40 px-4 py-1.5 font-deadlock text-xs font-black uppercase text-[#f4efe6] hover:border-amber-400/60"
             >
               Criar conta
             </Link>
           </div>
-        </div>
+        </SlantFrame>
       )}
 
       {!initialUser && error && (
@@ -236,7 +245,7 @@ export default function FeedClient({
           {posts.map((post) => (
             <article
               key={post.id}
-              className="space-y-4 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 shadow-lg sm:p-5"
+              className="dl-noise relative space-y-4 rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 p-4 shadow-lg sm:p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">

@@ -14,6 +14,7 @@ import {
 } from "@/lib/backend/client";
 import type { AuthUser, BuildPhases, CommunityBuildItem } from "@/lib/backend/types";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
+import SlantFrame from "@/app/heroes/[id]/SlantFrame";
 
 export interface BuildHeroOption {
   id: number;
@@ -190,16 +191,21 @@ export default function BuildsClient({ heroes, items }: Props) {
       {/* EDITOR DE BUILD */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 space-y-4">
-          <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 space-y-4 shadow-xl">
+          <SlantFrame
+            shape="narrowTop"
+            border="#3897a1"
+            background="linear-gradient(160deg, rgba(16,44,48,0.88), rgba(7,12,14,0.96))"
+            className="space-y-4"
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-400 mb-1">
+                <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300 mb-1">
                   Herói
                 </label>
                 <select
                   value={heroId}
                   onChange={(e) => setHeroId(Number(e.target.value))}
-                  className="w-full rounded-[4px] border border-neutral-700 bg-[#070908] px-3 py-2 font-deadlock text-xs font-black uppercase text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
+                  className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3 py-2 font-deadlock text-xs font-black uppercase text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
                 >
                   {heroes.map((h) => (
                     <option key={h.id} value={h.id}>
@@ -210,7 +216,7 @@ export default function BuildsClient({ heroes, items }: Props) {
               </div>
 
               <div>
-                <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-400 mb-1">
+                <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300 mb-1">
                   Título da Build
                 </label>
                 <input
@@ -219,7 +225,7 @@ export default function BuildsClient({ heroes, items }: Props) {
                   maxLength={80}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ex.: Haze Espírito Explosivo"
-                  className="w-full rounded-[4px] border border-neutral-700 bg-[#070908] px-3 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -235,8 +241,8 @@ export default function BuildsClient({ heroes, items }: Props) {
                     onClick={() => setActivePhase(phase.key)}
                     className={`rounded-[4px] border p-3 transition-colors cursor-pointer ${
                       selected
-                        ? "border-amber-500/70 bg-amber-500/5"
-                        : "border-neutral-800 bg-[#070908] hover:border-neutral-700"
+                        ? "border-amber-400/80 bg-black/55"
+                        : "border-white/10 bg-black/40 hover:border-white/25"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -318,12 +324,12 @@ export default function BuildsClient({ heroes, items }: Props) {
                 </button>
               </div>
             </div>
-          </div>
+          </SlantFrame>
         </div>
 
         {/* Catálogo de itens para adicionar na fase ativa */}
-        <div className="lg:col-span-5 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="border-b border-neutral-800/90 p-3.5 space-y-2.5">
+        <div className="lg:col-span-5 rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 overflow-hidden shadow-2xl">
+          <div className="dl-noise dl-halftone relative border-b border-white/10 bg-[#10181a]/90 p-3.5 space-y-2.5">
             <div className="flex flex-wrap gap-1.5">
               {(["all", "weapon", "vitality", "spirit"] as const).map((s) => (
                 <button
@@ -416,7 +422,7 @@ export default function BuildsClient({ heroes, items }: Props) {
               return (
                 <div
                   key={b.id}
-                  className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 space-y-3 shadow-lg"
+                  className="dl-noise dl-halftone relative rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 p-4 space-y-3 shadow-lg hover:border-amber-500/45 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">

@@ -678,14 +678,14 @@ export default function ProfileForm({
       {hasTrackerStats && (
         selectedHero ? (
           <section
-            className="rounded-2xl border bg-[#0a0d0c]/95 p-4 space-y-3"
-            style={{ borderColor: `color-mix(in srgb, ${heroColor} 24%, #262626)` }}
+            className="dl-noise dl-halftone relative rounded-[5px] border bg-[#0a0d0c]/95 p-4 space-y-3"
+            style={{ borderColor: `color-mix(in srgb, ${heroColor} 28%, #262626)` }}
           >
             <div className="flex items-center gap-3">
               <img
                 src={selectedHero.image}
                 alt={selectedHero.name}
-                className="h-14 w-14 shrink-0 rounded-xl border border-neutral-800 object-cover"
+                className="h-14 w-14 shrink-0 rounded-[4px] border border-white/15 object-cover"
               />
               <div className="min-w-0">
                 <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: heroColor }}>
@@ -709,7 +709,7 @@ export default function ProfileForm({
           </section>
         ) : (
           <section
-            className="rounded-2xl border border-dashed bg-neutral-900/30 p-4 text-center space-y-2.5"
+            className="rounded-[5px] border border-dashed bg-neutral-900/30 p-4 text-center space-y-2.5"
             style={{ borderColor: `color-mix(in srgb, ${heroColor} 35%, #262626)` }}
           >
             <p className="font-deadlock text-sm font-black text-neutral-300">
@@ -731,8 +731,8 @@ export default function ProfileForm({
       )}
 
       <section
-        className="space-y-3 rounded-2xl border bg-[#0a0d0c]/95 p-5"
-        style={{ borderColor: `color-mix(in srgb, ${heroColor} 22%, #262626)` }}
+        className="dl-noise dl-halftone relative space-y-3 rounded-[5px] border bg-[#0a0d0c]/95 p-5"
+        style={{ borderColor: `color-mix(in srgb, ${heroColor} 28%, #262626)` }}
       >
         <h3
           className="border-l-2 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]"
@@ -763,8 +763,8 @@ export default function ProfileForm({
       </section>
 
       <section
-        className="space-y-3 rounded-2xl border bg-[#0a0d0c]/95 p-5"
-        style={{ borderColor: `color-mix(in srgb, ${heroColor} 22%, #262626)` }}
+        className="dl-noise dl-halftone relative space-y-3 rounded-[5px] border bg-[#0a0d0c]/95 p-5"
+        style={{ borderColor: `color-mix(in srgb, ${heroColor} 28%, #262626)` }}
       >
         <h3
           className="border-l-2 pl-2 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]"
@@ -1204,7 +1204,7 @@ export default function ProfileForm({
         <div className="space-y-6">
           {/* Card Destaque do Herói Favorito */}
           {selectedHero ? (
-            <div className="relative overflow-hidden rounded-3xl border border-neutral-800/90 bg-[#0a0d0c] p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="dl-noise dl-halftone relative overflow-hidden rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="space-y-2 z-10 text-center md:text-left">
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-500">
                   Herói Selecionado em Destaque
@@ -1287,7 +1287,7 @@ export default function ProfileForm({
               {savedTierLists.map((item) => (
                 <div
                   key={item.id}
-                  className="rounded-2xl border border-neutral-800/90 bg-[#0a0d0c] p-5 space-y-3 shadow-xl"
+                  className="dl-noise dl-halftone relative rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 p-5 space-y-3 shadow-xl"
                 >
                   <div className="flex justify-between items-start gap-2">
                     <p className="font-deadlock text-lg font-black text-[#f4efe6] truncate">

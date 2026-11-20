@@ -9,6 +9,7 @@ import {
   getCurrentClientUser,
   resendVerificationEmail,
   signInWithGoogle,
+  signInWithSteam,
   signUpWithEmail,
   type ApiWakeStage,
 } from "@/lib/backend/client";
@@ -92,6 +93,35 @@ export default function RegisterPage() {
     }
   };
 
+  const handleSteamLogin = async () => {
+    setErrorMsg("");
+    setGoogleLoading(true);
+    setGoogleStage("connecting");
+    setGoogleElapsedMs(0);
+
+    const controller = new AbortController();
+    googleAbortRef.current = controller;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setGoogleElapsedMs(Date.now() - started);
+    }, 500);
+
+    const result = await signInWithSteam("/", {
+      signal: controller.signal,
+      onSlowWake: () => setGoogleWaking(true),
+      onStage: setGoogleStage,
+    });
+
+    clearInterval(timer);
+    if (!result.ok) {
+      setGoogleWaking(false);
+      setGoogleLoading(false);
+      if (!result.aborted && result.message) {
+        setErrorMsg(result.message);
+      }
+    }
+  };
+
   const strength = getPasswordStrength(password);
 
   const resetForm = () => {
@@ -150,13 +180,16 @@ export default function RegisterPage() {
       return;
     }
 
+    if (result.sessionActive) {
+      resetForm();
+      router.push("/welcome");
+      router.refresh();
+      return;
+    }
+
     setRegisteredEmail(email.trim());
-    setSessionActive(result.sessionActive);
-    setSuccessMsg(
-      result.sessionActive
-        ? "Conta criada e sessão iniciada! Você já pode usar o site e confirmar o e-mail depois."
-        : "Conta criada com sucesso! Confirme o e-mail para poder entrar.",
-    );
+    setSessionActive(false);
+    setSuccessMsg("Conta criada com sucesso! Confirme o e-mail para poder entrar.");
     setLoading(false);
   };
 
@@ -383,6 +416,18 @@ export default function RegisterPage() {
                 />
               </svg>
               <span>{googleLoading ? "Conectando..." : "Continuar com o Google"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSteamLogin}
+              disabled={googleLoading || loading}
+              className="mt-2.5 flex w-full items-center justify-center gap-3 rounded-lg border border-[#1b2838] bg-[#171a21] py-2.5 px-4 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#c7d5e0] transition-all hover:border-[#66c0f4]/60 hover:bg-[#1b2838] hover:text-white active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-sm"
+            >
+              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-current">
+                <path d="M11.98 0C5.63 0 .44 4.94.03 11.19l6.43 2.66a3.38 3.38 0 0 1 1.9-.58c.07 0 .14 0 .2.01l2.86-4.14v-.06a4.5 4.5 0 1 1 4.5 4.5h-.1l-4.08 2.91c0 .06.01.12.01.18a3.38 3.38 0 0 1-6.7.61L.44 15.36A12 12 0 1 0 11.98 0zm-4.5 17.51-1.46-.6a2.54 2.54 0 0 0 4.65.17 2.54 2.54 0 0 0-3.19-3.44l1.51.62a1.87 1.87 0 0 1-1.51 3.25zm11.02-8.43a3 3 0 1 0-6 0 3 3 0 0 0 6 0zm-5.25 0a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0z" />
+              </svg>
+              <span>{googleLoading ? "Conectando..." : "Continuar com a Steam"}</span>
             </button>
           </>
         )}

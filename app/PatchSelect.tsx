@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 interface Props {
   patches: { id: string; label: string }[];
@@ -9,6 +9,7 @@ interface Props {
 }
 
 export default function PatchSelect({ patches, selected }: Props) {
+  const pathname = usePathname() || "/tier-list";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -38,7 +39,7 @@ export default function PatchSelect({ patches, selected }: Props) {
     if (id === selected) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("patch", id);
-    startTransition(() => router.push(`/?${params.toString()}`));
+    startTransition(() => router.push(`${pathname}?${params.toString()}`));
   };
 
   return (

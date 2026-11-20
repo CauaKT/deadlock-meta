@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import SlantFrame from "@/app/heroes/[id]/SlantFrame";
 
 export interface PatchHeroDelta {
   id: number;
@@ -130,12 +131,17 @@ export default function PatchTrackerClient({
   return (
     <div className="space-y-8">
       {/* Barra de seleção de patch */}
-      <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+      <SlantFrame
+        shape="narrowTop"
+        border="#c97a2e"
+        background="linear-gradient(160deg, rgba(46,30,12,0.88), rgba(8,10,10,0.96))"
+        className="!py-4 !px-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+      >
         <div className="space-y-1">
           <p className="font-deadlock text-xs font-black uppercase tracking-wider text-amber-400">
             Comparação de Atualização
           </p>
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-neutral-300">
             Comparando o patch selecionado com o anterior: <strong className="text-[#f4efe6]">{prevPatchLabel}</strong>
           </p>
         </div>
@@ -146,7 +152,7 @@ export default function PatchTrackerClient({
             disabled={isPending}
             onChange={(e) => handlePatchChange(e.target.value)}
             aria-label="Selecionar patch para comparação"
-            className="rounded-[5px] border border-neutral-700 bg-[#070908] px-3 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
+            className="rounded-[5px] border border-white/15 bg-black/50 px-3 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
           >
             {patches.map((p) => (
               <option key={p.id} value={p.id}>
@@ -155,24 +161,29 @@ export default function PatchTrackerClient({
             ))}
           </select>
         </div>
-      </div>
+      </SlantFrame>
 
       {/* Destaques: Maiores altas e maiores quedas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="rounded-[5px] border-2 border-emerald-500/30 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="dl-halftone relative border-b border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
-            <h2 className="relative z-10 font-deadlock text-sm font-black uppercase tracking-wider text-emerald-400">
+        <SlantFrame
+          shape="slantLeft"
+          border="#389770"
+          background="linear-gradient(160deg, rgba(14,44,32,0.88), rgba(8,11,10,0.96))"
+          className="space-y-4"
+        >
+          <div className="border-b border-emerald-500/25 pb-2.5">
+            <h2 className="font-deadlock text-sm font-black uppercase tracking-wider text-emerald-400">
               Maiores Altas de Win Rate
             </h2>
           </div>
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Heróis</p>
+              <p className="font-deadlock text-[10px] font-black uppercase tracking-widest text-neutral-400">Heróis</p>
               {topHeroBuffs.map((h) => (
                 <Link
                   key={h.id}
                   href={`/heroes/${h.id}?patch=${selectedPatchId}`}
-                  className="flex items-center justify-between gap-2 rounded-[4px] border border-neutral-800/90 bg-[#070908] p-2 hover:border-emerald-500/50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-[4px] border border-white/10 bg-black/45 p-2 hover:border-emerald-400/55 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {h.image && (
@@ -186,12 +197,12 @@ export default function PatchTrackerClient({
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Itens</p>
+              <p className="font-deadlock text-[10px] font-black uppercase tracking-widest text-neutral-400">Itens</p>
               {topItemBuffs.map((it) => (
                 <Link
                   key={it.className}
                   href={`/items/${it.className}`}
-                  className="flex items-center justify-between gap-2 rounded-[4px] border border-neutral-800/90 bg-[#070908] p-2 hover:border-emerald-500/50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-[4px] border border-white/10 bg-black/45 p-2 hover:border-emerald-400/55 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {it.image && (
@@ -204,22 +215,27 @@ export default function PatchTrackerClient({
               ))}
             </div>
           </div>
-        </div>
+        </SlantFrame>
 
-        <div className="rounded-[5px] border-2 border-rose-500/30 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="dl-halftone relative border-b border-rose-500/25 bg-rose-500/10 px-4 py-3">
-            <h2 className="relative z-10 font-deadlock text-sm font-black uppercase tracking-wider text-rose-400">
+        <SlantFrame
+          shape="slantRight"
+          border="#9f3246"
+          background="linear-gradient(160deg, rgba(46,16,24,0.88), rgba(9,10,11,0.96))"
+          className="space-y-4"
+        >
+          <div className="border-b border-rose-500/25 pb-2.5">
+            <h2 className="font-deadlock text-sm font-black uppercase tracking-wider text-rose-400">
               Maiores Quedas de Win Rate
             </h2>
           </div>
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Heróis</p>
+              <p className="font-deadlock text-[10px] font-black uppercase tracking-widest text-neutral-400">Heróis</p>
               {topHeroNerfs.map((h) => (
                 <Link
                   key={h.id}
                   href={`/heroes/${h.id}?patch=${selectedPatchId}`}
-                  className="flex items-center justify-between gap-2 rounded-[4px] border border-neutral-800/90 bg-[#070908] p-2 hover:border-rose-500/50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-[4px] border border-white/10 bg-black/45 p-2 hover:border-rose-400/55 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {h.image && (
@@ -233,12 +249,12 @@ export default function PatchTrackerClient({
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Itens</p>
+              <p className="font-deadlock text-[10px] font-black uppercase tracking-widest text-neutral-400">Itens</p>
               {topItemNerfs.map((it) => (
                 <Link
                   key={it.className}
                   href={`/items/${it.className}`}
-                  className="flex items-center justify-between gap-2 rounded-[4px] border border-neutral-800/90 bg-[#070908] p-2 hover:border-rose-500/50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-[4px] border border-white/10 bg-black/45 p-2 hover:border-rose-400/55 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {it.image && (
@@ -251,12 +267,12 @@ export default function PatchTrackerClient({
               ))}
             </div>
           </div>
-        </div>
+        </SlantFrame>
       </div>
 
       {/* Filtros e tabela completa */}
-      <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-2xl">
-        <div className="border-b border-neutral-800/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 overflow-hidden shadow-2xl">
+        <div className="dl-noise dl-halftone relative border-b border-white/10 bg-[#10181a]/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
               type="button"

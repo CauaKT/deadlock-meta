@@ -20,45 +20,27 @@ export interface SourceGroup {
 const GROUPS: SourceGroup[] = [
   {
     id: "deadlock-api",
-    name: "Deadlock API (REST)",
+    name: "Deadlock API (Comunitária)",
     domain: "api.deadlock-api.com",
-    description: "API pública comunitária que fornece dados brutos extraídos do jogo e métricas agregadas de partidas.",
+    description: "API pública comunitária (não oficial) que fornece dados extraídos do jogo, métricas agregadas de partidas, perfis de jogadores e rankings.",
     endpoints: [
       {
-        title: "Analytics de Partidas (hero-stats)",
-        url: "https://api.deadlock-api.com/v1/analytics/hero-stats",
-        useCase: "Taxa de vitória (win rate), total de jogos disputados, vitórias e derrotas de cada herói segmentadas pelas janelas temporais de cada patch.",
+        title: "Analytics de Heróis, Itens & Matchups",
+        url: "https://api.deadlock-api.com/v1/analytics/{hero-stats,item-stats,hero-synergy-stats,hero-counter-stats}",
+        useCase: "Win rate, pick rate, impacto de patches, builds populares, sinergias e counters por patch e faixa de patente.",
         cache: "Revalidação a cada 1 hora (3600s)",
       },
       {
-        title: "Lista Geral de Heróis (heroes)",
-        url: "https://api.deadlock-api.com/v1/assets/heroes?language=brazilian",
-        useCase: "Nomes em pt-BR, status de lançamento, tags oficiais de papel tático, ícones de minimapa e cards 2:3 da seleção.",
-        cache: "Cache em memória de 24h no servidor",
+        title: "Assets de Heróis, Armas, Habilidades & Loja",
+        url: "https://api.deadlock-api.com/v1/assets/{heroes,items}?language=brazilian",
+        useCase: "Nomes em pt-BR, atributos base, ganhos por bênção, escalas, upgrades T1–T3, armas primárias e catálogo completo da loja.",
+        cache: "Cache em servidor de 24h (86400s)",
       },
       {
-        title: "Detalhes e Atributos Base (heroes/{id})",
-        url: "https://api.deadlock-api.com/v1/assets/heroes/{id}?language=brazilian",
-        useCase: "Atributos de combate nível 1 (vida, regeneração, velocidade, investida, stamina) e ganhos por bênção (nível).",
-        cache: "Revalidação diária (86400s)",
-      },
-      {
-        title: "Habilidades & Upgrades (items/by-hero-id/{id})",
-        url: "https://api.deadlock-api.com/v1/assets/items/by-hero-id/{id}?language=brazilian",
-        useCase: "As 4 habilidades do herói, propriedades numéricas, fórmulas de escalonamento com Espírito/Arma e descrições dos upgrades T1, T2 e T3.",
-        cache: "Revalidação diária (86400s)",
-      },
-      {
-        title: "Armas Primárias (items/by-type/weapon)",
-        url: "https://api.deadlock-api.com/v1/assets/items/by-type/weapon",
-        useCase: "Dano por segundo (DPS), dano por projétil, balas no pente, tempo de recarga e distância de queda de dano (falloff) convertida para metros.",
-        cache: "Revalidação diária (86400s)",
-      },
-      {
-        title: "Catálogo de Itens da Loja (items)",
-        url: "https://api.deadlock-api.com/v1/assets/items?language=brazilian",
-        useCase: "Todos os itens de Arma (Fairfax), Vitalidade (MPS) e Espírito (Curiosity), tiers 1 a 4, custos, atributos e itens componentes.",
-        cache: "Cache em memória de 24h no servidor (>2 MB)",
+        title: "Jogadores, Leaderboard & Partidas",
+        url: "https://api.deadlock-api.com/v1/{players,leaderboard,matches}",
+        useCase: "Estatísticas por Steam ID, histórico recente, patente/MMR, ranking regional e metadados de partidas consumidos via camada normalizada da API.",
+        cache: "Cache persistido no PostgreSQL (15m / 30m / 24h)",
       },
     ],
   },
@@ -66,12 +48,12 @@ const GROUPS: SourceGroup[] = [
     id: "deadlock-wiki",
     name: "Deadlock Wiki (MediaWiki & CDN)",
     domain: "deadlock.wiki",
-    description: "Base de conhecimento comunitária utilizada para extração fidedigna das cores oficiais dos heróis e artes vetoriais em alta resolução.",
+    description: "Wiki comunitária utilizada para extração dinâmica das cores oficiais dos heróis e artes em alta resolução.",
     endpoints: [
       {
         title: "Cores Oficiais dos Heróis (themes.css)",
         url: "https://deadlock.wiki/api.php?action=parse&page=Template:Infobox_hero/themes.css",
-        useCase: "Extração dinâmica das variáveis de cores oficiais de cada personagem (--th-heroinfobox-*), garantindo cores reais de cada herói sem mapas manuais.",
+        useCase: "Extração dinâmica das variáveis de cores oficiais de cada personagem (--th-heroinfobox-*), sem mapas manuais.",
         cache: "Cache em memória de 24h no servidor",
       },
       {
@@ -79,6 +61,26 @@ const GROUPS: SourceGroup[] = [
         url: "https://cdn.deadlock.wiki",
         useCase: "Logos tipográficos vetoriais (.svg) e renders oficiais de corpo inteiro dos heróis.",
         cache: "Entrega direta via CDN externa da Wiki",
+      },
+    ],
+  },
+  {
+    id: "lockpro-api",
+    name: "LockPro API (Camada Própria & Cache)",
+    domain: "deadlock-meta-api",
+    description: "API NestJS + PostgreSQL do próprio projeto, responsável por normalizar dados externos com cache persistente e gerenciar contas, builds, tier lists e comunidade.",
+    endpoints: [
+      {
+        title: "Camada Normalizada de Dados Externos",
+        url: "/api/backend/external-data/{status,player,leaderboard,matches}",
+        useCase: "Normaliza esquemas externos e persiste o cache no PostgreSQL (external_cache) para sobreviver a reinicializações.",
+        cache: "15m (jogador) • 30m (leaderboard) • 24h (partidas)",
+      },
+      {
+        title: "Contas, Comunidade & Conteúdo do Usuário",
+        url: "/api/backend/{auth,profiles,tier-lists,builds,feed,friends}",
+        useCase: "Autenticação httpOnly, perfis públicos, tier lists, builds, feed da comunidade e lista de amigos.",
+        cache: "Tempo real em PostgreSQL (Neon)",
       },
     ],
   },
@@ -208,7 +210,12 @@ const KNOWN_ROUTES: Record<string, string> = {
   "/": "a Tier List",
   "/heroes": "Heróis",
   "/items": "Itens",
+  "/patches": "Patch Tracker",
+  "/builds": "Builds",
+  "/calculator": "Calculadora",
   "/tier-maker": "o TierMaker",
+  "/feed": "o Feed",
+  "/profile": "o Perfil",
 };
 
 // Componente invisível que registra a última aba ativa da SPA

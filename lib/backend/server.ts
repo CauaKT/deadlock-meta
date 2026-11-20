@@ -34,11 +34,13 @@ interface ApiUserPayload {
   email: string;
   role?: "USER" | "ADMIN";
   emailVerified?: boolean;
+  emailVerificationRequired?: boolean;
   mustChangePassword?: boolean;
   createdAt: string;
   profile: {
     username: string | null;
     handle: string | null;
+    handleConfirmed?: boolean;
     avatarUrl: string | null;
     favoriteHeroId?: number | null;
   } | null;
@@ -74,6 +76,7 @@ export async function getServerAuthState(): Promise<{
         email: u.email,
         role: u.role === "ADMIN" ? "ADMIN" : "USER",
         emailVerified: Boolean(u.emailVerified),
+        emailVerificationRequired: Boolean(u.emailVerificationRequired),
         mustChangePassword: Boolean(u.mustChangePassword),
         createdAt: u.createdAt ?? null,
         suggestedUsername: u.profile?.username || fallbackName,
@@ -83,6 +86,7 @@ export async function getServerAuthState(): Promise<{
           ? {
               username: u.profile.username,
               handle: u.profile.handle,
+              handle_confirmed: u.profile.handleConfirmed ?? Boolean(u.profile.handle),
               avatar_url: u.profile.avatarUrl,
               favorite_hero_id: u.profile.favoriteHeroId ?? null,
             }

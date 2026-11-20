@@ -9,7 +9,7 @@ import {
 } from "@/lib/backend/client";
 import type { AuthUser } from "@/lib/backend/types";
 
-const HIDDEN_ROUTES = new Set(["/login", "/register", "/reset-password"]);
+const HIDDEN_ROUTES = new Set(["/login", "/register", "/reset-password", "/welcome"]);
 
 export default function EmailVerifyBanner() {
   const pathname = usePathname();
@@ -37,7 +37,13 @@ export default function EmailVerifyBanner() {
     return subscribeToAuthChanges(sync);
   }, []);
 
-  if (!user || user.emailVerified || dismissed || HIDDEN_ROUTES.has(pathname)) {
+  if (
+    !user ||
+    user.emailVerified ||
+    !user.emailVerificationRequired ||
+    dismissed ||
+    HIDDEN_ROUTES.has(pathname)
+  ) {
     return null;
   }
 

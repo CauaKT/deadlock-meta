@@ -3,6 +3,7 @@ export interface AuthUser {
   email: string;
   role: "USER" | "ADMIN";
   emailVerified: boolean;
+  emailVerificationRequired?: boolean;
   mustChangePassword?: boolean;
   createdAt: string | null;
   suggestedUsername: string;
@@ -25,6 +26,7 @@ export interface ProfileSummary {
   avatar_url?: string | null;
   favorite_hero_id?: number | null;
   handle?: string | null;
+  handle_confirmed?: boolean;
 }
 
 export interface OnboardingProfile {

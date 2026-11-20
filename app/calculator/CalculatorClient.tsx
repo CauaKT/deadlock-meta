@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
+import SlantFrame from "@/app/heroes/[id]/SlantFrame";
 
 export interface CalcHero {
   id: number;
@@ -218,12 +219,17 @@ export default function CalculatorClient({ heroes, items }: Props) {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* COLUNA ESQUERDA: Resumo da Build + Atributos */}
       <div className="lg:col-span-5 space-y-5">
-        <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="dl-halftone relative border-b border-neutral-800/90 bg-neutral-900/70 px-4 py-3 flex items-center justify-between gap-2">
-            <h2 className="relative z-10 font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
+        <SlantFrame
+          shape="narrowTop"
+          border="#3897a1"
+          background="linear-gradient(160deg, rgba(16,44,48,0.88), rgba(7,12,14,0.96))"
+          className="space-y-4"
+        >
+          <div className="border-b border-white/10 pb-3 flex items-center justify-between gap-2">
+            <h2 className="font-deadlock text-sm font-black uppercase tracking-wider text-[#f4efe6]">
               Herói & Orçamento
             </h2>
-            <div className="relative z-10 flex items-center gap-3">
+            <div className="flex items-center gap-3">
               {buildWinRate !== null && (
                 <span
                   title="Média da Win Rate dos itens equipados para o herói selecionado"
@@ -244,20 +250,20 @@ export default function CalculatorClient({ heroes, items }: Props) {
             </div>
           </div>
 
-          <div className="p-4 space-y-4">
+          <div className="space-y-4">
             <div className="flex items-center gap-3">
               {selectedHero?.image && (
                 <img
                   src={selectedHero.image}
                   alt=""
-                  className="h-12 w-12 shrink-0 rounded-[4px] object-cover border border-neutral-700"
+                  className="h-12 w-12 shrink-0 rounded-[4px] object-cover border border-white/15"
                 />
               )}
               <select
                 value={selectedHeroId}
                 onChange={(e) => setSelectedHeroId(e.target.value ? Number(e.target.value) : "")}
                 aria-label="Selecionar herói"
-                className="w-full rounded-[4px] border border-neutral-700 bg-[#070908] px-3 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
               >
                 <option value="">Todos os heróis (geral)</option>
                 {heroes.map((h) => (
@@ -270,8 +276,8 @@ export default function CalculatorClient({ heroes, items }: Props) {
 
             {selectedHero && (
               <div className="grid grid-cols-2 gap-2.5 text-xs">
-                <div className="rounded-[4px] border border-neutral-800 bg-[#070908] p-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                <div className="rounded-[4px] border border-white/10 bg-black/40 p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                     Vida Máxima
                   </p>
                   <p className="mt-0.5 font-mono text-sm font-black text-emerald-400">
@@ -283,24 +289,24 @@ export default function CalculatorClient({ heroes, items }: Props) {
                     )}
                   </p>
                 </div>
-                <div className="rounded-[4px] border border-neutral-800 bg-[#070908] p-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                <div className="rounded-[4px] border border-white/10 bg-black/40 p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                     Velocidade
                   </p>
                   <p className="mt-0.5 font-mono text-sm font-black text-[#f4efe6]">
                     {(selectedHero.moveSpeed + bonusMoveSpeed).toFixed(1)} m/s
                   </p>
                 </div>
-                <div className="rounded-[4px] border border-neutral-800 bg-[#070908] p-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                <div className="rounded-[4px] border border-white/10 bg-black/40 p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                     Regen. Vida
                   </p>
                   <p className="mt-0.5 font-mono text-sm font-black text-[#f4efe6]">
                     {selectedHero.healthRegen.toFixed(1)} /s
                   </p>
                 </div>
-                <div className="rounded-[4px] border border-neutral-800 bg-[#070908] p-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                <div className="rounded-[4px] border border-white/10 bg-black/40 p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                     Stamina Base
                   </p>
                   <p className="mt-0.5 font-mono text-sm font-black text-[#f4efe6]">
@@ -314,7 +320,7 @@ export default function CalculatorClient({ heroes, items }: Props) {
               {(["weapon", "vitality", "spirit"] as ItemSlot[]).map((slot) => (
                 <div
                   key={slot}
-                  className={`rounded-[4px] border px-2 py-1.5 ${SLOT_META[slot].border} ${SLOT_META[slot].bg}`}
+                  className={`rounded-[4px] border px-2 py-1.5 bg-black/40 ${SLOT_META[slot].border}`}
                 >
                   <p className={`font-deadlock text-[10px] font-black uppercase ${SLOT_META[slot].color}`}>
                     {SLOT_META[slot].label}
@@ -326,12 +332,17 @@ export default function CalculatorClient({ heroes, items }: Props) {
               ))}
             </div>
           </div>
-        </div>
+        </SlantFrame>
 
         {/* Slots Equipados */}
-        <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="border-b border-neutral-800/90 px-4 py-3 flex items-center justify-between">
-            <h2 className="font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+        <SlantFrame
+          shape="slantLeft"
+          border="#c97a2e"
+          background="linear-gradient(160deg, rgba(44,28,12,0.88), rgba(8,10,10,0.96))"
+          className="space-y-3"
+        >
+          <div className="border-b border-white/10 pb-2.5 flex items-center justify-between">
+            <h2 className="font-deadlock text-xs font-black uppercase tracking-wider text-amber-400">
               Itens Equipados ({equipped.length}/{MAX_SLOTS})
             </h2>
             {equipped.length > 0 && (
@@ -345,9 +356,9 @@ export default function CalculatorClient({ heroes, items }: Props) {
             )}
           </div>
 
-          <div className="p-4">
+          <div>
             {equipped.length === 0 ? (
-              <p className="py-4 text-center text-xs text-neutral-500">
+              <p className="py-4 text-center text-xs text-neutral-400">
                 Clique nos itens do catálogo ao lado para simular sua build.
               </p>
             ) : (
@@ -357,7 +368,7 @@ export default function CalculatorClient({ heroes, items }: Props) {
                     key={it.className}
                     onMouseEnter={(e) => showTip(it, e.currentTarget)}
                     onMouseLeave={() => setTip(null)}
-                    className={`group relative rounded-[4px] border p-1.5 text-center ${SLOT_META[it.slot].border} bg-[#070908]`}
+                    className={`group relative rounded-[4px] border p-1.5 text-center ${SLOT_META[it.slot].border} bg-black/50`}
                   >
                     <button
                       type="button"
@@ -382,23 +393,28 @@ export default function CalculatorClient({ heroes, items }: Props) {
               </div>
             )}
           </div>
-        </div>
+        </SlantFrame>
 
         {/* Soma Total dos Atributos */}
-        <div className="rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-xl">
-          <div className="border-b border-neutral-800/90 px-4 py-3">
-            <h2 className="font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+        <SlantFrame
+          shape="slantRight"
+          border="#659337"
+          background="linear-gradient(160deg, rgba(22,38,14,0.88), rgba(8,11,9,0.96))"
+          className="space-y-3"
+        >
+          <div className="border-b border-white/10 pb-2.5">
+            <h2 className="font-deadlock text-xs font-black uppercase tracking-wider text-emerald-400">
               Atributos Somados dos Itens
             </h2>
           </div>
 
-          <div className="p-4">
+          <div>
             {aggregatedStats.length === 0 ? (
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-neutral-400">
                 Nenhum atributo passivo somado ainda.
               </p>
             ) : (
-              <div className="divide-y divide-neutral-800/70 max-h-80 overflow-y-auto lp-scroll pr-1">
+              <div className="divide-y divide-white/10 max-h-80 overflow-y-auto lp-scroll pr-1">
                 {aggregatedStats.map((stat) => (
                   <div
                     key={`${stat.label}-${stat.unit}`}
@@ -415,12 +431,12 @@ export default function CalculatorClient({ heroes, items }: Props) {
               </div>
             )}
           </div>
-        </div>
+        </SlantFrame>
       </div>
 
       {/* COLUNA DIREITA: Catálogo Compacto (Ícone + Win Rate por Campeão) */}
-      <div className="lg:col-span-7 rounded-[5px] border-2 border-neutral-800/90 bg-[#0a0d0c]/95 overflow-hidden shadow-2xl">
-        <div className="border-b border-neutral-800/90 p-4 space-y-3">
+      <div className="lg:col-span-7 rounded-[5px] border border-white/15 bg-[#0a0d0c]/95 overflow-hidden shadow-2xl">
+        <div className="dl-noise dl-halftone relative border-b border-white/10 bg-[#10181a]/90 p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
               {(["all", "weapon", "vitality", "spirit"] as const).map((slot) => (

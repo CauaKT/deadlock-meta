@@ -20,6 +20,8 @@ interface SearchShopItem {
 }
 
 type ResultEntry =
+  | { kind: "playerId"; href: string; id: string }
+  | { kind: "matchId"; href: string; id: string }
   | { kind: "hero"; href: string; data: SearchHeroItem }
   | { kind: "item"; href: string; data: SearchShopItem }
   | { kind: "user"; href: string; data: CommunityProfileItem };
@@ -150,7 +152,20 @@ export default function GlobalSearchModal({
             .filter((item) => normalize(item.name).includes(q))
             .slice(0, 5);
 
+    const rawTrimmed = query.trim();
+    const numericId = /^\d{5,20}$/.test(rawTrimmed) ? rawTrimmed : null;
+    const isSteamUrl = /steamcommunity\.com\/(id|profiles)\//i.test(rawTrimmed);
+
     const flat: ResultEntry[] = [
+      ...(isSteamUrl
+        ? [{ kind: "playerId" as const, href: `steam-url:${rawTrimmed}`, id: rawTrimmed }]
+        : []),
+      ...(numericId
+        ? [
+            { kind: "playerId" as const, href: `/player/${numericId}`, id: numericId },
+            { kind: "matchId" as const, href: `/matches/${numericId}`, id: numericId },
+          ]
+        : []),
       ...hList.map((data): ResultEntry => ({
         kind: "hero",
         href: `/heroes/${data.id}`,
@@ -179,7 +194,19 @@ export default function GlobalSearchModal({
 
   if (!open) return null;
 
-  const navigateTo = (href: string) => {
+  const navigateTo = async (href: string) => {
+    if (href.startsWith("steam-url:")) {
+      const rawUrl = href.slice("steam-url:".length);
+      try {
+        const res = await fetch(`/api/resolve-steam?q=${encodeURIComponent(rawUrl)}`);
+        const data = (await res.json().catch(() => null)) as { steamId?: string } | null;
+        if (res.ok && data?.steamId) {
+          onOpenChange(false);
+          router.push(`/player/${data.steamId}`);
+        }
+      } catch {}
+      return;
+    }
     onOpenChange(false);
     router.push(href);
   };
@@ -236,7 +263,7 @@ export default function GlobalSearchModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Buscar heróis, itens ou @handle..."
+            placeholder="Buscar heróis, itens, @handle, Steam ID ou Match ID..."
             className="w-full bg-transparent text-sm text-[#f4efe6] placeholder:text-neutral-500 focus:outline-none"
           />
           <button
@@ -269,6 +296,41 @@ export default function GlobalSearchModal({
             </div>
           ) : (
             <div className="space-y-3 p-1">
+              {(/^\d{5,20}$/.test(query.trim()) || /steamcommunity\.com\/(id|profiles)\//i.test(query.trim())) && (
+                <div className="space-y-1">
+                  <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                    Tracker Direto
+                  </p>
+                  {(/steamcommunity\.com\/(id|profiles)\//i.test(query.trim())
+                    ? [{ label: "Abrir Perfil Steam", href: `steam-url:${query.trim()}`, tag: "Steam URL" }]
+                    : [
+                        { label: `Ver Jogador #${query.trim()}`, href: `/player/${query.trim()}`, tag: "Steam ID" },
+                        { label: `Ver Partida #${query.trim()}`, href: `/matches/${query.trim()}`, tag: "Match ID" },
+                      ]
+                  ).map((entry) => {
+                    globalIdx += 1;
+                    const idx = globalIdx;
+                    const active = activeIndex === idx;
+                    return (
+                      <button
+                        key={entry.href}
+                        type="button"
+                        onClick={() => navigateTo(entry.href)}
+                        onMouseEnter={() => setActiveIndex(idx)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition-colors cursor-pointer ${
+                          active ? "bg-amber-500/15 text-amber-300" : "text-[#f4efe6] hover:bg-neutral-900"
+                        }`}
+                      >
+                        <span className="truncate font-mono text-xs font-bold">{entry.label}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                          {entry.tag}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {matchedHeroes.length > 0 && (
                 <div className="space-y-1">
                   <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">

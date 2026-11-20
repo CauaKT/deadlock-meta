@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import { useState, useRef, useEffect, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { RankFilterOption } from "@/lib/deadlock";
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export default function RankSelect({ ranks, selected }: Props) {
+  const pathname = usePathname() || "/tier-list";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -44,7 +45,7 @@ export default function RankSelect({ ranks, selected }: Props) {
       params.set("rank", id);
     }
     const qs = params.toString();
-    startTransition(() => router.push(qs ? `/?${qs}` : "/"));
+    startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
   };
 
   return (

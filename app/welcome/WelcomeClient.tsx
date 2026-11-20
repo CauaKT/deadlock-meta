@@ -91,9 +91,14 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
       }
       setUser(u);
 
-      // Se já possui username e @ preenchidos, libera para a home
+      // Se já possui username e @ confirmados, libera para a home
       const profile = u.profile;
-      if (profile?.username && profile.username.trim() !== "" && profile.handle) {
+      if (
+        profile?.username &&
+        profile.username.trim() !== "" &&
+        profile.handle &&
+        profile.handle_confirmed
+      ) {
         router.push("/");
         return;
       }

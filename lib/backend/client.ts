@@ -34,11 +34,13 @@ interface ApiUserPayload {
   email: string;
   role: "USER" | "ADMIN";
   emailVerified: boolean;
+  emailVerificationRequired?: boolean;
   mustChangePassword?: boolean;
   createdAt: string;
   profile: {
     username: string | null;
     handle: string | null;
+    handleConfirmed?: boolean;
     avatarUrl: string | null;
     favoriteHeroId: number | null;
   } | null;
@@ -51,6 +53,7 @@ function mapApiUser(u: ApiUserPayload): AuthUser {
     email: u.email,
     role: u.role === "ADMIN" ? "ADMIN" : "USER",
     emailVerified: Boolean(u.emailVerified),
+    emailVerificationRequired: Boolean(u.emailVerificationRequired),
     mustChangePassword: Boolean(u.mustChangePassword),
     createdAt: u.createdAt ?? null,
     suggestedUsername: u.profile?.username || fallbackName,
@@ -60,6 +63,7 @@ function mapApiUser(u: ApiUserPayload): AuthUser {
       ? {
           username: u.profile.username,
           handle: u.profile.handle,
+          handle_confirmed: u.profile.handleConfirmed ?? Boolean(u.profile.handle),
           avatar_url: u.profile.avatarUrl,
           favorite_hero_id: u.profile.favoriteHeroId,
         }
@@ -203,6 +207,42 @@ export async function signInWithGoogle(
   }
 
   window.location.href = apiUrl(`/auth/google?next=${encodeURIComponent(nextRoute)}`);
+  return { ok: true };
+}
+
+export async function signInWithSteam(
+  nextRoute: string,
+  options?: {
+    onSlowWake?: () => void;
+    onStage?: (stage: ApiWakeStage) => void;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: true } | { ok: false; message: string; aborted?: boolean }> {
+  const slowTimer = options?.onSlowWake
+    ? setTimeout(() => {
+        options.onSlowWake?.();
+      }, 700)
+    : null;
+
+  const { ready, aborted } = await waitForApiReady({
+    signal: options?.signal,
+    onStage: options?.onStage,
+  });
+
+  if (slowTimer) clearTimeout(slowTimer);
+
+  if (aborted) {
+    return { ok: false, message: "", aborted: true };
+  }
+
+  if (!ready) {
+    return {
+      ok: false,
+      message: "O servidor demorou para responder. Tente novamente em alguns segundos.",
+    };
+  }
+
+  window.location.href = apiUrl(`/auth/steam?next=${encodeURIComponent(nextRoute)}`);
   return { ok: true };
 }
 

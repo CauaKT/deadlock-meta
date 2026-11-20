@@ -31,8 +31,8 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     redirect("/login");
   }
 
-  // Sem @handle o onboarding em /welcome é obrigatório (mesma regra do NavUserButton, agora também no servidor)
-  if (!user.profile?.handle) redirect("/welcome");
+  // Sem @handle confirmado o onboarding em /welcome é obrigatório (mesma regra do NavUserButton, agora também no servidor)
+  if (!user.profile?.handle || !user.profile?.handle_confirmed) redirect("/welcome");
 
   const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     getOwnFullProfile(user.id),
