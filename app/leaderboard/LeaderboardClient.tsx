@@ -1,12 +1,14 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 export interface LeaderboardHeroOption {
   id: number;
   name: string;
   image: string | null;
+  rgb?: [number, number, number] | null;
 }
 
 interface LeaderboardEntry {
@@ -206,16 +208,58 @@ function PaginationBar({
 export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroOption[] }) {
   const heroMap = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
 
-  const [region, setRegion] = useState("Global");
-  const [heroId, setHeroId] = useState<string>("");
-  const [heroOpen, setHeroOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [region, setRegion] = useState(() => {
+    const r = searchParams.get("region");
+    return r && ["Global", "SAmerica", "Row", "Europe", "SEAsia", "Oceania"].includes(r)
+      ? r
+      : "Global";
+  });
+  const [heroIds, setHeroIds] = useState<number[]>(() => {
+    const raw = searchParams.get("heroes") ?? searchParams.get("heroIds") ?? "";
+    return Array.from(
+      new Set(
+        raw
+          .split(",")
+          .map((v) => Number(v.trim()))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    ).slice(0, 3);
+  });
   const [heroSearch, setHeroSearch] = useState("");
-  const heroDropRef = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(1);
+  const heroIdsKey = heroIds.join(",");
+  const [debouncedHeroIdsKey, setDebouncedHeroIdsKey] = useState(heroIdsKey);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedHeroIdsKey(heroIdsKey), 500);
+    return () => clearTimeout(t);
+  }, [heroIdsKey]);
+  const [page, setPage] = useState(() => {
+    const p = Number(searchParams.get("page"));
+    return Number.isInteger(p) && p >= 1 ? p : 1;
+  });
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("points");
-  const [selectedTier, setSelectedTier] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>(() => {
+    const s = searchParams.get("sort");
+    return s === "winrate" || s === "matches" || s === "rank" ? s : "points";
+  });
+  const [selectedTier, setSelectedTier] = useState<number | null>(() => {
+    const t = Number(searchParams.get("tier"));
+    return Number.isInteger(t) && t >= 1 && t <= 11 ? t : null;
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (region !== "Global") params.set("region", region);
+    if (heroIdsKey) params.set("heroes", heroIdsKey);
+    if (selectedTier !== null) params.set("tier", String(selectedTier));
+    if (page > 1) params.set("page", String(page));
+    if (sortBy !== "points") params.set("sort", sortBy);
+    const qs = params.toString();
+    const nextUrl = qs ? `/leaderboard?${qs}` : "/leaderboard";
+    window.history.replaceState(null, "", nextUrl);
+  }, [region, heroIdsKey, selectedTier, page, sortBy]);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,36 +268,28 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
 
   const [rankDist, setRankDist] = useState<RankDistributionTier[]>([]);
   const [totalRankedPlayers, setTotalRankedPlayers] = useState<number>(0);
+  const tierParam =
+    selectedTier !== null && selectedTier >= 1 && selectedTier <= 11
+      ? selectedTier
+      : null;
 
   useEffect(() => {
-    if (!heroOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (heroDropRef.current && !heroDropRef.current.contains(e.target as Node)) {
-        setHeroOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setHeroOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [heroOpen]);
-
-  useEffect(() => {
-    fetch("/api/backend/external-data/rank-distribution", { cache: "no-store" })
+    let cancelled = false;
+    fetch(`/api/backend/external-data/rank-distribution?region=${encodeURIComponent(region)}`, {
+      cache: "no-store",
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { totalPlayers?: number; tiers?: RankDistributionTier[] } | null) => {
-        if (d && Array.isArray(d.tiers)) {
+        if (!cancelled && d && Array.isArray(d.tiers)) {
           setRankDist(d.tiers);
           setTotalRankedPlayers(typeof d.totalPlayers === "number" ? d.totalPlayers : 0);
         }
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [region]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,7 +299,8 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(PAGE_SIZE));
-    if (heroId) params.set("heroId", heroId);
+    if (debouncedHeroIdsKey) params.set("heroIds", debouncedHeroIdsKey);
+    if (tierParam !== null) params.set("tier", String(tierParam));
 
     const url = `/api/backend/external-data/leaderboard/${encodeURIComponent(region)}?${params.toString()}`;
 
@@ -314,13 +351,13 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     return () => {
       cancelled = true;
     };
-  }, [region, heroId, page, reloadKey]);
+  }, [region, debouncedHeroIdsKey, page, reloadKey, tierParam]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = [...entries];
 
-    if (selectedTier !== null) {
+    if (selectedTier !== null && tierParam === null) {
       list = list.filter((e) => getEntryTier(e) === selectedTier);
     }
 
@@ -347,7 +384,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     });
 
     return list;
-  }, [entries, search, sortBy, selectedTier]);
+  }, [entries, search, sortBy, selectedTier, tierParam]);
 
   const regionLabel = REGIONS.find((r) => r.id === region)?.label ?? region;
 
@@ -391,7 +428,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* COLUNA LATERAL DE FILTROS + DISTRIBUIÇÃO POR PATENTE */}
-        <aside className="lg:col-span-3 space-y-4">
+        <aside className="lg:col-span-3 lg:order-2 space-y-4">
           <div className="dl-noise relative z-20 rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 p-4 space-y-4">
             <div className="space-y-2">
               <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400">
@@ -418,128 +455,102 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
               </div>
             </div>
 
-            <div ref={heroDropRef} className="relative space-y-1.5 border-t border-white/10 pt-3">
-              <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400">
-                Herói
-              </label>
-              {(() => {
-                const activeHero = heroId ? heroMap.get(Number(heroId)) : null;
-                return (
+            <div className="space-y-2 border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400">
+                  Heróis {heroIds.length > 0 ? `(${heroIds.length}/3)` : ""}
+                </label>
+                {heroIds.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setHeroOpen((o) => !o)}
-                    aria-expanded={heroOpen}
-                    className="flex w-full items-center justify-between gap-2 rounded-[4px] border border-white/12 bg-black/60 px-2.5 py-2 text-left transition-colors hover:border-amber-500/50 focus:border-amber-500 focus:outline-none cursor-pointer"
+                    onClick={() => {
+                      setHeroIds([]);
+                      setPage(1);
+                    }}
+                    className="text-[10px] font-bold text-amber-400 hover:underline cursor-pointer"
                   >
-                    <span className="flex items-center gap-2 min-w-0">
-                      {activeHero?.image ? (
-                        <img
-                          src={activeHero.image}
-                          alt=""
-                          className="h-5 w-5 rounded-[3px] object-cover shrink-0"
-                        />
-                      ) : (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] bg-white/[0.06] text-amber-400">
-                          <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
-                          </svg>
-                        </span>
-                      )}
-                      <span className="truncate font-deadlock text-[11px] font-black uppercase text-[#f4efe6]">
-                        {activeHero ? activeHero.name : "Geral (Todos os Heróis)"}
-                      </span>
-                    </span>
-                    <svg
-                      aria-hidden
-                      viewBox="0 0 16 16"
-                      className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${
-                        heroOpen ? "rotate-180 text-amber-400" : ""
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="m4 6 4 4 4-4" />
-                    </svg>
+                    Limpar
                   </button>
-                );
-              })()}
-
-              {heroOpen && (
-                <div className="absolute left-0 right-0 z-50 mt-1 rounded-[5px] border border-white/20 bg-[#0c0f0e] shadow-[0_18px_40px_rgba(0,0,0,0.92)] overflow-hidden">
-                  <div className="border-b border-white/10 p-2">
-                    <input
-                      type="text"
-                      value={heroSearch}
-                      onChange={(e) => setHeroSearch(e.target.value)}
-                      placeholder="Buscar herói..."
-                      autoFocus
-                      className="w-full rounded-[4px] border border-white/12 bg-black/60 px-2.5 py-1.5 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="max-h-64 overflow-y-auto lp-scroll p-1 space-y-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeroId("");
-                        setPage(1);
-                        setHeroOpen(false);
-                        setHeroSearch("");
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-left text-xs font-semibold cursor-pointer ${
-                        heroId === ""
-                          ? "bg-amber-500/15 text-amber-300"
-                          : "text-neutral-300 hover:bg-white/[0.05]"
-                      }`}
-                    >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] bg-white/[0.06] text-amber-400">
-                        <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
-                        </svg>
-                      </span>
-                      <span className="truncate">Geral (Todos os Heróis)</span>
-                    </button>
-
-                    {heroes
-                      .filter((h) =>
-                        h.name.toLowerCase().includes(heroSearch.trim().toLowerCase()),
-                      )
-                      .map((h) => {
-                        const selected = heroId === String(h.id);
-                        return (
-                          <button
-                            key={h.id}
-                            type="button"
-                            onClick={() => {
-                              setHeroId(String(h.id));
-                              setPage(1);
-                              setHeroOpen(false);
-                              setHeroSearch("");
+                )}
+              </div>
+              <input
+                type="text"
+                value={heroSearch}
+                onChange={(e) => setHeroSearch(e.target.value)}
+                placeholder="Buscar herói..."
+                className="w-full rounded-[4px] border border-white/12 bg-black/60 px-2.5 py-1.5 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
+              />
+              <div className="grid grid-cols-5 gap-2 max-h-72 overflow-y-auto overflow-x-hidden lp-scroll p-2">
+                {heroes
+                  .filter((h) =>
+                    h.name.toLowerCase().includes(heroSearch.trim().toLowerCase()),
+                  )
+                  .map((h) => {
+                    const selected = heroIds.includes(h.id);
+                    const limitReached = !selected && heroIds.length >= 3;
+                    const hc =
+                      Array.isArray(h.rgb) && h.rgb.length === 3
+                        ? h.rgb.join(" ")
+                        : "245 158 11";
+                    return (
+                      <button
+                        key={h.id}
+                        type="button"
+                        title={h.name}
+                        aria-label={h.name}
+                        aria-pressed={selected}
+                        disabled={limitReached}
+                        onClick={() => {
+                          setHeroIds((prev) => {
+                            if (prev.includes(h.id)) return prev.filter((id) => id !== h.id);
+                            if (prev.length >= 3) return prev;
+                            return [...prev, h.id];
+                          });
+                          setPage(1);
+                        }}
+                        style={{ "--hc": hc } as CSSProperties}
+                        className={`group relative aspect-square w-full p-0.5 transition-all ${
+                          selected
+                            ? "pf-smoke scale-110 opacity-100 z-10 cursor-pointer"
+                            : limitReached
+                              ? "opacity-35 cursor-not-allowed"
+                              : heroIds.length > 0
+                                ? "opacity-45 hover:opacity-100 hover:scale-110 cursor-pointer"
+                                : "opacity-90 hover:opacity-100 hover:scale-110 cursor-pointer"
+                        }`}
+                      >
+                        <span
+                          style={{
+                            background: `radial-gradient(circle, rgb(${hc} / 0.65) 0%, rgb(${hc} / 0.25) 45%, transparent 72%)`,
+                          }}
+                          className={`pointer-events-none absolute -inset-1.5 rounded-full transition-opacity duration-200 ${
+                            selected
+                              ? "opacity-100"
+                              : heroIds.length === 0
+                                ? "opacity-80 group-hover:opacity-100"
+                                : limitReached
+                                  ? "opacity-0"
+                                  : "opacity-0 group-hover:opacity-100"
+                          }`}
+                        />
+                        {h.image ? (
+                          <img
+                            src={h.image}
+                            alt={h.name}
+                            style={{
+                              filter: selected
+                                ? `drop-shadow(0 0 8px rgb(${hc} / 0.85))`
+                                : undefined,
                             }}
-                            className={`flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-left text-xs font-semibold cursor-pointer ${
-                              selected
-                                ? "bg-amber-500/15 text-amber-300"
-                                : "text-neutral-200 hover:bg-white/[0.05]"
-                            }`}
-                          >
-                            {h.image ? (
-                              <img
-                                src={h.image}
-                                alt=""
-                                className="h-6 w-6 rounded-[3px] object-cover shrink-0"
-                              />
-                            ) : (
-                              <span className="h-6 w-6 rounded-[3px] bg-white/10 shrink-0" />
-                            )}
-                            <span className="truncate">{h.name}</span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
+                            className="relative z-10 h-full w-full object-contain"
+                          />
+                        ) : (
+                          <span className="relative z-10 block h-full w-full rounded-full bg-white/10" />
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
           </div>
 
@@ -552,7 +563,10 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                 {selectedTier !== null && (
                   <button
                     type="button"
-                    onClick={() => setSelectedTier(null)}
+                    onClick={() => {
+                      setSelectedTier(null);
+                      setPage(1);
+                    }}
                     className="text-[10px] font-bold text-amber-400 hover:underline cursor-pointer"
                   >
                     Limpar
@@ -566,9 +580,10 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                     <button
                       key={item.tier}
                       type="button"
-                      onClick={() =>
-                        setSelectedTier((prev) => (prev === item.tier ? null : item.tier))
-                      }
+                      onClick={() => {
+                        setSelectedTier((prev) => (prev === item.tier ? null : item.tier));
+                        setPage(1);
+                      }}
                       className={`flex w-full items-center justify-between gap-2 rounded-[4px] px-2 py-1 text-xs transition-colors cursor-pointer ${
                         active
                           ? "bg-amber-500/15 border border-amber-500/45 text-amber-300"
@@ -597,7 +612,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
         </aside>
 
         {/* TABELA PRINCIPAL */}
-        <div className="lg:col-span-9 space-y-4">
+        <div className="lg:col-span-9 lg:order-1 space-y-4">
           {error && (
             <div className="rounded-[5px] border border-rose-500/40 bg-rose-950/30 p-3.5 flex items-center justify-between gap-3 text-xs font-bold text-rose-300">
               <span>{error}</span>
