@@ -363,7 +363,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
             Leader<span className="text-amber-500">board</span>
           </h1>
           <p className="text-neutral-400 text-xs md:text-sm max-w-2xl">
-            Confira os melhores jogadores por região e por herói específico, com cache persistente e acesso direto ao perfil público.
+            Confira o topo oficial do ranking por região e por herói específico, com cache persistente e acesso direto ao perfil público.
           </p>
         </div>
 
@@ -374,7 +374,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                 {totalRankedPlayers.toLocaleString("pt-BR")}
               </p>
               <p className="font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-400">
-                Jogadores Mapeados
+                Jogadores Ranqueados
               </p>
             </div>
           )}
