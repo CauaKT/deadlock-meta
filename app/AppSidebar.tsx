@@ -531,7 +531,7 @@ export default function AppSidebar() {
         </div>
       </aside>
 
-      <GlobalSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <GlobalSearchModal open={searchOpen} onOpenChangeAction={setSearchOpen} />
     </>
   );
 }

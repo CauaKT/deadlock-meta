@@ -25,7 +25,7 @@ export default function SlantFrame({
   const clipPath = CLIPS[shape];
   return (
     <div className="flex" style={{ filter: "drop-shadow(0 10px 14px rgba(0,0,0,0.65))" }}>
-      <div className="flex flex-1 p-0.5" style={{ clipPath, backgroundColor: border }}>
+      <div className="flex flex-1 p-0.5" style={{ clipPath, background: border }}>
         <div
           className={`dl-noise dl-halftone relative flex-1 overflow-hidden p-5 ${className}`}
           style={{ clipPath, background, boxShadow: "inset 0 0 40px rgba(0,0,0,0.55)" }}

@@ -58,16 +58,22 @@ export async function generateMetadata({
 
 export default async function PublicPlayerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ steamId: string }>;
+  searchParams: Promise<{ heroId?: string }>;
 }) {
-  const { steamId } = await params;
+  const [{ steamId }, { heroId }] = await Promise.all([params, searchParams]);
   const accountId = toAccountId(steamId);
   if (!accountId) notFound();
 
   const linkedHandle = await getPublicProfileHandleBySteam(accountId);
   if (linkedHandle) {
-    redirect(`/profile/${encodeURIComponent(linkedHandle)}`);
+    redirect(
+      `/profile/${encodeURIComponent(linkedHandle)}${
+        heroId ? `?heroId=${encodeURIComponent(heroId)}` : ""
+      }`,
+    );
   }
 
   const [steam, heroesMap, wikiColors] = await Promise.all([

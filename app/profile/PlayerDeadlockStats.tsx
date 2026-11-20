@@ -831,6 +831,16 @@ export default function PlayerDeadlockStats({
   const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
   const [heroFilter, setHeroFilter] = useState<number | "all">("all");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+
+  useEffect(() => {
+    try {
+      const raw = new URLSearchParams(window.location.search).get("heroId");
+      const id = raw ? Number(raw) : NaN;
+      if (Number.isInteger(id) && id > 0) {
+        setHeroFilter(id);
+      }
+    } catch {}
+  }, []);
   const [visibleMatchesCount, setVisibleMatchesCount] = useState(12);
   const [showAllHeroes, setShowAllHeroes] = useState(false);
 
@@ -1673,9 +1683,14 @@ const filteredMatches = useMemo(() => {
     </section>
   );
 
+  const filteredHeroStatsList =
+    heroFilter === "all"
+      ? (summary?.allHeroesSorted ?? [])
+      : (summary?.allHeroesSorted ?? []).filter((row) => row.hero_id === heroFilter);
+
   const visibleHeroes = showAllHeroes
-    ? summary?.allHeroesSorted ?? []
-    : (summary?.allHeroesSorted ?? []).slice(0, 7);
+    ? filteredHeroStatsList
+    : filteredHeroStatsList.slice(0, 7);
 
   return (
     <div className="space-y-4">

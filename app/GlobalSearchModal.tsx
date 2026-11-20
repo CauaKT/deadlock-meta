@@ -42,10 +42,10 @@ function normalize(s: string) {
 
 export default function GlobalSearchModal({
   open,
-  onOpenChange,
+  onOpenChangeAction: onOpenChange,
 }: {
   open: boolean;
-  onOpenChange: (next: boolean) => void;
+  onOpenChangeAction: (next: boolean) => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +60,8 @@ export default function GlobalSearchModal({
   const [users, setUsers] = useState<CommunityProfileItem[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [steamError, setSteamError] = useState<string | null>(null);
+  const [steamResolving, setSteamResolving] = useState(false);
 
   // Atalho global Ctrl + K / Cmd + K
   useEffect(() => {
@@ -81,6 +83,8 @@ export default function GlobalSearchModal({
       setQuery("");
       setUsers([]);
       setActiveIndex(0);
+      setSteamError(null);
+      setSteamResolving(false);
       return;
     }
 
@@ -152,9 +156,11 @@ export default function GlobalSearchModal({
             .filter((item) => normalize(item.name).includes(q))
             .slice(0, 5);
 
-    const rawTrimmed = query.trim();
+    const rawTrimmed = query.trim().replace(/^@+/, "");
     const numericId = /^\d{5,20}$/.test(rawTrimmed) ? rawTrimmed : null;
-    const isSteamUrl = /steamcommunity\.com\/(id|profiles)\//i.test(rawTrimmed);
+    const isSteamUrl =
+      /steamcommunity\.com\/(id|profiles)\//i.test(rawTrimmed) ||
+      /s\.team\/p\//i.test(rawTrimmed);
 
     const flat: ResultEntry[] = [
       ...(isSteamUrl
@@ -195,16 +201,24 @@ export default function GlobalSearchModal({
   if (!open) return null;
 
   const navigateTo = async (href: string) => {
+    setSteamError(null);
     if (href.startsWith("steam-url:")) {
       const rawUrl = href.slice("steam-url:".length);
+      setSteamResolving(true);
       try {
         const res = await fetch(`/api/resolve-steam?q=${encodeURIComponent(rawUrl)}`);
-        const data = (await res.json().catch(() => null)) as { steamId?: string } | null;
+        const data = (await res.json().catch(() => null)) as { steamId?: string; error?: string } | null;
         if (res.ok && data?.steamId) {
           onOpenChange(false);
           router.push(`/player/${data.steamId}`);
+        } else {
+          setSteamError(data?.error || "Não foi possível resolver o link da Steam.");
         }
-      } catch {}
+      } catch {
+        setSteamError("Erro de conexão ao consultar a Steam.");
+      } finally {
+        setSteamResolving(false);
+      }
       return;
     }
     onOpenChange(false);
@@ -296,16 +310,37 @@ export default function GlobalSearchModal({
             </div>
           ) : (
             <div className="space-y-3 p-1">
-              {(/^\d{5,20}$/.test(query.trim()) || /steamcommunity\.com\/(id|profiles)\//i.test(query.trim())) && (
+              {steamError && (
+                <p className="px-2.5 py-1 text-xs font-semibold text-rose-400">{steamError}</p>
+              )}
+
+              {(/^\d{5,20}$/.test(query.trim().replace(/^@+/, "")) ||
+                /steamcommunity\.com\/(id|profiles)\//i.test(query.trim()) ||
+                /s\.team\/p\//i.test(query.trim())) && (
                 <div className="space-y-1">
                   <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
                     Tracker Direto
                   </p>
-                  {(/steamcommunity\.com\/(id|profiles)\//i.test(query.trim())
-                    ? [{ label: "Abrir Perfil Steam", href: `steam-url:${query.trim()}`, tag: "Steam URL" }]
+                  {(/steamcommunity\.com\/(id|profiles)\//i.test(query.trim()) ||
+                  /s\.team\/p\//i.test(query.trim())
+                    ? [
+                        {
+                          label: steamResolving ? "Resolvendo perfil Steam..." : "Abrir Perfil Steam",
+                          href: `steam-url:${query.trim().replace(/^@+/, "")}`,
+                          tag: "Steam URL",
+                        },
+                      ]
                     : [
-                        { label: `Ver Jogador #${query.trim()}`, href: `/player/${query.trim()}`, tag: "Steam ID" },
-                        { label: `Ver Partida #${query.trim()}`, href: `/matches/${query.trim()}`, tag: "Match ID" },
+                        {
+                          label: `Ver Jogador #${query.trim().replace(/^@+/, "")}`,
+                          href: `/player/${query.trim().replace(/^@+/, "")}`,
+                          tag: "Steam ID",
+                        },
+                        {
+                          label: `Ver Partida #${query.trim().replace(/^@+/, "")}`,
+                          href: `/matches/${query.trim().replace(/^@+/, "")}`,
+                          tag: "Match ID",
+                        },
                       ]
                   ).map((entry) => {
                     globalIdx += 1;
