@@ -20,6 +20,25 @@ export const metadata: Metadata = {
   description: "Acompanhe quais heróis e itens ganharam ou perderam mais win rate e pick rate entre os patches de Deadlock.",
 };
 
+interface OfficialPatchNote {
+  title: string;
+  pub_date: string;
+  link: string;
+}
+
+async function fetchOfficialPatchNotes(): Promise<OfficialPatchNote[]> {
+  try {
+    const res = await fetch("https://api.deadlock-api.com/v2/patches", {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as OfficialPatchNote[];
+    return Array.isArray(data) ? data.slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function PatchesPage({
   searchParams,
 }: {
@@ -45,6 +64,7 @@ export default async function PatchesPage({
     heroStatsPrev,
     itemStatsNow,
     itemStatsPrev,
+    officialNotes,
   ] = await Promise.all([
     fetchHeroesAssets(),
     fetchWikiColors(),
@@ -53,6 +73,7 @@ export default async function PatchesPage({
     fetchHeroesAnalytics(prevPatch.since, currentPatch.since),
     fetchItemsAnalytics(currentPatch.since, currentUntil),
     fetchItemsAnalytics(prevPatch.since, currentPatch.since),
+    fetchOfficialPatchNotes(),
   ]);
 
   const totalHeroMatchesNow = heroStatsNow.reduce((sum, s) => sum + (s.matches || 0), 0);
@@ -143,6 +164,32 @@ export default async function PatchesPage({
           Impacto real de cada atualização no meta: variação de Win Rate e Pick Rate de heróis e itens em comparação com o patch anterior.
         </p>
       </header>
+
+      {officialNotes.length > 0 && (
+        <section className="space-y-2.5">
+          <p className="font-deadlock text-[10px] font-black uppercase tracking-widest text-amber-400">
+            Notas Oficiais Recentes (Steam)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {officialNotes.map((note) => (
+              <a
+                key={note.link}
+                href={note.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="dl-noise relative rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 p-3.5 transition-colors hover:border-amber-500/50 space-y-1.5"
+              >
+                <p className="font-mono text-[10px] text-neutral-400">
+                  {new Date(note.pub_date).toLocaleDateString("pt-BR")}
+                </p>
+                <p className="text-xs font-bold text-[#f4efe6] line-clamp-2">
+                  {note.title}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <PatchTrackerClient
         patches={selectablePatches.map((p) => ({ id: p.id, label: p.label }))}

@@ -35,7 +35,7 @@ interface RankDistributionTier {
 
 type SortKey = "points" | "winrate" | "matches" | "rank";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
 const REGIONS = [
   { id: "Global", label: "Global" },
@@ -130,6 +130,79 @@ function ChevronIcon({ dir }: { dir: "left" | "right" }) {
   );
 }
 
+function PaginationBar({
+  page,
+  totalPages,
+  loading,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  loading: boolean;
+  onPageChange: (next: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(page));
+
+  useEffect(() => {
+    setDraft(String(page));
+  }, [page]);
+
+  const commit = () => {
+    const parsed = Number.parseInt(draft, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > totalPages) {
+      setDraft(String(page));
+      return;
+    }
+    if (parsed !== page) {
+      onPageChange(parsed);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-[11px]">
+      <button
+        type="button"
+        disabled={page <= 1 || loading}
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+        aria-label="Página anterior"
+        className="flex h-7 w-7 items-center justify-center rounded-[4px] border border-white/12 bg-black/50 text-neutral-300 hover:border-amber-500/50 hover:text-amber-400 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
+      >
+        <ChevronIcon dir="left" />
+      </button>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          commit();
+        }}
+        className="flex items-center gap-1 px-1 text-neutral-300"
+      >
+        <span>Pág</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+          onBlur={commit}
+          disabled={loading || totalPages <= 1}
+          aria-label="Ir para página"
+          title="Digite o número da página e pressione Enter"
+          className="h-7 w-10 rounded-[4px] border border-white/12 bg-black/60 px-1 text-center font-mono text-[11px] font-bold text-[#f4efe6] focus:border-amber-500 focus:outline-none disabled:opacity-45"
+        />
+        <span className="text-neutral-400">/ {totalPages}</span>
+      </form>
+      <button
+        type="button"
+        disabled={page >= totalPages || loading}
+        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        aria-label="Próxima página"
+        className="flex h-7 w-7 items-center justify-center rounded-[4px] border border-white/12 bg-black/50 text-neutral-300 hover:border-amber-500/50 hover:text-amber-400 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
+      >
+        <ChevronIcon dir="right" />
+      </button>
+    </div>
+  );
+}
+
 export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroOption[] }) {
   const heroMap = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
 
@@ -192,32 +265,51 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     params.set("limit", String(PAGE_SIZE));
     if (heroId) params.set("heroId", heroId);
 
-    fetch(`/api/backend/external-data/leaderboard/${encodeURIComponent(region)}?${params.toString()}`, {
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { message?: string } | null;
-          throw new Error(body?.message || "Não foi possível carregar o leaderboard.");
+    const url = `/api/backend/external-data/leaderboard/${encodeURIComponent(region)}?${params.toString()}`;
+
+    const load = async () => {
+      const maxAttempts = 3;
+      let lastError: string | null = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(body?.message || "Não foi possível carregar o leaderboard.");
+          }
+          const data = (await res.json()) as {
+            entries?: LeaderboardEntry[];
+            totalPages?: number;
+            fetchedAt?: string;
+          };
+          if (!cancelled) {
+            setEntries(Array.isArray(data.entries) ? data.entries : []);
+            setTotalPages(
+              typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1,
+            );
+            setFetchedAt(data.fetchedAt ?? null);
+            setError(null);
+            setLoading(false);
+          }
+          return;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "Erro ao carregar leaderboard.";
+          if (attempt < maxAttempts && !cancelled) {
+            await new Promise((resolve) => setTimeout(resolve, 2500));
+          }
         }
-        return res.json();
-      })
-      .then((data: { entries?: LeaderboardEntry[]; totalPages?: number; fetchedAt?: string }) => {
-        if (!cancelled) {
-          setEntries(Array.isArray(data.entries) ? data.entries : []);
-          setTotalPages(typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1);
-          setFetchedAt(data.fetchedAt ?? null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setEntries([]);
-          setError(err instanceof Error ? err.message : "Erro ao carregar leaderboard.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      }
+
+      if (!cancelled) {
+        setEntries([]);
+        setError(lastError || "Não foi possível carregar o leaderboard.");
+        setLoading(false);
+      }
+    };
+
+    void load();
 
     return () => {
       cancelled = true;
@@ -258,32 +350,6 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
   }, [entries, search, sortBy, selectedTier]);
 
   const regionLabel = REGIONS.find((r) => r.id === region)?.label ?? region;
-
-  const PaginationBar = () => (
-    <div className="flex items-center gap-1.5 font-mono text-[11px]">
-      <button
-        type="button"
-        disabled={page <= 1 || loading}
-        onClick={() => setPage((p) => Math.max(1, p - 1))}
-        aria-label="Página anterior"
-        className="flex h-7 w-7 items-center justify-center rounded-[4px] border border-white/12 bg-black/50 text-neutral-300 hover:border-amber-500/50 hover:text-amber-400 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
-      >
-        <ChevronIcon dir="left" />
-      </button>
-      <span className="px-2 text-neutral-300">
-        Pág <strong className="text-[#f4efe6]">{page}</strong> / {totalPages}
-      </span>
-      <button
-        type="button"
-        disabled={page >= totalPages || loading}
-        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-        aria-label="Próxima página"
-        className="flex h-7 w-7 items-center justify-center rounded-[4px] border border-white/12 bg-black/50 text-neutral-300 hover:border-amber-500/50 hover:text-amber-400 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
-      >
-        <ChevronIcon dir="right" />
-      </button>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -591,13 +657,70 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                   ))}
                 </div>
 
-                <PaginationBar />
+                <PaginationBar
+                  page={page}
+                  totalPages={totalPages}
+                  loading={loading}
+                  onPageChange={setPage}
+                />
               </div>
             </div>
 
             {loading ? (
-              <div className="p-8 text-center text-xs text-neutral-400">
-                Carregando página {page}...
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs tabular-nums">
+                  <thead className="border-b border-white/10 bg-black/40 font-deadlock text-[10px] uppercase tracking-wider text-neutral-400">
+                    <tr>
+                      <th className="pl-4 pr-2 py-3 w-12">Rank</th>
+                      <th className="px-2 py-3 w-14 text-center">Elo</th>
+                      <th className="pl-2 pr-4 py-3 w-24 text-right">Pontos</th>
+                      <th className="px-4 py-3">Jogador</th>
+                      <th className="pl-3 pr-6 py-3 w-32 text-right">W / L</th>
+                      <th className="pl-2 pr-4 py-3 w-36">Win %</th>
+                      <th className="px-4 py-3 w-32 text-right">Top Heróis</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.07]">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="pl-4 pr-2 py-3 w-12">
+                          <div className="h-3.5 w-6 rounded bg-white/10" />
+                        </td>
+                        <td className="px-2 py-3 w-14">
+                          <div className="mx-auto h-7 w-7 rounded-full bg-white/10" />
+                        </td>
+                        <td className="pl-2 pr-4 py-3 w-24">
+                          <div className="ml-auto h-3.5 w-14 rounded bg-white/10" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-[4px] bg-white/10 shrink-0" />
+                            <div className="space-y-1.5 flex-1">
+                              <div className="h-3.5 w-32 rounded bg-white/10" />
+                              <div className="h-2.5 w-20 rounded bg-white/[0.06]" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="pl-3 pr-6 py-3 w-32">
+                          <div className="ml-auto h-3.5 w-16 rounded bg-white/10" />
+                        </td>
+                        <td className="pl-2 pr-4 py-3 w-36">
+                          <div className="space-y-1.5">
+                            <div className="h-3 w-11 rounded bg-white/10" />
+                            <div className="h-1 w-full rounded-full bg-white/[0.07]" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 w-32">
+                          <div className="flex justify-end gap-1.5">
+                            <div className="h-7 w-7 rounded-[3px] bg-white/10" />
+                            <div className="h-7 w-7 rounded-[3px] bg-white/10" />
+                            <div className="h-7 w-7 rounded-[3px] bg-white/10" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-xs text-neutral-500">
@@ -757,7 +880,12 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                   <span className="font-mono text-[10px] text-neutral-500">
                     Exibindo {filtered.length} de {entries.length} nesta página
                   </span>
-                  <PaginationBar />
+                  <PaginationBar
+                    page={page}
+                    totalPages={totalPages}
+                    loading={loading}
+                    onPageChange={setPage}
+                  />
                 </div>
               </>
             )}

@@ -40,6 +40,35 @@ async function resolveVanity(vanity: string) {
   };
 }
 
+async function resolveViaDeadlockSearch(query: string) {
+  const res = await fetch(
+    `https://api.deadlock-api.com/v1/players/steam-search?search_query=${encodeURIComponent(query)}&limit=5`,
+    {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(4500),
+    },
+  );
+  if (!res.ok) return null;
+
+  const rows = (await res.json()) as Array<{
+    account_id?: number;
+    personaname?: string | null;
+  }>;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const lower = query.trim().toLowerCase();
+  const exact = rows.find(
+    (r) => typeof r.personaname === "string" && r.personaname.trim().toLowerCase() === lower,
+  );
+  const chosen = exact ?? rows[0];
+  if (!chosen || typeof chosen.account_id !== "number" || chosen.account_id <= 0) return null;
+
+  return {
+    steamId: (STEAM64_BASE + BigInt(chosen.account_id)).toString(),
+    personaName: chosen.personaname?.trim() || null,
+  };
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rawInput = (searchParams.get("q") || "").trim();
@@ -91,9 +120,11 @@ export async function GET(req: Request) {
       return NextResponse.json(resolved);
     }
 
-    // Busca explícita por vanity name (sem URL)
-    if (mode === "vanity" && /^[a-zA-Z0-9_-]{2,64}$/.test(raw)) {
-      const resolved = await resolveVanity(raw);
+    // Busca explícita por vanity name ou nick (sem URL)
+    if (mode === "vanity" && raw.length >= 2 && raw.length <= 64) {
+      const resolved =
+        (/^[a-zA-Z0-9_-]{2,64}$/.test(raw) ? await resolveVanity(raw) : null) ??
+        (await resolveViaDeadlockSearch(raw));
       if (!resolved) {
         return NextResponse.json({ error: "Perfil Steam não encontrado." }, { status: 404 });
       }
