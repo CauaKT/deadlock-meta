@@ -21,209 +21,176 @@ interface NavItem {
   children?: NavSubItem[];
 }
 
-interface NavGroup {
-  title: string;
-  items: NavItem[];
-}
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: "Início",
-    items: [
-      {
-        href: "/",
-        label: "Tracker",
-        match: (p) => p === "/",
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Meta",
-    items: [
-      {
-        href: "/tier-list",
-        label: "Tier List",
-        match: (p) => p.startsWith("/tier-list"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18M3 12h18M3 18h18" />
-          </svg>
-        ),
-      },
-      {
-        href: "/heroes",
-        label: "Heróis",
-        match: (p) => p.startsWith("/heroes"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
-          </svg>
-        ),
-      },
-      {
-        href: "/items",
-        label: "Itens",
-        match: (p) => p.startsWith("/items"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-            <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
-          </svg>
-        ),
-      },
-      {
-        href: "/patches",
-        label: "Patch Tracker",
-        match: (p) => p.startsWith("/patches"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 3v18h18" />
-            <path d="m19 9-5 5-4-4-3 3" />
-          </svg>
-        ),
-      },
-      {
-        href: "/builds",
-        label: "Builds",
-        match: (p) => p.startsWith("/builds"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-          </svg>
-        ),
-      },
-      {
-        href: "/calculator",
-        label: "Calculadora",
-        match: (p) => p.startsWith("/calculator"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="4" y="2" width="16" height="20" rx="2" />
-            <line x1="8" y1="6" x2="16" y2="6" />
-            <line x1="8" y1="10" x2="8" y2="10.01" />
-            <line x1="12" y1="10" x2="12" y2="10.01" />
-            <line x1="16" y1="10" x2="16" y2="10.01" />
-            <line x1="8" y1="14" x2="8" y2="14.01" />
-            <line x1="12" y1="14" x2="12" y2="14.01" />
-            <line x1="16" y1="14" x2="16" y2="14.01" />
-            <line x1="8" y1="18" x2="16" y2="18" />
-          </svg>
-        ),
-      },
-      {
-        href: "/leaderboard",
-        label: "Leaderboard",
-        match: (p) => p.startsWith("/leaderboard"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-            <path d="M4 22h16" />
-            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-          </svg>
-        ),
-      },
-      {
-        href: "/tournaments",
-        label: "Torneios",
-        match: (p) => p.startsWith("/tournaments"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" />
-            <path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3" />
-          </svg>
-        ),
-      },
-      {
-        href: "/compare",
-        label: "Comparador 1v1",
-        match: (p) => p.startsWith("/compare"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
-          </svg>
-        ),
-      },
-      {
-        href: "/tier-maker",
-        label: "Tier Maker",
-        match: (p) => p.startsWith("/tier-maker"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <path d="M14 17.5h7M17.5 14v7" />
-          </svg>
-        ),
-        children: [
-          {
-            href: "/tier-maker",
-            label: "Montar Tier List",
-            match: (p) => p === "/tier-maker",
-          },
-          {
-            href: "/tier-maker/comunidade",
-            label: "Comunidade",
-            match: (p) => p.startsWith("/tier-maker/comunidade"),
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Social",
-    items: [
-      {
-        href: "/feed",
-        label: "Feed",
-        match: (p) => p.startsWith("/feed"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-        ),
-      },
-      {
-        href: "/lfg",
-        label: "Procurar Duo / LFG",
-        match: (p) => p.startsWith("/lfg"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      {
-        href: "/data-sources",
-        label: "Fontes de Dados",
-        match: (p) => p.startsWith("/data-sources"),
-        icon: (
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <ellipse cx="12" cy="5" rx="9" ry="3" />
-            <path d="M3 5v14a9 3 0 0 0 18 0V5" />
-            <path d="M3 12a9 3 0 0 0 18 0" />
-          </svg>
-        ),
-      },
-    ],
-  },
+const NAV_SECTIONS: NavItem[][] = [
+  [
+    {
+      href: "/",
+      label: "Tracker",
+      match: (p) => p === "/",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      ),
+    },
+    {
+      href: "/tier-list",
+      label: "Tier List",
+      match: (p) => p.startsWith("/tier-list") || p.startsWith("/tier-maker"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+      ),
+      children: [
+        {
+          href: "/tier-list",
+          label: "Tier List do Meta",
+          match: (p) => p.startsWith("/tier-list"),
+        },
+        {
+          href: "/tier-maker",
+          label: "Tier Maker",
+          match: (p) => p === "/tier-maker",
+        },
+        {
+          href: "/tier-maker/comunidade",
+          label: "Comunidade",
+          match: (p) => p.startsWith("/tier-maker/comunidade"),
+        },
+      ],
+    },
+    {
+      href: "/heroes",
+      label: "Heróis & Meta",
+      match: (p) => p.startsWith("/heroes") || p.startsWith("/patches"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
+        </svg>
+      ),
+      children: [
+        {
+          href: "/heroes",
+          label: "Todos os Heróis",
+          match: (p) => p.startsWith("/heroes"),
+        },
+        {
+          href: "/patches",
+          label: "Patch Tracker",
+          match: (p) => p.startsWith("/patches"),
+        },
+      ],
+    },
+    {
+      href: "/items",
+      label: "Itens & Builds",
+      match: (p) =>
+        p.startsWith("/items") ||
+        p.startsWith("/builds") ||
+        p.startsWith("/calculator"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+          <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
+        </svg>
+      ),
+      children: [
+        {
+          href: "/items",
+          label: "Catálogo de Itens",
+          match: (p) => p.startsWith("/items"),
+        },
+        {
+          href: "/builds",
+          label: "Builds",
+          match: (p) => p.startsWith("/builds"),
+        },
+        {
+          href: "/calculator",
+          label: "Calculadora",
+          match: (p) => p.startsWith("/calculator"),
+        },
+      ],
+    },
+    {
+      href: "/leaderboard",
+      label: "Competitivo",
+      match: (p) => p.startsWith("/leaderboard") || p.startsWith("/tournaments"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+          <path d="M4 22h16" />
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+        </svg>
+      ),
+      children: [
+        {
+          href: "/leaderboard",
+          label: "Leaderboard",
+          match: (p) => p.startsWith("/leaderboard"),
+        },
+        {
+          href: "/tournaments",
+          label: "Torneios",
+          match: (p) => p.startsWith("/tournaments"),
+        },
+      ],
+    },
+  ],
+  [
+    {
+      href: "/compare",
+      label: "Comparador 1v1",
+      match: (p) => p.startsWith("/compare"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+        </svg>
+      ),
+    },
+    {
+      href: "/feed",
+      label: "Feed",
+      match: (p) => p.startsWith("/feed"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      ),
+    },
+    {
+      href: "/lfg",
+      label: "Procurar Duo / LFG",
+      match: (p) => p.startsWith("/lfg"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+  ],
+  [
+    {
+      href: "/data-sources",
+      label: "Fontes de Dados",
+      match: (p) => p.startsWith("/data-sources"),
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+          <path d="M3 12a9 3 0 0 0 18 0" />
+        </svg>
+      ),
+    },
+  ],
 ];
 
 export default function AppSidebar() {
@@ -231,14 +198,32 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    "/tier-maker": pathname.startsWith("/tier-maker"),
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const section of NAV_SECTIONS) {
+      for (const item of section) {
+        if (item.children && item.match(pathname)) {
+          initial[item.href] = true;
+        }
+      }
+    }
+    return initial;
   });
 
   useEffect(() => {
-    if (pathname.startsWith("/tier-maker")) {
-      setExpandedGroups((prev) => ({ ...prev, "/tier-maker": true }));
-    }
+    setExpandedGroups((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const section of NAV_SECTIONS) {
+        for (const item of section) {
+          if (item.children && item.match(pathname) && !next[item.href]) {
+            next[item.href] = true;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [pathname]);
 
   useEffect(() => {
@@ -251,6 +236,32 @@ export default function AppSidebar() {
 
   useEffect(() => {
     setMobileOpen(false);
+    const matchedPrefix = [
+      "/tier-list",
+      "/tier-maker",
+      "/heroes",
+      "/items",
+      "/patches",
+      "/builds",
+      "/calculator",
+      "/leaderboard",
+      "/tournaments",
+      "/compare",
+      "/feed",
+      "/lfg",
+    ].find((prefix) => pathname.startsWith(prefix));
+
+    if (matchedPrefix) {
+      try {
+        const raw = localStorage.getItem("lp_recent_tabs");
+        const prev = raw ? (JSON.parse(raw) as string[]) : [];
+        const next = [
+          matchedPrefix,
+          ...(Array.isArray(prev) ? prev.filter((p) => p !== matchedPrefix) : []),
+        ].slice(0, 5);
+        localStorage.setItem("lp_recent_tabs", JSON.stringify(next));
+      } catch {}
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -273,105 +284,111 @@ export default function AppSidebar() {
   };
 
   const renderLinks = (isCompact: boolean) => (
-    <nav className="flex-1 overflow-y-auto px-2.5 py-4 space-y-5 lp-scroll">
-      {NAV_GROUPS.map((group) => (
-        <div key={group.title} className="space-y-1">
-          {!isCompact && (
-            <p className="px-2.5 pb-1 font-deadlock text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">
-              {group.title}
-            </p>
-          )}
-          <div className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = item.match(pathname);
-              const hasChildren = Boolean(!isCompact && item.children && item.children.length > 0);
-              const isExpanded = Boolean(expandedGroups[item.href]);
+    <nav className="flex-1 overflow-y-auto px-2.5 py-3 lp-scroll">
+      {NAV_SECTIONS.map((section, sectionIdx) => (
+        <div
+          key={sectionIdx}
+          className={
+            sectionIdx > 0
+              ? "mt-3 pt-3 border-t border-neutral-800/75 space-y-0.5"
+              : "space-y-0.5"
+          }
+        >
+          {section.map((item) => {
+            const active = item.match(pathname);
+            const hasChildren = Boolean(!isCompact && item.children && item.children.length > 0);
+            const isExpanded = Boolean(expandedGroups[item.href]);
 
-              return (
-                <div key={item.href} className="space-y-0.5">
-                  {hasChildren ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedGroups((prev) => ({
-                          ...prev,
-                          [item.href]: !prev[item.href],
-                        }))
-                      }
-                      aria-expanded={isExpanded}
-                      className={`flex w-full items-center justify-between gap-2 rounded-[5px] px-2.5 py-2 text-sm font-semibold transition-colors cursor-pointer ${
-                        active
-                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
-                          : "text-[#f4efe6]/85 border border-transparent hover:bg-neutral-900 hover:text-amber-400"
-                      }`}
-                    >
-                      <span className="flex items-center gap-3 min-w-0">
+            return (
+              <div key={item.href} className="space-y-0.5">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedGroups((prev) => ({
+                        ...prev,
+                        [item.href]: !prev[item.href],
+                      }))
+                    }
+                    aria-expanded={isExpanded}
+                    className={`flex w-full items-center justify-between gap-2 rounded-[5px] px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.06em] transition-colors cursor-pointer ${
+                      active
+                        ? "bg-neutral-900/95 text-[#f4efe6] border border-neutral-800/90"
+                        : "text-neutral-300 border border-transparent hover:bg-neutral-900/70 hover:text-[#f4efe6]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className={active ? "text-amber-400" : "text-neutral-400"}>
                         {item.icon}
-                        <span className="truncate">{item.label}</span>
                       </span>
-                      <svg
-                        viewBox="0 0 16 16"
-                        className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
-                          isExpanded ? "rotate-180 text-amber-400" : "text-neutral-400"
-                        }`}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m4 6 4 4 4-4" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      title={isCompact ? item.label : undefined}
-                      className={`flex w-full items-center gap-3 rounded-[5px] px-2.5 py-2 text-sm font-semibold transition-colors ${
-                        isCompact ? "justify-center" : ""
-                      } ${
-                        active
-                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
-                          : "text-[#f4efe6]/85 border border-transparent hover:bg-neutral-900 hover:text-amber-400"
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <svg
+                      viewBox="0 0 16 16"
+                      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
+                        isExpanded
+                          ? "rotate-180 text-amber-400"
+                          : "text-neutral-500"
                       }`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
+                      <path d="m4 6 4 4 4-4" />
+                    </svg>
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    title={isCompact ? item.label : undefined}
+                    className={`flex w-full items-center gap-2.5 rounded-[5px] px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.06em] transition-colors ${
+                      isCompact ? "justify-center" : ""
+                    } ${
+                      active
+                        ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
+                        : "text-neutral-300 border border-transparent hover:bg-neutral-900/70 hover:text-[#f4efe6]"
+                    }`}
+                  >
+                    <span className={active ? "text-amber-400" : "text-neutral-400"}>
                       {item.icon}
-                      {!isCompact && <span className="truncate">{item.label}</span>}
-                    </Link>
-                  )}
+                    </span>
+                    {!isCompact && <span className="truncate">{item.label}</span>}
+                  </Link>
+                )}
 
-                  {hasChildren && (
-                    <div
-                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
-                        isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="ml-3 border-l border-neutral-800 pl-2.5 space-y-0.5 pt-0.5">
-                          {item.children!.map((sub) => {
-                            const subActive = sub.match(pathname);
-                            return (
-                              <Link
-                                key={sub.href}
-                                href={sub.href}
-                                className={`block rounded-[4px] px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                                  subActive
-                                    ? "bg-amber-500/15 text-amber-300"
-                                    : "text-neutral-400 hover:bg-neutral-900/70 hover:text-[#f4efe6]"
-                                }`}
-                              >
-                                {sub.label}
-                              </Link>
-                            );
-                          })}
-                        </div>
+                {hasChildren && (
+                  <div
+                    className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                      isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="ml-[18px] border-l border-neutral-800/90 pl-2.5 space-y-0.5 py-1">
+                        {item.children!.map((sub) => {
+                          const subActive = sub.match(pathname);
+                          return (
+                            <Link
+                              key={sub.href}
+                              href={sub.href}
+                              className={`block rounded-[4px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] transition-colors ${
+                                subActive
+                                  ? "bg-amber-500/15 text-amber-300"
+                                  : "text-neutral-400 hover:bg-neutral-900/70 hover:text-[#f4efe6]"
+                              }`}
+                            >
+                              {sub.label}
+                            </Link>
+                          );
+                        })}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
     </nav>

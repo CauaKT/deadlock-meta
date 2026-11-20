@@ -59,14 +59,6 @@ export default async function Home() {
       image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
     }));
 
-  const items: HomeTrackerItem[] = shopItems.map((item) => ({
-    className: item.className,
-    name: item.name,
-    image: item.image,
-    slot: item.slot,
-    cost: item.cost,
-  }));
-
   const metaTop: HomeMetaHero[] = statsNow
     .map((s) => {
       const h = heroesMap[s.hero_id];
@@ -119,8 +111,16 @@ export default async function Home() {
     .sort((a, b) => a.winDelta - b.winDelta)
     .slice(0, 3);
 
+  const items: HomeTrackerItem[] = shopItems.map((item) => ({
+    className: item.className,
+    name: item.name,
+    image: item.image,
+    slot: item.slot,
+    cost: item.cost,
+  }));
+
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-10">
+    <div className="max-w-7xl mx-auto p-4 md:p-8">
       <HomeTracker
         heroes={heroes}
         items={items}

@@ -34,6 +34,7 @@ export default function RootLayout({
           style={{ backgroundImage: "url('/bg.webp')" }}
         />
         <div className="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-[#070807]/80 via-[#070807]/60 to-[#070807]/95" />
+        <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_65%_40%_at_55%_0%,rgba(245,158,11,0.08),transparent_70%)]" />
 
         {/* SIDEBAR ESQUERDA (DESKTOP) + TOPBAR/DRAWER (MOBILE) */}
         <AppSidebar />
