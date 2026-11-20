@@ -28,10 +28,10 @@ export default async function TournamentsPage() {
 
   const [user, tournaments, leaderboard] = await Promise.all([
     getServerAuthUser(),
-    fetch(`${base}/tournaments`, { headers, cache: "no-store", signal: AbortSignal.timeout(4000) })
+    fetch(`${base}/tournaments`, { headers, cache: "no-store", signal: AbortSignal.timeout(8000) })
       .then((r) => (r.ok ? (r.json() as Promise<TournamentItem[]>) : []))
       .catch(() => [] as TournamentItem[]),
-    fetch(`${base}/tournaments/pickem-leaderboard`, { cache: "no-store", signal: AbortSignal.timeout(4000) })
+    fetch(`${base}/tournaments/pickem-leaderboard`, { cache: "no-store", signal: AbortSignal.timeout(8000) })
       .then((r) => (r.ok ? (r.json() as Promise<PickemLeaderEntry[]>) : []))
       .catch(() => [] as PickemLeaderEntry[]),
   ]);

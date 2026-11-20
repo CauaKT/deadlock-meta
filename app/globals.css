@@ -523,6 +523,62 @@ html {
   background: rgba(245, 158, 11, 0.7);
 }
 
+@property --cmp-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22d3ee;
+}
+@property --cmp-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f59e0b;
+}
+@property --cmp-a-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(13, 54, 59, 0.94);
+}
+@property --cmp-b-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(59, 42, 9, 0.94);
+}
+@property --cmp-a-text {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22d3ee;
+}
+@property --cmp-b-text {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f59e0b;
+}
+
+.cmp-theme-scope {
+  transition:
+    --cmp-a 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    --cmp-b 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    --cmp-a-bg 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    --cmp-b-bg 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    --cmp-a-text 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    --cmp-b-text 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cmp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cmp-enter {
+  animation: cmp-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lp-load,
   main > :not(.lp-load),
@@ -530,7 +586,11 @@ html {
   .lp-spin,
   .lp-card-in,
   .lp-bar,
+  .cmp-enter,
   .lp-shimmer::after {
     animation: none;
+  }
+  .cmp-theme-scope {
+    transition: none;
   }
 }

@@ -1,12 +1,207 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SlantFrame from "@/app/heroes/[id]/SlantFrame";
 
 const COMPARE_STORAGE_KEY = "lp_compare_last";
 const RECENT_PROFILES_KEY = "lp_recent_compare_profiles";
+const DEFAULT_COLOR_A = "#22d3ee";
+const DEFAULT_COLOR_B = "#f59e0b";
+
+function normalizeHex(raw?: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+function parseHexRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function rgba(rgb: [number, number, number], alpha: number): string {
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
+function darkTintRgba(hex: string, tintAmount: number, alpha: number): string {
+  const darkened = mixHex("#070908", hex, tintAmount);
+  return rgba(parseHexRgb(darkened), alpha);
+}
+
+function mixHex(hexA: string, hexB: string, weightB = 0.5): string {
+  const [rA, gA, bA] = parseHexRgb(hexA);
+  const [rB, gB, bB] = parseHexRgb(hexB);
+  const wA = 1 - weightB;
+  return rgbToHex(rA * wA + rB * weightB, gA * wA + gB * weightB, bA * wA + bB * weightB);
+}
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const lin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function rgbToHue(r: number, g: number, b: number): { h: number; s: number; v: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  const v = max;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+    else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+    else h = ((rn - gn) / d + 4) / 6;
+  }
+  return { h, s, v };
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+  return rgbToHex(r * 255, g * 255, b * 255);
+}
+
+function readableTextHex(hex: string): string {
+  const rgb = parseHexRgb(hex);
+  const lum = relativeLuminance(rgb);
+  if (lum >= 0.28) return hex;
+  const { h, s, v } = rgbToHue(rgb[0], rgb[1], rgb[2]);
+  return hsvToHex(h, Math.max(s, 0.55), Math.max(v, 0.86));
+}
+
+function rgbDistance(hexA: string, hexB: string): number {
+  const [r1, g1, b1] = parseHexRgb(hexA);
+  const [r2, g2, b2] = parseHexRgb(hexB);
+  return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
+}
+
+function ensureDistinctColorB(colorA: string, rawB: string): string {
+  if (rgbDistance(colorA, rawB) >= 105) return rawB;
+  const [r, g, b] = parseHexRgb(rawB);
+  const { h, s, v } = rgbToHue(r, g, b);
+  return readableTextHex(hsvToHex((h + 0.52) % 1, Math.max(s, 0.72), Math.max(v, 0.88)));
+}
+
+function mixVibrantHex(hexA: string, hexB: string): string {
+  const mixed = mixHex(hexA, hexB);
+  const [r, g, b] = parseHexRgb(mixed);
+  const { h, s, v } = rgbToHue(r, g, b);
+  if (s >= 0.08) {
+    return hsvToHex(h, Math.max(s, 0.72), Math.max(v, 0.92));
+  }
+  const [rA, gA, bA] = parseHexRgb(hexA);
+  const [rB, gB, bB] = parseHexRgb(hexB);
+  const hA = rgbToHue(rA, gA, bA).h;
+  const hB = rgbToHue(rB, gB, bB).h;
+  let diff = hB - hA;
+  if (diff > 0.5) diff -= 1;
+  if (diff < -0.5) diff += 1;
+  return hsvToHex((hA + diff * 0.5 + 1) % 1, 0.72, 0.92);
+}
+
+async function extractAvatarColor(avatarUrl?: string | null): Promise<string | null> {
+  if (!avatarUrl || typeof document === "undefined") return null;
+
+  const src =
+    avatarUrl.startsWith("data:") || avatarUrl.startsWith("/")
+      ? avatarUrl
+      : `/api/avatar-proxy?url=${encodeURIComponent(avatarUrl)}`;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const size = 24;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+
+        const sample = (minSat: number) => {
+          const buckets = Array.from({ length: 24 }, () => ({
+            weight: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+          }));
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] < 128) continue;
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const { h, s, v } = rgbToHue(r, g, b);
+            if (v < 0.16 || s < minSat || (s < 0.22 && v > 0.9)) continue;
+
+            const idx = Math.min(23, Math.floor(h * 24));
+            const weight = Math.pow(s, 2.6) * (0.35 + v * 0.65);
+            buckets[idx].weight += weight;
+            buckets[idx].r += r * weight;
+            buckets[idx].g += g * weight;
+            buckets[idx].b += b * weight;
+          }
+          return buckets.reduce((best, b) => (b.weight > best.weight ? b : best), buckets[0]);
+        };
+
+        let best = sample(0.28);
+        if (best.weight <= 0) best = sample(0.14);
+        if (best.weight <= 0) {
+          resolve(null);
+          return;
+        }
+
+        const avgR = best.r / best.weight;
+        const avgG = best.g / best.weight;
+        const avgB = best.b / best.weight;
+        const { h, s, v } = rgbToHue(avgR, avgG, avgB);
+        const vibrantHex = hsvToHex(h, Math.max(s, 0.68), Math.max(v, 0.85));
+        resolve(readableTextHex(vibrantHex));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
 
 interface RecentCompareProfile {
   label: string;
@@ -51,6 +246,8 @@ interface NormalizedPlayerSummary {
   soulsPerMin: number;
   damagePerMin: number;
   topHeroes: NormalizedHeroStat[];
+  profileColor?: string | null;
+  avatarColor?: string | null;
 }
 
 export default function CompareClient({
@@ -62,6 +259,7 @@ export default function CompareClient({
   initialA?: string;
   initialB?: string;
 }) {
+  const router = useRouter();
   const heroMap = new Map(heroes.map((h) => [h.id, h]));
 
   const [idA, setIdA] = useState(initialA);
@@ -150,14 +348,36 @@ export default function CompareClient({
 
   const fetchPlayer = async (rawId: string): Promise<NormalizedPlayerSummary> => {
     const clean = await resolvePlayerId(rawId);
-    const res = await fetch(`/api/backend/external-data/player/${encodeURIComponent(clean)}/summary`, {
-      cache: "no-store",
-    });
+    const [res, profileRes] = await Promise.all([
+      fetch(`/api/backend/external-data/player/${encodeURIComponent(clean)}/summary`, {
+        cache: "no-store",
+      }),
+      fetch(`/api/backend/profiles/by-steam/${encodeURIComponent(clean)}`, {
+        cache: "no-store",
+      }).catch(() => null),
+    ]);
+
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { message?: string } | null;
       throw new Error(body?.message || `Erro ao buscar jogador ${clean}.`);
     }
-    return (await res.json()) as NormalizedPlayerSummary;
+
+    const summary = (await res.json()) as NormalizedPlayerSummary;
+    let profileColor: string | null = null;
+    if (profileRes?.ok) {
+      const profileData = (await profileRes.json().catch(() => null)) as {
+        profileColor?: string | null;
+      } | null;
+      profileColor = normalizeHex(profileData?.profileColor);
+    }
+
+    const avatarColor = await extractAvatarColor(summary.avatarUrl);
+
+    return {
+      ...summary,
+      profileColor,
+      avatarColor,
+    };
   };
 
   const runCompare = async (rawA: string, rawB: string) => {
@@ -237,6 +457,27 @@ export default function CompareClient({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialA, initialB]);
+
+  useEffect(() => {
+    const onReset = (e: Event) => {
+      if (!playerA && !playerB && !idA.trim() && !idB.trim() && !error) return;
+      e.preventDefault();
+      setPlayerA(null);
+      setPlayerB(null);
+      setIdA("");
+      setIdB("");
+      setError(null);
+      setActiveDropdown(null);
+      try {
+        sessionStorage.removeItem(COMPARE_STORAGE_KEY);
+      } catch {}
+      if (window.location.search) {
+        router.replace("/compare", { scroll: false });
+      }
+    };
+    window.addEventListener("lp-compare-reset", onReset);
+    return () => window.removeEventListener("lp-compare-reset", onReset);
+  }, [playerA, playerB, idA, idB, error, router]);
 
   const handleCompare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,16 +588,44 @@ export default function CompareClient({
     };
   })();
 
+  const colorA =
+    normalizeHex(playerA?.avatarColor) ?? normalizeHex(playerA?.profileColor) ?? DEFAULT_COLOR_A;
+  const rawColorB =
+    normalizeHex(playerB?.avatarColor) ?? normalizeHex(playerB?.profileColor) ?? DEFAULT_COLOR_B;
+  const colorB = ensureDistinctColorB(colorA, rawColorB);
+  const rgbA = parseHexRgb(colorA);
+  const rgbB = parseHexRgb(colorB);
+  const textA = readableTextHex(colorA);
+  const textB = readableTextHex(colorB);
+  const vsButtonBg = mixVibrantHex(colorA, colorB);
+  const vsButtonRgb = parseHexRgb(vsButtonBg);
+  const vsButtonText = relativeLuminance(vsButtonRgb) > 0.3 ? "#000000" : "#f4efe6";
+
   return (
-    <div className="space-y-8">
+    <div
+      className="space-y-8 cmp-theme-scope"
+      style={
+        {
+          "--cmp-a": colorA,
+          "--cmp-b": colorB,
+          "--cmp-a-bg": darkTintRgba(colorA, 0.24, 0.94),
+          "--cmp-b-bg": darkTintRgba(colorB, 0.24, 0.94),
+          "--cmp-a-text": textA,
+          "--cmp-b-text": textB,
+        } as React.CSSProperties
+      }
+    >
       <SlantFrame
         shape="narrowTop"
-        border="linear-gradient(90deg, #22d3ee 0%, #3897a1 35%, #d97706 65%, #f59e0b 100%)"
-        background="linear-gradient(90deg, rgba(14,74,92,0.92) 0%, rgba(12,16,18,0.94) 50%, rgba(96,46,10,0.92) 100%)"
+        border="linear-gradient(90deg, var(--cmp-a) 0%, color-mix(in srgb, var(--cmp-a) 65%, var(--cmp-b) 35%) 35%, color-mix(in srgb, var(--cmp-a) 35%, var(--cmp-b) 65%) 65%, var(--cmp-b) 100%)"
+        background="linear-gradient(90deg, var(--cmp-a-bg) 0%, rgba(12,16,18,0.95) 50%, var(--cmp-b-bg) 100%)"
       >
         <form onSubmit={handleCompare} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
           <div className="md:col-span-5 space-y-1.5">
-            <label className="block font-deadlock text-[11px] font-black uppercase tracking-wider text-cyan-300">
+            <label
+              className="block font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors duration-500"
+              style={{ color: "var(--cmp-a-text)" }}
+            >
               Jogador 1 (Link da Steam ou ID)
             </label>
             <input
@@ -373,7 +642,8 @@ export default function CompareClient({
               }}
               onBlur={() => setActiveDropdown(null)}
               placeholder="Ex.: steamcommunity.com/id/... ou 7656119..."
-              className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3.5 py-2.5 font-mono text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-cyan-400 focus:outline-none"
+              style={{ "--ring-a": colorA } as React.CSSProperties}
+              className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3.5 py-2.5 font-mono text-xs text-[#f4efe6] placeholder:text-neutral-500 transition-colors duration-300 focus:border-[var(--ring-a)] focus:outline-none"
             />
           </div>
 
@@ -381,14 +651,22 @@ export default function CompareClient({
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-[4px] bg-amber-500 py-2.5 px-4 font-deadlock text-xs font-black uppercase tracking-wider text-black hover:brightness-110 disabled:opacity-50 cursor-pointer"
+              style={{
+                backgroundColor: vsButtonBg,
+                color: vsButtonText,
+                boxShadow: `0 0 18px ${rgba(vsButtonRgb, 0.35)}`,
+              }}
+              className="w-full rounded-[4px] border border-white/25 py-2.5 px-4 font-deadlock text-xs font-black uppercase tracking-wider transition-all duration-500 ease-out hover:brightness-110 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               {loading ? "Comparando..." : "Comparar 1v1"}
             </button>
           </div>
 
           <div className="md:col-span-5 space-y-1.5">
-            <label className="block font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-300">
+            <label
+              className="block font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors duration-500"
+              style={{ color: "var(--cmp-b-text)" }}
+            >
               Jogador 2 (Link da Steam ou ID)
             </label>
             <input
@@ -405,7 +683,8 @@ export default function CompareClient({
               }}
               onBlur={() => setActiveDropdown(null)}
               placeholder="Ex.: steamcommunity.com/id/... ou 7656119..."
-              className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3.5 py-2.5 font-mono text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
+              style={{ "--ring-b": colorB } as React.CSSProperties}
+              className="w-full rounded-[4px] border border-white/15 bg-black/50 px-3.5 py-2.5 font-mono text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-[var(--ring-b)] focus:outline-none"
             />
           </div>
         </form>
@@ -486,23 +765,28 @@ export default function CompareClient({
       )}
 
       {playerA && playerB && (
-        <div className="space-y-6">
+        <div key={`results-${playerA.accountId}-${playerB.accountId}`} className="space-y-6 cmp-enter">
           {/* Cabeçalhos dos dois jogadores */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[
-              { p: playerA, shape: "slantLeft" as const, border: "#3897a1", bg: "linear-gradient(160deg, rgba(16,44,48,0.88), rgba(7,12,14,0.96))" },
-              { p: playerB, shape: "slantRight" as const, border: "#c97a2e", bg: "linear-gradient(160deg, rgba(44,28,12,0.88), rgba(8,10,10,0.96))" },
-            ].map(({ p, shape, border, bg }) => (
-              <SlantFrame key={p.accountId} shape={shape} border={border} background={bg}>
+              { p: playerA, shape: "slantLeft" as const, border: colorA, bg: `linear-gradient(160deg, ${darkTintRgba(colorA, 0.16, 0.9)}, rgba(7,12,14,0.96))` },
+              { p: playerB, shape: "slantRight" as const, border: colorB, bg: `linear-gradient(160deg, ${darkTintRgba(colorB, 0.16, 0.9)}, rgba(8,10,10,0.96))` },
+            ].map(({ p, shape, border, bg }, idx) => (
+              <SlantFrame key={`header-${p.accountId}-${idx}`} shape={shape} border={border} background={bg}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    {p.avatarUrl ? (
-                      <img src={p.avatarUrl} alt="" className="h-12 w-12 rounded-[4px] border border-white/15 object-cover" />
-                    ) : (
-                      <div className="flex h-12 w-12 items-center justify-center rounded-[4px] border border-white/15 bg-black/50 font-deadlock text-lg font-black text-amber-400">
-                        ?
-                      </div>
-                    )}
+                    <Link
+                      href={`/player/${p.accountId}`}
+                      className="shrink-0 transition-transform hover:scale-105"
+                    >
+                      {p.avatarUrl ? (
+                        <img src={p.avatarUrl} alt="" className="h-12 w-12 rounded-[4px] border border-white/15 object-cover" />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-[4px] border border-white/15 bg-black/50 font-deadlock text-lg font-black text-amber-400">
+                          ?
+                        </div>
+                      )}
+                    </Link>
                     <div className="min-w-0">
                       <Link
                         href={`/player/${p.accountId}`}
@@ -530,16 +814,16 @@ export default function CompareClient({
               shape="narrowTop"
               border={
                 comparisonSummary.winnerSide === "A"
-                  ? "#3897a1"
+                  ? colorA
                   : comparisonSummary.winnerSide === "B"
-                    ? "#f59e0b"
+                    ? colorB
                     : "#525252"
               }
-              background={
+             background={
                 comparisonSummary.winnerSide === "A"
-                  ? "linear-gradient(135deg, rgba(16,44,48,0.94), rgba(6,10,12,0.98))"
+                  ? `linear-gradient(135deg, ${darkTintRgba(colorA, 0.18, 0.94)}, rgba(6,10,12,0.98))`
                   : comparisonSummary.winnerSide === "B"
-                    ? "linear-gradient(135deg, rgba(56,34,10,0.94), rgba(8,10,10,0.98))"
+                    ? `linear-gradient(135deg, ${darkTintRgba(colorB, 0.18, 0.94)}, rgba(8,10,10,0.98))`
                     : "linear-gradient(135deg, rgba(24,24,27,0.94), rgba(8,10,10,0.98))"
               }
               className="space-y-5 px-5 sm:px-8"
@@ -549,6 +833,9 @@ export default function CompareClient({
                   {comparisonSummary.winnerSide !== "TIE" && (() => {
                     const winner = comparisonSummary.winnerSide === "A" ? playerA : playerB;
                     const isA = comparisonSummary.winnerSide === "A";
+                    const winColor = isA ? colorA : colorB;
+                    const winRgb = isA ? rgbA : rgbB;
+                    const winText = isA ? textA : textB;
                     return (
                       <Link
                         href={`/player/${winner.accountId}`}
@@ -558,17 +845,16 @@ export default function CompareClient({
                           <img
                             src={winner.avatarUrl}
                             alt=""
-                            className={`h-20 w-20 sm:h-24 sm:w-24 rounded-[5px] object-cover border-2 ${
-                              isA
-                                ? "border-cyan-400 shadow-[0_0_24px_rgba(34,211,238,0.3)]"
-                                : "border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.3)]"
-                            }`}
+                            style={{
+                              borderColor: winColor,
+                              boxShadow: `0 0 24px ${rgba(winRgb, 0.3)}`,
+                            }}
+                            className="h-20 w-20 sm:h-24 sm:w-24 rounded-[5px] object-cover border-2"
                           />
                         ) : (
                           <div
-                            className={`flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[5px] border-2 bg-black/60 font-deadlock text-2xl font-black ${
-                              isA ? "border-cyan-400 text-cyan-300" : "border-amber-400 text-amber-400"
-                            }`}
+                            style={{ borderColor: winColor, color: winText }}
+                            className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[5px] border-2 bg-black/60 font-deadlock text-2xl font-black"
                           >
                             ★
                           </div>
@@ -586,13 +872,13 @@ export default function CompareClient({
                       <h2 className="truncate font-deadlock text-3xl sm:text-4xl font-black leading-tight text-[#f4efe6]">
                         <Link
                           href={`/player/${comparisonSummary.winnerId}`}
-                          className="hover:underline"
+                          className="transition-opacity hover:opacity-85"
                         >
                           Vitória de{" "}
                           <span
-                            className={
-                              comparisonSummary.winnerSide === "A" ? "text-cyan-300" : "text-amber-400"
-                            }
+                            style={{
+                              color: comparisonSummary.winnerSide === "A" ? textA : textB,
+                            }}
                           >
                             {comparisonSummary.winnerName}
                           </span>
@@ -603,7 +889,7 @@ export default function CompareClient({
                 </div>
 
                 {comparisonSummary.winnerSide !== "TIE" && (
-                  <div className="flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 flex-col items-center justify-center rounded-full border-2 border-emerald-400/75 bg-gradient-to-b from-emerald-950/60 to-black/85 p-2 text-center shadow-[0_0_26px_rgba(16,185,129,0.24)]">
+                  <div className="flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 flex-col items-center justify-center rounded-full border-2 border-emerald-400/75 bg-transparent p-2 text-center shadow-[0_0_26px_rgba(16,185,129,0.24)]">
                     <p className="font-mono text-2xl sm:text-[26px] font-black leading-tight text-emerald-400">
                       {Math.max(comparisonSummary.scoreA, comparisonSummary.scoreB).toFixed(1)}%
                     </p>
@@ -619,14 +905,20 @@ export default function CompareClient({
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <div className="flex items-center justify-between gap-2 text-xs font-mono font-black">
-                  <span className="truncate text-cyan-300">
+                  <span className="truncate" style={{ color: textA }}>
                     {playerA.personaName || `#${playerA.accountId}`}{" "}
-                    <span className="ml-1 rounded-[3px] bg-cyan-500/15 px-1.5 py-0.5 text-[11px]">
+                    <span
+                      className="ml-1 rounded-[3px] px-1.5 py-0.5 text-[11px]"
+                      style={{ backgroundColor: rgba(rgbA, 0.16), color: textA }}
+                    >
                       {comparisonSummary.scoreA.toFixed(1)}%
                     </span>
                   </span>
-                  <span className="truncate text-right text-amber-400">
-                    <span className="mr-1 rounded-[3px] bg-amber-500/15 px-1.5 py-0.5 text-[11px]">
+                  <span className="truncate text-right" style={{ color: textB }}>
+                    <span
+                      className="mr-1 rounded-[3px] px-1.5 py-0.5 text-[11px]"
+                      style={{ backgroundColor: rgba(rgbB, 0.16), color: textB }}
+                    >
                       {comparisonSummary.scoreB.toFixed(1)}%
                     </span>{" "}
                     {playerB.personaName || `#${playerB.accountId}`}
@@ -635,16 +927,22 @@ export default function CompareClient({
 
                 <div className="relative flex h-4 w-full items-center overflow-visible rounded-[3px] border border-white/15 bg-black/70">
                   <div
-                    className="h-full rounded-l-[2px] bg-gradient-to-r from-cyan-500 to-cyan-300 transition-all duration-500"
-                    style={{ width: `${comparisonSummary.scoreA}%` }}
+                    className="h-full rounded-l-[2px] transition-all duration-500"
+                    style={{
+                      width: `${comparisonSummary.scoreA}%`,
+                      background: `linear-gradient(90deg, ${mixHex(colorA, "#000000", 0.15)}, ${textA})`,
+                    }}
                   />
                   <div
-                    className="h-full rounded-r-[2px] bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-500"
-                    style={{ width: `${comparisonSummary.scoreB}%` }}
+                    className="h-full rounded-r-[2px] transition-all duration-500"
+                    style={{
+                      width: `${comparisonSummary.scoreB}%`,
+                      background: `linear-gradient(90deg, ${colorB}, ${textB})`,
+                    }}
                   />
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+                    className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 ease-out"
                     style={{ left: `${comparisonSummary.scoreA}%` }}
                   >
                     <svg viewBox="0 0 20 32" className="h-6 w-4">
@@ -705,9 +1003,9 @@ export default function CompareClient({
 
           {/* Melhores Heróis lado a lado */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {[
-              { p: playerA, shape: "slantLeft" as const, border: "#3897a1", bg: "linear-gradient(160deg, rgba(16,44,48,0.86), rgba(7,12,14,0.97))" },
-              { p: playerB, shape: "slantRight" as const, border: "#c97a2e", bg: "linear-gradient(160deg, rgba(44,28,12,0.86), rgba(8,10,10,0.97))" },
+           {[
+              { p: playerA, shape: "slantLeft" as const, border: colorA, bg: `linear-gradient(160deg, ${darkTintRgba(colorA, 0.15, 0.9)}, rgba(7,12,14,0.97))` },
+              { p: playerB, shape: "slantRight" as const, border: colorB, bg: `linear-gradient(160deg, ${darkTintRgba(colorB, 0.15, 0.9)}, rgba(8,10,10,0.97))` },
             ].map(({ p, shape, border, bg }, idx) => (
               <SlantFrame
                 key={`heroes-${p.accountId}-${idx}`}
