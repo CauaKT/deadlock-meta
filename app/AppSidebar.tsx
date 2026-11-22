@@ -117,7 +117,8 @@ const NAV_SECTIONS: NavItem[][] = [
     {
       href: "/leaderboard",
       label: "Competitivo",
-      match: (p) => p.startsWith("/leaderboard") || p.startsWith("/tournaments"),
+      match: (p) =>
+        p.startsWith("/leaderboard") || p.startsWith("/playerbase") || p.startsWith("/tournaments"),
       icon: (
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
@@ -135,38 +136,22 @@ const NAV_SECTIONS: NavItem[][] = [
           match: (p) => p.startsWith("/leaderboard"),
         },
         {
+          href: "/playerbase",
+          label: "Playerbase",
+          match: (p) => p.startsWith("/playerbase"),
+        },
+        {
           href: "/tournaments",
           label: "Torneios",
           match: (p) => p.startsWith("/tournaments"),
         },
       ],
     },
-  ],
-  [
-    {
-      href: "/compare",
-      label: "Comparador 1v1",
-      match: (p) => p.startsWith("/compare"),
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
-        </svg>
-      ),
-    },
     {
       href: "/feed",
-      label: "Feed",
-      match: (p) => p.startsWith("/feed"),
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      ),
-    },
-    {
-      href: "/lfg",
-      label: "Procurar Duo / LFG",
-      match: (p) => p.startsWith("/lfg"),
+      label: "Social",
+      match: (p) =>
+        p.startsWith("/feed") || p.startsWith("/lfg") || p.startsWith("/compare"),
       icon: (
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -175,6 +160,23 @@ const NAV_SECTIONS: NavItem[][] = [
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       ),
+      children: [
+        {
+          href: "/feed",
+          label: "Feed",
+          match: (p) => p.startsWith("/feed"),
+        },
+        {
+          href: "/lfg",
+          label: "Procurar Duo",
+          match: (p) => p.startsWith("/lfg"),
+        },
+        {
+          href: "/compare",
+          label: "Comparador 1v1",
+          match: (p) => p.startsWith("/compare"),
+        },
+      ],
     },
   ],
   [

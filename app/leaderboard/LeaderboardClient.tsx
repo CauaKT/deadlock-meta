@@ -78,6 +78,9 @@ function getEntryTier(entry: LeaderboardEntry): number {
   if (typeof entry.badgeLevel === "number" && entry.badgeLevel >= 11) {
     return Math.floor(entry.badgeLevel / 10);
   }
+  if (typeof entry.points === "number" && entry.points >= 0) {
+    return Math.min(11, Math.max(1, Math.floor(entry.points / 6500) + 1));
+  }
   return 0;
 }
 
@@ -99,6 +102,14 @@ function formatRankInfo(entry: LeaderboardEntry): { tier: number; label: string;
     sub = entry.badgeLevel % 10;
   }
   if (!tier || tier < 1) {
+    if (typeof entry.points === "number" && entry.points >= 0) {
+      const approxTier = Math.min(11, Math.max(1, Math.floor(entry.points / 6500) + 1));
+      return {
+        tier: approxTier,
+        label: RANK_NAMES[approxTier] ?? `Tier ${approxTier}`,
+        iconUrl: tierIconUrl(approxTier, 1),
+      };
+    }
     return {
       tier: 0,
       label: "Obscuro",
@@ -240,6 +251,32 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
   });
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [regionMenuOpen, setRegionMenuOpen] = useState(false);
+  const regionMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    if (!regionMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (regionMenuRef.current && !regionMenuRef.current.contains(e.target as Node)) {
+        setRegionMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRegionMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [regionMenuOpen]);
   const [sortBy, setSortBy] = useState<SortKey>(() => {
     const s = searchParams.get("sort");
     return s === "winrate" || s === "matches" || s === "rank" ? s : "points";
@@ -301,6 +338,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     params.set("limit", String(PAGE_SIZE));
     if (debouncedHeroIdsKey) params.set("heroIds", debouncedHeroIdsKey);
     if (tierParam !== null) params.set("tier", String(tierParam));
+    if (debouncedSearch.length >= 2) params.set("search", debouncedSearch);
 
     const url = `/api/backend/external-data/leaderboard/${encodeURIComponent(region)}?${params.toString()}`;
 
@@ -351,7 +389,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     return () => {
       cancelled = true;
     };
-  }, [region, debouncedHeroIdsKey, page, reloadKey, tierParam]);
+  }, [region, debouncedHeroIdsKey, page, reloadKey, tierParam, debouncedSearch]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -361,7 +399,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
       list = list.filter((e) => getEntryTier(e) === selectedTier);
     }
 
-    if (q) {
+    if (q && debouncedSearch.length < 2) {
       list = list.filter((e) => e.accountName.toLowerCase().includes(q));
     }
 
@@ -406,22 +444,56 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           {totalRankedPlayers > 0 && (
-            <div className="dl-noise relative rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 px-4 py-2.5 text-right">
+            <Link
+              href="/playerbase"
+              title="Ver detalhes da playerbase de Deadlock"
+              className="dl-noise relative block rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 px-4 py-2.5 text-right transition-colors hover:border-amber-500/50"
+            >
               <p className="font-mono text-base font-black text-[#f4efe6]">
                 {totalRankedPlayers.toLocaleString("pt-BR")}
               </p>
               <p className="font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-400">
                 Jogadores Ranqueados
               </p>
-            </div>
+            </Link>
           )}
-          <div className="dl-noise relative rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 px-4 py-2.5 text-right">
-            <p className="font-deadlock text-base font-black text-amber-400 uppercase">
-              {regionLabel}
-            </p>
-            <p className="font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-400">
-              Região Selecionada
-            </p>
+          <div ref={regionMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setRegionMenuOpen((o) => !o)}
+              aria-expanded={regionMenuOpen}
+              className="dl-noise relative rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 px-4 py-2.5 text-right cursor-pointer transition-colors hover:border-amber-500/50"
+            >
+              <p className="font-deadlock text-base font-black text-amber-400 uppercase">
+                {regionLabel}
+              </p>
+              <p className="font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-400">
+                Região Selecionada
+              </p>
+            </button>
+
+            {regionMenuOpen && (
+              <div className="absolute right-0 mt-1.5 w-48 z-40 rounded-[5px] border border-white/15 bg-[#0a0d0c]/98 p-1.5 shadow-2xl space-y-1">
+                {REGIONS.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setRegion(r.id);
+                      setPage(1);
+                      setRegionMenuOpen(false);
+                    }}
+                    className={`w-full text-left rounded-[4px] px-2.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider cursor-pointer transition-colors ${
+                      region === r.id
+                        ? "bg-amber-500 text-black"
+                        : "text-neutral-200 hover:bg-white/10 hover:text-amber-300"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -632,19 +704,13 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
                 <input
                   type="text"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar nick na página..."
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Buscar jogador..."
                   className="w-full sm:w-56 rounded-[4px] border border-white/12 bg-black/55 px-3 py-1.5 text-xs text-[#f4efe6] placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
                 />
-                {fetchedAt && (
-                  <span className="font-mono text-[10px] text-neutral-400">
-                    Cache{" "}
-                    {new Date(fetchedAt).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3 shrink-0">

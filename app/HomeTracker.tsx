@@ -1481,7 +1481,7 @@ export default function HomeTracker({
         <div className="lg:col-span-4 dl-noise relative rounded-[5px] border border-white/12 bg-[#0a0d0c]/92 p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
             <h3 className="font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6]">
-              Comunidade & LFG
+              Comunidade & Procurar Duo
             </h3>
             <div className="flex items-center gap-2 font-deadlock text-[10px] font-black uppercase tracking-wider shrink-0">
               <Link href="/lfg" className="text-amber-400 hover:text-amber-300">
@@ -1513,7 +1513,7 @@ export default function HomeTracker({
                   className="block rounded-[4px] border border-white/10 bg-black/40 p-2.5 hover:border-amber-500/45 transition-colors"
                 >
                   <div className="flex items-center justify-between text-[10px] font-mono text-amber-400">
-                    <span>LFG • {post.region} • {post.rankTier}</span>
+                    <span>Procurar Duo • {post.region} • {post.rankTier}</span>
                     <span>{post.mode}</span>
                   </div>
                   <p className="mt-1 truncate text-xs font-bold text-[#f4efe6]">{post.note}</p>

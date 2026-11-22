@@ -7,7 +7,7 @@ import LfgClient, { type LfgHeroOption, type LfgPostItem } from "./LfgClient";
 export const instant = false;
 
 export const metadata: Metadata = {
-  title: "LockPro • Procurar Duo / Time (LFG)",
+  title: "LockPro • Procurar Duo / Time",
   description: "Encontre duo ou feche time para partidas e torneios de Deadlock por região, patente e heróis.",
 };
 

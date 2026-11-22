@@ -218,7 +218,7 @@ export default function LfgClient({
                 disabled={posting || !note.trim()}
                 className="rounded-[4px] bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black hover:brightness-110 disabled:opacity-50 cursor-pointer"
               >
-                {posting ? "Publicando..." : "Publicar LFG"}
+                {posting ? "Publicando..." : "Publicar Anúncio"}
               </button>
             </div>
           </form>
@@ -277,7 +277,7 @@ export default function LfgClient({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredPosts.length === 0 ? (
           <p className="md:col-span-2 py-8 text-center text-xs text-neutral-500">
-            Nenhum anúncio LFG encontrado com esses filtros.
+            Nenhum anúncio encontrado com esses filtros.
           </p>
         ) : (
           filteredPosts.map((p) => (
