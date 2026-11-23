@@ -4,6 +4,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  PLAYERBASE_MAP_REGIONS,
+  PLAYERBASE_REGION_LABELS,
+  RANK_COLORS,
+  RANK_NAMES,
+  getRankIconUrl,
+} from "@/lib/data/config";
+import { TACTICAL_PLATE_CLASS } from "@/components/ui/TacticalPlate";
 import { WORLD_PATHS } from "./worldMapData";
 
 interface DailyPoint {
@@ -28,62 +36,11 @@ interface PlayerbaseData {
   fetchedAt: string;
 }
 
-const PLATE =
-  "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
+const PLATE = TACTICAL_PLATE_CLASS;
 
-const RANK_NAMES: Record<number, string> = {
-  1: "Iniciado",
-  2: "Aspirante",
-  3: "Acólito",
-  4: "Sentinela",
-  5: "Místico",
-  6: "Ritualista",
-  7: "Emissário",
-  8: "Oráculo",
-  9: "Fantasma",
-  10: "Ascendente",
-  11: "Eterno",
-};
-
-const RANK_COLORS: Record<number, string> = {
-  1: "#6A3E1E",
-  2: "#882355",
-  3: "#5C6DAB",
-  4: "#719C47",
-  5: "#DDA326",
-  6: "#EE4F57",
-  7: "#B47FEB",
-  8: "#955138",
-  9: "#7C7C7C",
-  10: "#C39751",
-  11: "#5CE9A9",
-};
-
-const REGION_LABELS: Record<string, string> = {
-  Europe: "Europa",
-  Row: "América do Norte",
-  SAmerica: "América do Sul",
-  SEAsia: "Ásia",
-  Oceania: "Oceania",
-  Desconhecida: "Outras / N/D",
-};
-
-const MAP_REGIONS: Array<{
-  id: string;
-  label: string;
-  pinX: number;
-  pinY: number;
-}> = [
-  { id: "Row", label: "América do Norte", pinX: 228, pinY: 141 },
-  { id: "SAmerica", label: "América do Sul", pinX: 344, pinY: 315 },
-  { id: "Europe", label: "Europa", pinX: 542, pinY: 105 },
-  { id: "SEAsia", label: "Ásia", pinX: 792, pinY: 164 },
-  { id: "Oceania", label: "Oceania", pinX: 875, pinY: 352 },
-];
-
-function tierIconUrl(tier: number, sub = 6): string {
-  return `https://api.deadlock-api.com/v1/assets/ranks/${tier}/${sub}/image?format=webp`;
-}
+const REGION_LABELS = PLAYERBASE_REGION_LABELS;
+const MAP_REGIONS = PLAYERBASE_MAP_REGIONS;
+const tierIconUrl = getRankIconUrl;
 
 function formatAxisTick(n: number): string {
   if (n >= 1_000_000) {
@@ -136,7 +93,6 @@ export default function PlayerbaseClient() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetch("/api/backend/external-data/playerbase", { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error("Não foi possível carregar os dados da playerbase.");

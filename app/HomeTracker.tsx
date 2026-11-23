@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useConfirm } from "@/components/ui/ConfirmModal";
+import {
+  LEADERBOARD_CONFIG,
+  LEADERBOARD_REGIONS,
+  SLOT_META,
+  formatRankInfo,
+} from "@/lib/data/config";
 
 export interface HomeTrackerHero {
   id: number;
@@ -56,44 +62,6 @@ interface LeaderboardEntry {
   matches?: number | null;
   winRate?: number | null;
   topHeroIds: number[];
-}
-
-const RANK_NAMES: Record<number, string> = {
-  1: "Iniciado",
-  2: "Aspirante",
-  3: "Acólito",
-  4: "Sentinela",
-  5: "Místico",
-  6: "Ritualista",
-  7: "Emissário",
-  8: "Oráculo",
-  9: "Fantasma",
-  10: "Ascendente",
-  11: "Eterno",
-};
-
-const ROMAN = ["", "I", "II", "III", "IV", "V", "VI"];
-
-function formatRankInfo(entry: LeaderboardEntry): { label: string; iconUrl: string } {
-  let tier = entry.rankedRank ?? null;
-  let sub = entry.rankedSubrank ?? null;
-  if ((tier === null || sub === null) && entry.badgeLevel !== null && entry.badgeLevel >= 11) {
-    tier = Math.floor(entry.badgeLevel / 10);
-    sub = entry.badgeLevel % 10;
-  }
-  if (!tier || tier < 1) {
-    return {
-      label: "Obscuro",
-      iconUrl: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank00_sm.webp",
-    };
-  }
-  const validSub = sub && sub >= 1 && sub <= 6 ? sub : 1;
-  const name = RANK_NAMES[tier] ?? `Tier ${tier}`;
-  const roman = ROMAN[validSub] ?? String(validSub);
-  return {
-    label: `${name} ${roman}`,
-    iconUrl: `https://api.deadlock-api.com/v1/assets/ranks/${tier}/${validSub}/image?format=webp`,
-  };
 }
 
 interface LfgSummaryItem {
@@ -246,19 +214,12 @@ const TAB_META: Record<string, { label: string; icon: ReactNode }> = {
   },
 };
 
-const REGIONS = [
-  { id: "Global", label: "Global" },
-  { id: "SAmerica", label: "América do Sul" },
-  { id: "NAmerica", label: "América do Norte" },
-  { id: "Europe", label: "Europa" },
-  { id: "Asia", label: "Ásia" },
-  { id: "Oceania", label: "Oceania" },
-];
+const REGIONS = LEADERBOARD_REGIONS;
 
 const SLOT_BADGE: Record<HomeTrackerItem["slot"], string> = {
-  weapon: "text-amber-400 border-amber-500/30 bg-amber-500/10",
-  vitality: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
-  spirit: "text-purple-400 border-purple-500/30 bg-purple-500/10",
+  weapon: SLOT_META.weapon.badgeClass,
+  vitality: SLOT_META.vitality.badgeClass,
+  spirit: SLOT_META.spirit.badgeClass,
 };
 
 const TOURNAMENT_STATUS_STYLE: Record<
@@ -352,7 +313,7 @@ export default function HomeTracker({
     item?: HomeTrackerItem;
   } | null>(null);
 
-  const [region, setRegion] = useState("SAmerica");
+  const [region, setRegion] = useState<string>(LEADERBOARD_CONFIG.defaultRegion);
   const [mmrLoading, setMmrLoading] = useState(true);
   const [topLeaders, setTopLeaders] = useState<LeaderboardEntry[]>([]);
 
@@ -363,43 +324,50 @@ export default function HomeTracker({
   const [feedList, setFeedList] = useState<FeedSummaryItem[]>([]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as RecentSearch[];
-        if (Array.isArray(parsed)) {
-          const sanitized = parsed
-            .filter(
-              (p) =>
-                p &&
-                typeof p.label === "string" &&
-                typeof p.href === "string" &&
-                !p.label.startsWith("@http") &&
-                !p.href.startsWith("/profile/http"),
-            )
-            .slice(0, 5);
-          setRecent(sanitized);
-          if (sanitized.length !== parsed.length) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as RecentSearch[];
+          if (Array.isArray(parsed)) {
+            const sanitized = parsed
+              .filter(
+                (p) =>
+                  p &&
+                  typeof p.label === "string" &&
+                  typeof p.href === "string" &&
+                  !p.label.startsWith("@http") &&
+                  !p.href.startsWith("/profile/http"),
+              )
+              .slice(0, 5);
+            setRecent(sanitized);
+            if (sanitized.length !== parsed.length) {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+            }
           }
         }
-      }
-    } catch {}
+      } catch {}
 
-    try {
-      const rawTabs = localStorage.getItem(RECENT_TABS_KEY);
-      if (rawTabs) {
-        const parsedTabs = JSON.parse(rawTabs) as string[];
-        if (Array.isArray(parsedTabs)) {
-          const valid = parsedTabs.filter((t) => typeof t === "string" && TAB_META[t]);
-          const merged = [
-            ...valid,
-            ...DEFAULT_RECENT_TABS.filter((d) => !valid.includes(d)),
-          ].slice(0, 5);
-          if (merged.length > 0) setRecentTabs(merged);
+      try {
+        const rawTabs = localStorage.getItem(RECENT_TABS_KEY);
+        if (rawTabs) {
+          const parsedTabs = JSON.parse(rawTabs) as string[];
+          if (Array.isArray(parsedTabs)) {
+            const valid = parsedTabs.filter((t) => typeof t === "string" && TAB_META[t]);
+            const merged = [
+              ...valid,
+              ...DEFAULT_RECENT_TABS.filter((d) => !valid.includes(d)),
+            ].slice(0, 5);
+            if (merged.length > 0) setRecentTabs(merged);
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -521,8 +489,6 @@ export default function HomeTracker({
 
   useEffect(() => {
     let cancelled = false;
-    setMmrLoading(true);
-    setTopLeaders([]);
 
     fetch(`/api/backend/external-data/leaderboard/${encodeURIComponent(region)}`, {
       cache: "no-store",
@@ -549,7 +515,6 @@ export default function HomeTracker({
 
   useEffect(() => {
     let cancelled = false;
-    setCommunityLoading(true);
 
     Promise.all([
       fetch("/api/backend/tournaments", { cache: "no-store" })
@@ -1141,7 +1106,11 @@ export default function HomeTracker({
             <div className="flex items-center gap-2.5 shrink-0">
               <select
                 value={region}
-                onChange={(e) => setRegion(e.target.value)}
+                onChange={(e) => {
+                  setRegion(e.target.value);
+                  setMmrLoading(true);
+                  setTopLeaders([]);
+                }}
                 aria-label="Região do Leaderboard"
                 className="rounded-[4px] border border-white/12 bg-[#0a0d0c] px-2 py-1 font-deadlock text-[10px] font-black uppercase text-[#f4efe6] focus:border-amber-500 focus:outline-none cursor-pointer"
               >

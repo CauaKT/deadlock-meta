@@ -2,8 +2,9 @@
 import Link from "next/link";
 import type { HeroMatchupEntry, HeroMatchups as HeroMatchupsData } from "@/lib/deadlock";
 import SlantFrame from "@/components/ui/SlantFrame";
+import { TACTICAL_PLATE_CLASS } from "@/components/ui/TacticalPlate";
 
-const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
+const PLATE = TACTICAL_PLATE_CLASS;
 
 function MatchupGroup({
   title,

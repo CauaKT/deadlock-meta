@@ -24,10 +24,17 @@ export default function NotificationBell({ placement = "header" }: { placement?:
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const saved = Number(localStorage.getItem(SEEN_KEY) || "0");
-      if (Number.isFinite(saved)) setSeenAt(saved);
-    } catch {}
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const saved = Number(localStorage.getItem(SEEN_KEY) || "0");
+        if (Number.isFinite(saved)) setSeenAt(saved);
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

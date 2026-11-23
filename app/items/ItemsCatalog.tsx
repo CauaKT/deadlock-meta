@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { SLOT_META, computeItemTooltipPosition } from "@/lib/data/config";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "./ItemTooltip";
 
@@ -29,30 +30,30 @@ const VENDORS: Record<ItemSlot | "all", Vendor> = {
     tileArt: ["#b3a894", "#6d6a5c", "#3d3b33", "#2a2925"],
   },
   weapon: {
-    name: "Fairfax",
-    label: "Arma",
+    name: SLOT_META.weapon.vendor,
+    label: SLOT_META.weapon.label,
     board: "#b8a282",
-    plate: "#3b2d1a",
+    plate: SLOT_META.weapon.plate,
     panel: "#7a6a45",
     panelLast: "#2e281c",
-    accent: "#e2a23f",
+    accent: SLOT_META.weapon.accent,
     tileArt: ["#b49a74", "#8a5a2c", "#4a3320", "#2f2519"],
   },
   vitality: {
-    name: "MPS",
-    label: "Vitalidade",
+    name: SLOT_META.vitality.vendor,
+    label: SLOT_META.vitality.label,
     board: "#c3b8a2",
-    plate: "#394d2d",
+    plate: SLOT_META.vitality.plate,
     panel: "#80806b",
     panelLast: "#334335",
-    accent: "#8fc43a",
+    accent: SLOT_META.vitality.accent,
     tileArt: ["#b3a894", "#4d7e73", "#2f3228", "#2f4234"],
   },
   spirit: {
-    name: "Curiosity Catalog",
-    label: "Espírito",
+    name: SLOT_META.spirit.vendor,
+    label: SLOT_META.spirit.label,
     board: "#cab4b6",
-    plate: "#3a2d3d",
+    plate: SLOT_META.spirit.plate,
     panel: "#766272",
     panelLast: "#2d2236",
     accent: "#c79af0",
@@ -195,13 +196,7 @@ export default function ItemsCatalog({ items }: { items: ShopItem[] }) {
       setTip(null);
       return;
     }
-    const r = el.getBoundingClientRect();
-    const fitsRight = r.right + 8 + TIP_WIDTH <= window.innerWidth;
-    setTip({
-      item,
-      x: fitsRight ? r.right + 8 : Math.max(8, r.left - 8 - TIP_WIDTH),
-      y: Math.max(8, Math.min(r.top, window.innerHeight - 420)),
-    });
+    setTip({ item, ...computeItemTooltipPosition(el, TIP_WIDTH) });
   };
   const allTiers = useMemo(() => Array.from(new Set(items.map((i) => i.tier))).sort((a, b) => a - b), [items]);
   const [shownTiers, setShownTiers] = useState<number[]>(() => allTiers.filter((t) => t <= EXPERT_TIER));

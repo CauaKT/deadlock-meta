@@ -9,9 +9,12 @@ export default function PageTransitionBar() {
   const [loading, setLoading] = useState(false);
 
   // Desativa a barra assim que a nova rota termina de renderizar
-  useEffect(() => {
+  const routeKey = `${pathname}?${searchParams?.toString() ?? ""}`;
+  const [prevRouteKey, setPrevRouteKey] = useState(routeKey);
+  if (routeKey !== prevRouteKey) {
+    setPrevRouteKey(routeKey);
     setLoading(false);
-  }, [pathname, searchParams]);
+  }
 
   // Intercepta cliques em links internos para dar feedback visual imediato
   useEffect(() => {

@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { extractColor, fetchHeroesAssets, fetchWikiColors } from "@/lib/deadlock";
+import {
+  extractColor,
+  fetchHeroesAssets,
+  fetchWikiColors,
+  getPlayableHeroes,
+  resolveHeroMedia,
+} from "@/lib/deadlock";
 import LeaderboardClient, { type LeaderboardHeroOption } from "./LeaderboardClient";
 
 export const instant = false;
@@ -15,15 +21,12 @@ export default async function LeaderboardPage() {
     fetchHeroesAssets(),
     fetchWikiColors(),
   ]);
-  const heroes: LeaderboardHeroOption[] = Object.values(heroesMap)
-    .filter((h) => h.player_selectable !== false && h.disabled !== true)
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
-      rgb: extractColor(h, wikiColors),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const heroes: LeaderboardHeroOption[] = getPlayableHeroes(heroesMap).map((h) => ({
+    id: h.id,
+    name: h.name,
+    image: resolveHeroMedia(h).icon,
+    rgb: extractColor(h, wikiColors),
+  }));
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">

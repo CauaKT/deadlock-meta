@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { DEADLOCK_DATA_CONFIG, getRankIconUrl } from "@/lib/data/config";
 
 interface HeroOption {
   id: number;
@@ -536,7 +537,7 @@ let upgradeItemsPromise: Promise<Map<number, UpgradeAssetItem>> | null = null;
 function loadUpgradeItemsMap(): Promise<Map<number, UpgradeAssetItem>> {
   if (!upgradeItemsPromise) {
     upgradeItemsPromise = fetch(
-      "https://api.deadlock-api.com/v1/assets/items/by-type/upgrade?language=brazilian",
+      `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/assets/items/by-type/upgrade?language=${DEADLOCK_DATA_CONFIG.language}`,
       { cache: "force-cache" },
     )
       .then((r) => (r.ok ? r.json() : []))
@@ -630,8 +631,7 @@ function resolveRankBadge(
   const color = asset?.color ?? "#f59e0b";
   const icon =
     tier > 0 && sub >= 1 && sub <= 6
-      ? asset?.images?.[`small_subrank${sub}_webp`] ||
-        `https://api.deadlock-api.com/v1/assets/ranks/${tier}/${sub}/image?format=webp`
+      ? asset?.images?.[`small_subrank${sub}_webp`] || getRankIconUrl(tier, sub)
       : asset?.images?.small_webp || asset?.images?.large_webp || null;
   return {
     label: tier > 0 && sub >= 1 && sub <= 6 ? `${name} ${romanSubrank(sub)}` : name,
@@ -833,13 +833,20 @@ export default function PlayerDeadlockStats({
   const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
 
   useEffect(() => {
-    try {
-      const raw = new URLSearchParams(window.location.search).get("heroId");
-      const id = raw ? Number(raw) : NaN;
-      if (Number.isInteger(id) && id > 0) {
-        setHeroFilter(id);
-      }
-    } catch {}
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const raw = new URLSearchParams(window.location.search).get("heroId");
+        const id = raw ? Number(raw) : NaN;
+        if (Number.isInteger(id) && id > 0) {
+          setHeroFilter(id);
+        }
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const [visibleMatchesCount, setVisibleMatchesCount] = useState(12);
   const [showAllHeroes, setShowAllHeroes] = useState(false);
@@ -863,7 +870,7 @@ export default function PlayerDeadlockStats({
           .filter((id) => Number.isFinite(id) && !(id in steamNames));
         if (missingIds.length > 0) {
           fetch(
-            `https://api.deadlock-api.com/v1/players/steam?account_ids=${missingIds.join(",")}`,
+            `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/steam?account_ids=${missingIds.join(",")}`,
             { cache: "no-store" },
           )
             .then((r) => (r.ok ? r.json() : []))
@@ -892,18 +899,14 @@ export default function PlayerDeadlockStats({
     setHoveredItemTip({ item, x, y, above });
   };
 
-  const [baseLoading, setBaseLoading] = useState(false);
+  const [baseLoading, setBaseLoading] = useState(() => Boolean(accountId));
   const [statsLoading, setStatsLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [prevAccountId, setPrevAccountId] = useState(accountId);
 
-  // Dados gerais da conta (histórico, patente, região, aliados, inimigos)
-  useEffect(() => {
-    activeAccountRef.current = accountId;
-    statsCacheRef.current = {};
-    matchDetailsCacheRef.current = {};
-    fetchingMatchIdsRef.current.clear();
+  if (accountId !== prevAccountId) {
+    setPrevAccountId(accountId);
     setMatchDetailsMap({});
-
     if (!accountId) {
       setStats(null);
       setMatches([]);
@@ -912,43 +915,55 @@ export default function PlayerDeadlockStats({
       setSteamNames({});
       setRankInfo(null);
       setRegionInfo(null);
+      setBaseLoading(false);
       setFailed(false);
-      return;
+    } else {
+      setBaseLoading(true);
+      setFailed(false);
     }
+  }
+
+  // Dados gerais da conta (histórico, patente, região, aliados, inimigos)
+  useEffect(() => {
+    activeAccountRef.current = accountId;
+    statsCacheRef.current = {};
+    matchDetailsCacheRef.current = {};
+    fetchingMatchIdsRef.current.clear();
+
+    if (!accountId) return;
 
     let cancelled = false;
-    setBaseLoading(true);
-    setFailed(false);
 
     Promise.all([
-      fetch(`https://api.deadlock-api.com/v1/players/${accountId}/match-history`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/match-history`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
-      fetch(`https://api.deadlock-api.com/v1/players/${accountId}/mate-stats`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/mate-stats`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
-      fetch(`https://api.deadlock-api.com/v1/players/${accountId}/enemy-stats`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/enemy-stats`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
-      fetch(`https://api.deadlock-api.com/v1/players/${accountId}/rank`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/rank`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
-      fetch(`https://api.deadlock-api.com/v1/players/${accountId}/region`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/region`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
-      fetch(`https://api.deadlock-api.com/v1/assets/ranks?language=brazilian`, {
-        cache: "force-cache",
-      })
+      fetch(
+        `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/assets/ranks?language=${DEADLOCK_DATA_CONFIG.language}`,
+        { cache: "force-cache" },
+      )
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
     ]).then(([matchData, mateData, enemyData, rkData, rgData, ranksArr]) => {
@@ -980,7 +995,7 @@ export default function PlayerDeadlockStats({
           ? `?min_average_badge=${rankTier * 10}&max_average_badge=${rankTier * 10 + 9}`
           : "";
 
-      fetch(`https://api.deadlock-api.com/v1/analytics/hero-stats${eloQuery}`, {
+      fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/analytics/hero-stats${eloQuery}`, {
         cache: "force-cache",
       })
         .then((r) => (r.ok ? r.json() : []))
@@ -1029,7 +1044,7 @@ export default function PlayerDeadlockStats({
 
       if (allSteamIds.length > 0) {
         fetch(
-          `https://api.deadlock-api.com/v1/players/steam?account_ids=${allSteamIds.join(",")}`,
+          `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/steam?account_ids=${allSteamIds.join(",")}`,
           { cache: "no-store" },
         )
           .then((r) => (r.ok ? r.json() : []))
@@ -1068,12 +1083,12 @@ export default function PlayerDeadlockStats({
 
     const url =
       modeFilter === "all"
-        ? `https://api.deadlock-api.com/v1/players/${accountId}/hero-stats`
+        ? `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/${accountId}/hero-stats`
         : modeFilter === "ranked"
-          ? `https://api.deadlock-api.com/v1/players/hero-stats?account_ids=${accountId}&game_mode=1&match_mode=4`
+          ? `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/hero-stats?account_ids=${accountId}&game_mode=1&match_mode=4`
           : modeFilter === "brawl"
-            ? `https://api.deadlock-api.com/v1/players/hero-stats?account_ids=${accountId}&game_mode=4&match_mode=1`
-            : `https://api.deadlock-api.com/v1/players/hero-stats?account_ids=${accountId}&game_mode=1&match_mode=1`;
+            ? `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/hero-stats?account_ids=${accountId}&game_mode=4&match_mode=1`
+            : `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/players/hero-stats?account_ids=${accountId}&game_mode=1&match_mode=1`;
 
     fetch(url, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("http"))))
@@ -1166,7 +1181,9 @@ const filteredMatches = useMemo(() => {
         const results = await Promise.all(
           chunk.map(async (matchId) => {
             try {
-              const res = await fetch(`https://api.deadlock-api.com/v1/matches/${matchId}/metadata`, {
+              const res = await fetch(
+                `${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/matches/${matchId}/metadata`,
+                {
                 cache: "force-cache",
               });
               if (!res.ok) return { matchId, snap: null };

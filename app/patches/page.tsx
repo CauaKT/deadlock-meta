@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
+import RankSelect from "@/app/RankSelect";
 import {
+  computeHeroMatchStats,
   extractColor,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
   fetchItemsAnalytics,
+  fetchOfficialPatchNotes,
+  fetchPatches,
   fetchShopItems,
   fetchWikiColors,
-  fetchPatches,
+  isPlayableHero,
+  RANK_FILTERS,
+  resolveRankFilter,
+  SAMPLE_THRESHOLDS,
 } from "@/lib/deadlock";
 import PatchTrackerClient, {
   type PatchHeroDelta,
@@ -20,34 +27,16 @@ export const metadata: Metadata = {
   description: "Acompanhe quais heróis e itens ganharam ou perderam mais win rate e pick rate entre os patches de Deadlock.",
 };
 
-interface OfficialPatchNote {
-  title: string;
-  pub_date: string;
-  link: string;
-}
-
-async function fetchOfficialPatchNotes(): Promise<OfficialPatchNote[]> {
-  try {
-    const res = await fetch("https://api.deadlock-api.com/v2/patches", {
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as OfficialPatchNote[];
-    return Array.isArray(data) ? data.slice(0, 4) : [];
-  } catch {
-    return [];
-  }
-}
-
 export default async function PatchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ patch?: string }>;
+  searchParams: Promise<{ patch?: string; rank?: string }>;
 }) {
-  const [{ patch: patchParam }, patches] = await Promise.all([
+  const [{ patch: patchParam, rank: rankParam }, patches] = await Promise.all([
     searchParams,
     fetchPatches(),
   ]);
+  const selectedRank = resolveRankFilter(rankParam);
   const datedPatches = patches.filter((p) => typeof p.since === "number");
   const selectablePatches = datedPatches.slice(0, -1); // precisa de um patch anterior para comparar
 
@@ -72,8 +61,8 @@ export default async function PatchesPage({
     fetchHeroesAssets(),
     fetchWikiColors(),
     fetchShopItems(),
-    fetchHeroesAnalytics(currentPatch.since, currentUntil),
-    fetchHeroesAnalytics(prevPatch.since, currentPatch.since),
+    fetchHeroesAnalytics(currentPatch.since, currentUntil, selectedRank.minBadge),
+    fetchHeroesAnalytics(prevPatch.since, currentPatch.since, selectedRank.minBadge),
     fetchItemsAnalytics(currentPatch.since, currentUntil),
     fetchItemsAnalytics(prevPatch.since, currentPatch.since),
     fetchOfficialPatchNotes(),
@@ -90,17 +79,22 @@ export default async function PatchesPage({
   for (const now of heroStatsNow) {
     const prev = prevHeroById.get(now.hero_id);
     if (!prev) continue;
-    const matchesNow = now.matches || 0;
-    const matchesPrev = prev.matches || 0;
-    if (matchesNow < 300 || matchesPrev < 300) continue;
+    const currStats = computeHeroMatchStats(now);
+    const prevStats = computeHeroMatchStats(prev);
+    const matchesNow = currStats.matches;
+    const matchesPrev = prevStats.matches;
+    if (
+      matchesNow < SAMPLE_THRESHOLDS.patchTrackerHero ||
+      matchesPrev < SAMPLE_THRESHOLDS.patchTrackerHero
+    ) {
+      continue;
+    }
 
     const hero = heroesMap[now.hero_id];
-    if (!hero || hero.name.startsWith("hero_")) continue;
+    if (!isPlayableHero(hero)) continue;
 
-    const winsNow = now.wins ?? Math.round((matchesNow * (now.win_rate ?? 50)) / 100);
-    const winsPrev = prev.wins ?? Math.round((matchesPrev * (prev.win_rate ?? 50)) / 100);
-    const winRateNow = now.win_rate ?? (winsNow / matchesNow) * 100;
-    const winRatePrev = prev.win_rate ?? (winsPrev / matchesPrev) * 100;
+    const winRateNow = currStats.winRate;
+    const winRatePrev = prevStats.winRate;
 
     const pickRateNow = (matchesNow / totalGamesNow) * 100;
     const pickRatePrev = (matchesPrev / totalGamesPrev) * 100;
@@ -133,7 +127,12 @@ export default async function PatchesPage({
     const now = nowItemById.get(item.id);
     const prev = prevItemById.get(item.id);
     if (!now || !prev) continue;
-    if (now.matches < 500 || prev.matches < 500) continue;
+    if (
+      now.matches < SAMPLE_THRESHOLDS.patchTrackerItem ||
+      prev.matches < SAMPLE_THRESHOLDS.patchTrackerItem
+    ) {
+      continue;
+    }
 
     const winRateNow = (now.wins / now.matches) * 100;
     const winRatePrev = (prev.wins / prev.matches) * 100;
@@ -194,9 +193,14 @@ export default async function PatchesPage({
         </section>
       )}
 
+      <div className="flex flex-wrap items-center gap-3">
+        <RankSelect ranks={RANK_FILTERS} selected={selectedRank.id} />
+      </div>
+
       <PatchTrackerClient
         patches={selectablePatches.map((p) => ({ id: p.id, label: p.label }))}
         selectedPatchId={currentPatch.id}
+        selectedRankId={selectedRank.id}
         prevPatchLabel={prevPatch.label}
         heroes={heroesDelta}
         items={itemsDelta}

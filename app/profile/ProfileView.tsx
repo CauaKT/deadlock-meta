@@ -10,7 +10,19 @@ import {
   getServerFriendsOverview,
   getServerTierLists,
 } from "@/lib/backend/server";
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, fetchPatches } from "@/lib/deadlock";
+import {
+  extractColor,
+  extractHeroTheme,
+  fetchHeroBlurbs,
+  fetchHeroesAnalytics,
+  fetchHeroesAssets,
+  fetchPatches,
+  fetchWikiColors,
+  getDefaultRank,
+  isPlayableHero,
+  resolveHeroMedia,
+  resolvePatchWindow,
+} from "@/lib/deadlock";
 import ProfileForm from "./ProfileForm";
 import fs from "fs";
 import path from "path";
@@ -35,11 +47,14 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   if (!user.profile?.handle || !user.profile?.handle_confirmed) redirect("/welcome");
 
   const patches = await fetchPatches();
+  const { selectedPatch, patchUntil } = resolvePatchWindow(patches);
+  const defaultRank = getDefaultRank();
+
   const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     getOwnFullProfile(user.id),
     fetchHeroesAssets(),
     fetchWikiColors(),
-    fetchHeroesAnalytics(patches[0].since),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil, defaultRank.minBadge),
     fetchHeroBlurbs(),
   ]);
   const withMatches = new Set(stats.filter((s) => (s.matches || 0) > 0).map((s) => s.hero_id));
@@ -59,17 +74,15 @@ export default async function ProfileView({ handle }: { handle?: string }) {
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     .map((h) => {
       const theme = extractHeroTheme(h, wikiColors);
-      const bg = h.images?.background_image_webp || h.images?.background_image || "";
+      const media = resolveHeroMedia(h, localArt);
       const file = h.name.trim().replace(/ /g, "_");
-      const slug = h.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const local = slug ? localArt.find((f) => f.toLowerCase().startsWith(slug)) : undefined;
       return {
         id: h.id,
         name: h.name,
-        image: h.images?.icon_hero_card || h.images?.icon_image_small || h.images?.minimap_image || "",
-        banner: bg,
+        image: media.card,
+        banner: media.bg,
         head: h.images?.icon_image_small || "",
-        art: local ? `/heroes/${local}` : `https://cdn.deadlock.wiki/thumb/${file}_Render.png/800px-${file}_Render.png`,
+        art: media.art,
         tagBg: theme.tagBg,
         tagText: theme.tagText,
         tags: blurbs[h.id]?.tags ?? [],
@@ -77,7 +90,7 @@ export default async function ProfileView({ handle }: { handle?: string }) {
         // Mesma regra de "lançado" da /heroes
         playable:
           extractColor(h, wikiColors) !== null &&
-          (withMatches.has(h.id) || (h.player_selectable === true && h.disabled !== true && h.in_development !== true)),
+          (withMatches.has(h.id) || isPlayableHero(h)),
         rgb: theme.rgb,
       };
     });

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { fetchHeroesAssets, fetchShopItems } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchShopItems, getPlayableHeroes, resolveHeroMedia } from "@/lib/deadlock";
 import BuildsClient, { type BuildHeroOption } from "./BuildsClient";
 
 export const instant = false;
@@ -16,24 +16,11 @@ export default async function BuildsPage() {
     fetchShopItems(),
   ]);
 
-  const heroes: BuildHeroOption[] = Object.values(heroesMap)
-    .filter(
-      (h) =>
-        h.player_selectable === true &&
-        h.disabled !== true &&
-        h.in_development !== true &&
-        !h.name.startsWith("hero_"),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image:
-        h.images?.icon_image_small ||
-        h.images?.minimap_image ||
-        h.images?.icon_hero_card ||
-        null,
-    }));
+  const heroes: BuildHeroOption[] = getPlayableHeroes(heroesMap).map((h) => ({
+    id: h.id,
+    name: h.name,
+    image: resolveHeroMedia(h).icon,
+  }));
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-8">

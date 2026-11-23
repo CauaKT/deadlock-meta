@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchHeroesAssets, fetchShopItems } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchShopItems, getPlayableHeroes, resolveHeroMedia } from "@/lib/deadlock";
 
 export async function GET() {
   try {
@@ -8,23 +8,11 @@ export async function GET() {
       fetchShopItems(),
     ]);
 
-    const heroes = Object.values(heroesMap)
-      .filter(
-        (h) =>
-          h.player_selectable === true &&
-          h.disabled !== true &&
-          h.in_development !== true,
-      )
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-      .map((h) => ({
-        id: h.id,
-        name: h.name,
-        image:
-          h.images?.icon_image_small ||
-          h.images?.minimap_image ||
-          h.images?.icon_hero_card ||
-          null,
-      }));
+    const heroes = getPlayableHeroes(heroesMap).map((h) => ({
+      id: h.id,
+      name: h.name,
+      image: resolveHeroMedia(h).icon,
+    }));
 
     const items = shopItems.map((item) => ({
       className: item.className,

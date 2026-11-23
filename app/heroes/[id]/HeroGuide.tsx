@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PATCHES, type HeroBuild, type ItemSlot, type Patch, type PopularItem, type ShopItem } from "@/lib/deadlock";
+import { SLOT_ACCENTS, computeItemTooltipPosition } from "@/lib/data/config";
+import { PATCHES, type HeroBuild, type Patch, type PopularItem, type ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
 import SlantFrame from "@/components/ui/SlantFrame";
+import { TACTICAL_PLATE_CLASS } from "@/components/ui/TacticalPlate";
 
-const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
+const PLATE = TACTICAL_PLATE_CLASS;
 const MAX_COMPLEXITY = 4;
-
-const SLOT_ACCENTS: Record<ItemSlot, string> = {
-  weapon: "#e2a23f",
-  vitality: "#8fc43a",
-  spirit: "#c79af0",
-};
 
 // Tradução minha dos valores de hero_type da API
 const HERO_TYPE_LABELS: Record<string, string> = {
@@ -115,13 +111,7 @@ export default function HeroGuide({
       setTip(null);
       return;
     }
-    const r = el.getBoundingClientRect();
-    const fitsRight = r.right + 8 + TIP_WIDTH <= window.innerWidth;
-    setTip({
-      item,
-      x: fitsRight ? r.right + 8 : Math.max(8, r.left - 8 - TIP_WIDTH),
-      y: Math.max(8, Math.min(r.top, window.innerHeight - 420)),
-    });
+    setTip({ item, ...computeItemTooltipPosition(el, TIP_WIDTH) });
   };
 
   return (

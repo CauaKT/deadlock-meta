@@ -35,9 +35,12 @@ export interface PatchItemDelta {
   matchesNow: number;
 }
 
+import { DEFAULT_RANK_ID, SLOT_META } from "@/lib/data/config";
+
 interface Props {
   patches: { id: string; label: string }[];
   selectedPatchId: string;
+  selectedRankId: string;
   prevPatchLabel: string;
   heroes: PatchHeroDelta[];
   items: PatchItemDelta[];
@@ -47,9 +50,9 @@ type Tab = "heroes" | "items";
 type SortKey = "winDelta-desc" | "winDelta-asc" | "pickDelta-desc" | "win-desc";
 
 const SLOT_STYLE: Record<PatchItemDelta["slot"], { label: string; badge: string }> = {
-  weapon: { label: "Arma", badge: "text-amber-400 border-amber-500/35 bg-amber-500/10" },
-  vitality: { label: "Vitalidade", badge: "text-emerald-400 border-emerald-500/35 bg-emerald-500/10" },
-  spirit: { label: "Espírito", badge: "text-purple-400 border-purple-500/35 bg-purple-500/10" },
+  weapon: { label: SLOT_META.weapon.label, badge: SLOT_META.weapon.patchBadgeClass },
+  vitality: { label: SLOT_META.vitality.label, badge: SLOT_META.vitality.patchBadgeClass },
+  spirit: { label: SLOT_META.spirit.label, badge: SLOT_META.spirit.patchBadgeClass },
 };
 
 function DeltaBadge({ value, suffix = "%" }: { value: number; suffix?: string }) {
@@ -75,6 +78,7 @@ function DeltaBadge({ value, suffix = "%" }: { value: number; suffix?: string })
 export default function PatchTrackerClient({
   patches,
   selectedPatchId,
+  selectedRankId,
   prevPatchLabel,
   heroes,
   items,
@@ -125,7 +129,10 @@ export default function PatchTrackerClient({
   }, [items, search, sort]);
 
   const handlePatchChange = (id: string) => {
-    startTransition(() => router.push(`/patches?patch=${id}`));
+    const params = new URLSearchParams();
+    params.set("patch", id);
+    if (selectedRankId !== DEFAULT_RANK_ID) params.set("rank", selectedRankId);
+    startTransition(() => router.push(`/patches?${params.toString()}`));
   };
 
   return (

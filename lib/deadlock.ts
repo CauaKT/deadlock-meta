@@ -2,6 +2,48 @@
 // lib/deadlock.ts
 
 import { connection } from "next/server";
+import {
+  DEADLOCK_DATA_CONFIG,
+  DEFAULT_RANK_ID,
+  MIN_HERO_MATCHES,
+  PATCHES,
+  PATCH_HISTORY_LIMIT,
+  PATCH_TITLE_REGEX,
+  RANK_FILTERS,
+  SAMPLE_THRESHOLDS,
+  TIER_BADGE_STYLES,
+  TIER_THRESHOLDS,
+  calculateTier,
+  getDefaultRank,
+  isPlayableHero,
+  minMatchesForRank,
+  resolveHeroMedia,
+  resolvePatchWindow,
+  resolveRankFilter,
+  type Patch,
+  type RankFilterOption,
+} from "@/lib/data/config";
+
+export {
+  DEADLOCK_DATA_CONFIG,
+  DEFAULT_RANK_ID,
+  MIN_HERO_MATCHES,
+  PATCHES,
+  PATCH_HISTORY_LIMIT,
+  RANK_FILTERS,
+  SAMPLE_THRESHOLDS,
+  TIER_BADGE_STYLES,
+  TIER_THRESHOLDS,
+  calculateTier,
+  getDefaultRank,
+  isPlayableHero,
+  minMatchesForRank,
+  resolveHeroMedia,
+  resolvePatchWindow,
+  resolveRankFilter,
+  type Patch,
+  type RankFilterOption,
+};
 
 export interface HeroAbility {
   id: number;
@@ -258,51 +300,19 @@ export async function fetchHeroDetails(heroId: number): Promise<HeroAsset | null
   }
 }
 
-export interface Patch {
-  id: string;
-  label: string;
-  since?: number; // Unix timestamp em segundos; sem valor = sem filtro de data
+export function getPlayableHeroes(heroesMap: Record<number, HeroAsset>): HeroAsset[] {
+  return Object.values(heroesMap)
+    .filter((h) => isPlayableHero(h))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
-// Do mais novo para o mais antigo. O primeiro é o selecionado por padrão.
-// `since` = Unix timestamp em segundos. Patches com horário exato usam o horário
-// do post da Valve no Steam; os que só têm dia usam 00:00 UTC desse dia, então
-// podem incluir algumas horas de partidas anteriores ao patch.
-export const PATCHES: Patch[] = [
-  { id: "minor-2026-11-04", label: "04/11/2026 - Minor Update", since: 1793854950 },
-  { id: "halloween-2026", label: "30/10/2026 - Halloween + Gameplay", since: 1793393460 },
-  { id: "minor-10-14", label: "14/10/2026 - Minor Update", since: 1792033860 },
-  { id: "minor-10-05", label: "05/10/2026 - Minor Update", since: 1791241500 },
-  { id: "city-never-sleeps", label: "29/09/2026 - City Never Sleeps", since: 1790713511 },
-  { id: "minor-09-16", label: "16/09/2026 - Minor Update", since: 1789516800 },
-  { id: "minor-08-22", label: "22/08/2026 - Minor Update", since: 1787356800 },
-  { id: "ranked-season-1", label: "30/07/2026 - Ranked Season 1", since: 1785430800 },
-  { id: "minor-06-04", label: "04/06/2026 - Minor Update", since: 1780531200 },
-  { id: "update-05-22", label: "22/05/2026 - Minor Update", since: 1779408000 },
-  { id: "update-04-30", label: "30/04/2026 - Minor Update", since: 1777507200 },
-  { id: "update-03-21", label: "21/03/2026 - Minor Update", since: 1774051200 },
-  { id: "update-03-06", label: "06/03/2026 - Minor Update", since: 1772833020 },
-  { id: "update-01-30", label: "30/01/2026 - Minor Update", since: 1769731200 },
-  { id: "old-gods-new-blood", label: "22/01/2026 - Old Gods, New Blood", since: 1769122593 },
-  { id: "update-2025-12-29", label: "29/12/2025 - Minor Update", since: 1766966400 },
-  { id: "update-2025-12-16", label: "16/12/2025 - Minor Update", since: 1765843200 },
-  { id: "update-2025-11-21", label: "21/11/2025 - Minor Update", since: 1763683200 },
-  { id: "update-2025-10-24", label: "24/10/2025 - Minor Update", since: 1761264000 },
-  { id: "update-2025-10-02", label: "02/10/2025 - Minor Update", since: 1759363200 },
-  { id: "update-2025-09-04", label: "04/09/2025 - Minor Update", since: 1756944000 },
-  { id: "update-2025-08-18", label: "18/08/2025 - Minor Update", since: 1755475200 },
-  { id: "update-2025-07-29", label: "29/07/2025 - Minor Update", since: 1753747200 },
-  { id: "shop-rework-2025", label: "08/05/2025 - Shop Rework Update", since: 1746732792 },
-  { id: "map-rework-2025", label: "25/02/2025 - Map Rework Update", since: 1740520159 },
-  { id: "four-heroes-2025", label: "17/01/2025 - Holliday, Vyper, Calico & Sinclair", since: 1737139201 },
-  { id: "winter-visual-2024", label: "17/12/2024 - Winter Visual Update", since: 1734468800 },
-  { id: "update-2024-12-06", label: "06/12/2024 - Minor Update", since: 1733516709 },
-  { id: "update-2024-11-07", label: "07/11/2024 - Minor Update", since: 1731027988 },
-  { id: "update-2024-10-24", label: "24/10/2024 - Minor Update", since: 1729814181 },
-];
-
-const PATCH_TITLE_REGEX =
-  /update|ranked|season|city never sleeps|old gods|rework|six new heroes|holliday|halloween/i;
+export function computeHeroMatchStats(stat?: HeroAnalytics) {
+  const matches = stat?.matches || 0;
+  const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
+  const losses = stat?.losses ?? (matches - wins);
+  const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+  return { matches, wins, losses, winRate };
+}
 
 function formatSteamPatch(unixSec: number, rawTitle: string): { id: string; label: string } {
   const mdy = rawTitle.match(/(\d{2})-(\d{2})-(\d{4})/);
@@ -351,10 +361,9 @@ function formatSteamPatch(unixSec: number, rawTitle: string): { id: string; labe
 
 export async function fetchPatches(): Promise<Patch[]> {
   try {
-    const res = await fetch(
-      "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1422450&count=100&feeds=steam_community_announcements",
-      { next: { revalidate: 3600 } },
-    );
+    const res = await fetch(DEADLOCK_DATA_CONFIG.steamNewsUrl, {
+      next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.patchesSeconds },
+    });
     if (!res.ok) return PATCHES;
     const json = (await res.json()) as {
       appnews?: { newsitems?: Array<{ title?: string; date?: number }> };
@@ -386,49 +395,24 @@ export async function fetchPatches(): Promise<Patch[]> {
   }
 }
 
-export const MIN_HERO_MATCHES = 1000;
-
-export function minMatchesForRank(tier: number): number {
-  if (tier >= 9) return 100;
-  if (tier >= 1) return 300;
-  return MIN_HERO_MATCHES;
+export interface OfficialPatchNote {
+  title: string;
+  pub_date: string;
+  link: string;
 }
 
-export function resolvePatchWindow(
-  patches: Patch[],
-  patchId?: string,
-): { selectedPatch: Patch; patchUntil: number | undefined } {
-  const selectedPatch = patches.find((p) => p.id === patchId) ?? patches[0];
-  const selectedIndex = patches.findIndex((p) => p.id === selectedPatch.id);
-  const patchUntil =
-    selectedPatch.since && selectedIndex > 0 ? patches[selectedIndex - 1].since : undefined;
-  return { selectedPatch, patchUntil };
+export async function fetchOfficialPatchNotes(limit = 4): Promise<OfficialPatchNote[]> {
+  try {
+    const res = await fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v2/patches`, {
+      next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.patchesSeconds },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as OfficialPatchNote[];
+    return Array.isArray(data) ? data.slice(0, limit) : [];
+  } catch {
+    return [];
+  }
 }
-
-export interface RankFilterOption {
-  id: string;
-  tier: number;
-  label: string;
-  minBadge?: number;
-  icon?: string;
-}
-
-export const RANK_FILTERS: RankFilterOption[] = [
-  { id: "all", tier: 0, label: "Todas as Patentes", icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank00_lg.png" },
-  { id: "1", tier: 1, label: "Iniciado+", minBadge: 11, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank01_lg.png" },
-  { id: "2", tier: 2, label: "Aspirante+", minBadge: 21, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank02_lg.png" },
-  { id: "3", tier: 3, label: "Acólito+", minBadge: 31, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank03_lg.png" },
-  { id: "4", tier: 4, label: "Sentinela+", minBadge: 41, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank04_lg.png" },
-  { id: "5", tier: 5, label: "Místico+", minBadge: 51, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank05_lg.png" },
-  { id: "6", tier: 6, label: "Ritualista+", minBadge: 61, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank06_lg.png" },
-  { id: "7", tier: 7, label: "Emissário+", minBadge: 71, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank07_lg.png" },
-  { id: "8", tier: 8, label: "Oráculo+", minBadge: 81, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank08_lg.png" },
-  { id: "9", tier: 9, label: "Fantasma+", minBadge: 91, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank09_lg.png" },
-  { id: "10", tier: 10, label: "Ascendente+", minBadge: 101, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank10_lg.png" },
-  { id: "11", tier: 11, label: "Eterno", minBadge: 111, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank11_lg.png" },
-];
-
-export const DEFAULT_RANK_ID = "7";
 
 export async function fetchHeroesAnalytics(
   minUnixTimestamp?: number,
@@ -436,7 +420,7 @@ export async function fetchHeroesAnalytics(
   minAverageBadge?: number,
 ): Promise<HeroAnalytics[]> {
   try {
-    const url = new URL("https://api.deadlock-api.com/v1/analytics/hero-stats");
+    const url = new URL(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/analytics/hero-stats`);
     if (minUnixTimestamp) {
       url.searchParams.set("min_unix_timestamp", String(minUnixTimestamp));
     }
@@ -448,7 +432,7 @@ export async function fetchHeroesAnalytics(
     }
     const res = await fetch(url.toString(), {
       headers: { Accept: "application/json" },
-      next: { revalidate: 3600 },
+      next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.analyticsSeconds },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -468,18 +452,22 @@ export interface ItemAnalytics {
 export async function fetchItemsAnalytics(
   minUnixTimestamp?: number,
   maxUnixTimestamp?: number,
+  heroId?: number,
 ): Promise<ItemAnalytics[]> {
   try {
-    const url = new URL("https://api.deadlock-api.com/v1/analytics/item-stats");
+    const url = new URL(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/analytics/item-stats`);
     if (minUnixTimestamp) {
       url.searchParams.set("min_unix_timestamp", String(minUnixTimestamp));
     }
     if (maxUnixTimestamp) {
       url.searchParams.set("max_unix_timestamp", String(maxUnixTimestamp));
     }
+    if (heroId) {
+      url.searchParams.set("hero_id", String(heroId));
+    }
     const res = await fetch(url.toString(), {
       headers: { Accept: "application/json" },
-      next: { revalidate: 3600 },
+      next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.analyticsSeconds },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -488,14 +476,6 @@ export async function fetchItemsAnalytics(
     return [];
   }
 }
-
-export const TIER_THRESHOLDS = {
-  META: 53.5,
-  A: 51.5,
-  B: 50.0,
-  C: 48.5,
-  D: 47.0,
-} as const;
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -890,8 +870,6 @@ export interface HeroBuild {
   late: PopularItem[];
 }
 
-const ITEMS_PER_PHASE = 4;
-
 // Cruza com o catálogo em cache para trazer os atributos completos; busca individual fica só de fallback
 export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
   if (!popular || typeof popular !== "object") return null;
@@ -904,7 +882,7 @@ export async function fetchHeroBuild(popular: any): Promise<HeroBuild | null> {
           typeof i.className === "string" && i.pickPct !== null,
       )
       .sort((a, b) => b.pickPct - a.pickPct)
-      .slice(0, ITEMS_PER_PHASE);
+      .slice(0, SAMPLE_THRESHOLDS.popularItemsPerPhase);
 
   const picks = {
     early: top(popular.early_game),
@@ -1192,45 +1170,59 @@ export interface PatchWinRatePoint {
   delta: number | null;
 }
 
-// Coleta o desempenho do herói ao longo dos últimos patches cronológicos
-export async function fetchHeroPatchHistory(heroId: number, count = 6): Promise<PatchWinRatePoint[]> {
+// Coleta o desempenho do herói ao longo dos patches cronológicos (controlado por PATCH_HISTORY_LIMIT)
+export async function fetchHeroPatchHistory(
+  heroId: number,
+  options?: { count?: number | null; minAverageBadge?: number },
+): Promise<PatchWinRatePoint[]> {
   const allPatches = await fetchPatches();
-  const patchesWithSince = allPatches.filter((p) => typeof p.since === "number").slice(0, count);
+  const limit = options?.count !== undefined ? options.count : PATCH_HISTORY_LIMIT;
+  const dated = allPatches.filter((p) => typeof p.since === "number");
+  const patchesWithSince = typeof limit === "number" ? dated.slice(0, limit) : dated;
   if (patchesWithSince.length === 0) return [];
 
-  const results = await Promise.all(
-    patchesWithSince.map(async (patch, idx) => {
-      const until = idx > 0 ? patchesWithSince[idx - 1].since : undefined;
-      const stats = await fetchHeroesAnalytics(patch.since, until);
-      const stat = stats.find((s) => s.hero_id === heroId);
-      const matches = stat?.matches || 0;
-      const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
-      const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+  const results: Array<Omit<PatchWinRatePoint, "delta"> | null> = [];
+  const batchSize = DEADLOCK_DATA_CONFIG.patchHistoryBatchSize;
 
-      const dateMatch = patch.label.match(/(\d{2}\/\d{2})/);
-      let dateLabel = dateMatch ? dateMatch[1] : "";
-      if (!dateLabel && patch.since) {
-        dateLabel = new Date(patch.since * 1000).toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-          timeZone: "UTC",
-        });
-      }
-      if (!dateLabel) {
-        dateLabel = patch.id;
-      }
+  for (let start = 0; start < patchesWithSince.length; start += batchSize) {
+    const batch = patchesWithSince.slice(start, start + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (patch, offset) => {
+        const idx = start + offset;
+        const until = idx > 0 ? patchesWithSince[idx - 1].since : undefined;
+        const stats = await fetchHeroesAnalytics(patch.since, until, options?.minAverageBadge);
+        const stat = stats.find((s) => s.hero_id === heroId);
+        const { matches, winRate } = computeHeroMatchStats(stat);
+        if (matches < SAMPLE_THRESHOLDS.patchHistoryHero) return null;
 
-      return {
-        patchId: patch.id,
-        label: patch.label,
-        dateLabel,
-        winRate: Number(winRate.toFixed(2)),
-        matches,
-      };
-    })
-  );
+        const dateMatch = patch.label.match(/(\d{2}\/\d{2})/);
+        let dateLabel = dateMatch ? dateMatch[1] : "";
+        if (!dateLabel && patch.since) {
+          dateLabel = new Date(patch.since * 1000).toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            timeZone: "UTC",
+          });
+        }
+        if (!dateLabel) {
+          dateLabel = patch.id;
+        }
 
-  const chronological = results.reverse().filter((r) => r.matches > 0);
+        return {
+          patchId: patch.id,
+          label: patch.label,
+          dateLabel,
+          winRate: Number(winRate.toFixed(2)),
+          matches,
+        };
+      }),
+    );
+    results.push(...batchResults);
+  }
+
+  const chronological = results
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .reverse();
 
   return chronological.map((point, i) => {
     const prev = i > 0 ? chronological[i - 1] : null;
@@ -1277,7 +1269,11 @@ async function fetchAnalyticsList<T>(
   maxUnixTimestamp?: number,
 ): Promise<T[]> {
   const query = (withWindow: boolean) => {
-    const params = new URLSearchParams({ min_matches: withWindow && minUnixTimestamp ? "50" : "150" });
+    const minMatches =
+      withWindow && minUnixTimestamp
+        ? SAMPLE_THRESHOLDS.synergyWindowMinMatches
+        : SAMPLE_THRESHOLDS.synergyFallbackMinMatches;
+    const params = new URLSearchParams({ min_matches: String(minMatches) });
     if (withWindow && minUnixTimestamp) params.set("min_unix_timestamp", String(minUnixTimestamp));
     if (withWindow && maxUnixTimestamp) params.set("max_unix_timestamp", String(maxUnixTimestamp));
     return `https://api.deadlock-api.com/v1/analytics/${endpoint}?${params.toString()}`;
@@ -1330,7 +1326,7 @@ export function buildHeroMatchups(
   limit = 4,
 ): HeroMatchups {
   const toEntry = (otherId: number, wins: number, matches: number): HeroMatchupEntry | null => {
-    if (otherId === heroId || matches <= 0) return null;
+    if (otherId === heroId || matches < SAMPLE_THRESHOLDS.matchupMinMatches) return null;
     const h = heroesMap[otherId];
     if (!h) return null;
     const image = h.images?.icon_image_small || h.images?.icon_hero_card || "";

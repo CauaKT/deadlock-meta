@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useConfirm } from "@/components/ui/ConfirmModal";
 import SlantFrame from "@/components/ui/SlantFrame";
 import type { AuthUser } from "@/lib/backend/types";
+import { LEADERBOARD_CONFIG, LFG_RANK_NAMES, LFG_REGIONS } from "@/lib/data/config";
 
 export interface LfgHeroOption {
   id: number;
@@ -29,28 +30,8 @@ export interface LfgPostItem {
   canDelete: boolean;
 }
 
-const REGIONS = [
-  { id: "SAmerica", label: "América do Sul" },
-  { id: "NAmerica", label: "América do Norte" },
-  { id: "Europe", label: "Europa" },
-  { id: "Asia", label: "Ásia" },
-  { id: "Oceania", label: "Oceania" },
-];
-
-const RANKS = [
-  "Iniciado",
-  "Aspirante",
-  "Acólito",
-  "Alquimista",
-  "Arcanista",
-  "Ritualista",
-  "Emissário",
-  "Arconte",
-  "Oráculo",
-  "Fantasma",
-  "Ascendente",
-  "Eterno",
-];
+const REGIONS = LFG_REGIONS;
+const RANKS = LFG_RANK_NAMES;
 
 const MODES = [
   { id: "duo", label: "Duo" },
@@ -71,7 +52,7 @@ export default function LfgClient({
   const heroMap = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
 
   const [posts, setPosts] = useState<LfgPostItem[]>(initialPosts);
-  const [region, setRegion] = useState("SAmerica");
+  const [region, setRegion] = useState<string>(LEADERBOARD_CONFIG.defaultRegion);
   const [rankTier, setRankTier] = useState("Ritualista");
   const [mode, setMode] = useState("duo");
   const [heroIds, setHeroIds] = useState<number[]>([]);

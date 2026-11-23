@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchHeroesAssets, fetchShopItems } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchShopItems, getPlayableHeroes, resolveHeroMedia } from "@/lib/deadlock";
 import CalculatorClient, { type CalcHero } from "./CalculatorClient";
 
 export const instant = false;
@@ -9,8 +9,12 @@ export const metadata: Metadata = {
   description: "Combine até 12 itens da loja de Deadlock com qualquer herói e veja o custo total de almas e atributos somados.",
 };
 
-function readStat(stats: Record<string, any> | undefined, key: string): number {
-  const raw = stats?.[key]?.value ?? stats?.[key];
+function readStat(stats: Record<string, unknown> | undefined, key: string): number {
+  const entry = stats?.[key];
+  const raw =
+    entry && typeof entry === "object" && "value" in entry
+      ? (entry as { value?: unknown }).value
+      : entry;
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -21,24 +25,11 @@ export default async function CalculatorPage() {
     fetchShopItems(),
   ]);
 
-  const heroes: CalcHero[] = Object.values(heroesMap)
-    .filter(
-      (h) =>
-        h.player_selectable === true &&
-        h.disabled !== true &&
-        h.in_development !== true &&
-        !h.name.startsWith("hero_"),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image:
-        h.images?.icon_image_small ||
-        h.images?.minimap_image ||
-        h.images?.icon_hero_card ||
-        null,
-      maxHealth: readStat(h.starting_stats, "max_health"),
+  const heroes: CalcHero[] = getPlayableHeroes(heroesMap).map((h) => ({
+    id: h.id,
+    name: h.name,
+    image: resolveHeroMedia(h).icon,
+    maxHealth: readStat(h.starting_stats, "max_health"),
       healthRegen: readStat(h.starting_stats, "base_health_regen"),
       moveSpeed: readStat(h.starting_stats, "max_move_speed"),
       stamina: readStat(h.starting_stats, "stamina"),

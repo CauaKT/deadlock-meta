@@ -2,6 +2,10 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "@/components/ui/ConfirmModal";
+import {
+  SLOT_META as CENTRAL_SLOT_META,
+  computeItemTooltipPosition,
+} from "@/lib/data/config";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
 import SlantFrame from "@/components/ui/SlantFrame";
@@ -28,25 +32,25 @@ const SLOT_META: Record<
   { label: string; color: string; border: string; bg: string; accent: string }
 > = {
   weapon: {
-    label: "Arma",
-    color: "text-amber-400",
-    border: "border-amber-500/40",
-    bg: "bg-amber-500/10",
-    accent: "#c97a2e",
+    label: CENTRAL_SLOT_META.weapon.label,
+    color: CENTRAL_SLOT_META.weapon.colorClass,
+    border: CENTRAL_SLOT_META.weapon.borderClass,
+    bg: CENTRAL_SLOT_META.weapon.bgClass,
+    accent: CENTRAL_SLOT_META.weapon.calcAccent,
   },
   vitality: {
-    label: "Vitalidade",
-    color: "text-emerald-400",
-    border: "border-emerald-500/40",
-    bg: "bg-emerald-500/10",
-    accent: "#659337",
+    label: CENTRAL_SLOT_META.vitality.label,
+    color: CENTRAL_SLOT_META.vitality.colorClass,
+    border: CENTRAL_SLOT_META.vitality.borderClass,
+    bg: CENTRAL_SLOT_META.vitality.bgClass,
+    accent: CENTRAL_SLOT_META.vitality.calcAccent,
   },
   spirit: {
-    label: "Espírito",
-    color: "text-purple-400",
-    border: "border-purple-500/40",
-    bg: "bg-purple-500/10",
-    accent: "#9153b8",
+    label: CENTRAL_SLOT_META.spirit.label,
+    color: CENTRAL_SLOT_META.spirit.colorClass,
+    border: CENTRAL_SLOT_META.spirit.borderClass,
+    bg: CENTRAL_SLOT_META.spirit.bgClass,
+    accent: CENTRAL_SLOT_META.spirit.calcAccent,
   },
 };
 
@@ -70,12 +74,16 @@ export default function CalculatorClient({ heroes, items }: Props) {
   const [sort, setSort] = useState<"relevance" | "winrate-desc" | "winrate-asc" | "name-asc" | "cost-asc" | "cost-desc">("relevance");
 
   const [itemStats, setItemStats] = useState<Record<number, { winRate: number; matches: number }>>({});
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [prevHeroId, setPrevHeroId] = useState(selectedHeroId);
+  if (selectedHeroId !== prevHeroId) {
+    setPrevHeroId(selectedHeroId);
+    setStatsLoading(true);
+  }
   const [tip, setTip] = useState<{ item: ShopItem; x: number; y: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setStatsLoading(true);
     const qs = selectedHeroId ? `?heroId=${selectedHeroId}` : "";
     fetch(`/api/item-stats${qs}`)
       .then((res) => (res.ok ? res.json() : { stats: {} }))
@@ -208,13 +216,7 @@ export default function CalculatorClient({ heroes, items }: Props) {
   };
 
   const showTip = (item: ShopItem, el: HTMLElement) => {
-    const r = el.getBoundingClientRect();
-    const x =
-      r.right + 10 + TIP_WIDTH <= window.innerWidth
-        ? r.right + 10
-        : Math.max(8, r.left - TIP_WIDTH - 10);
-    const y = Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - 360));
-    setTip({ item, x, y });
+    setTip({ item, ...computeItemTooltipPosition(el, TIP_WIDTH, 10, 360) });
   };
 
   return (

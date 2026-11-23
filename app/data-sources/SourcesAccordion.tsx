@@ -221,20 +221,27 @@ export function BackButton() {
   const [targetHref, setTargetHref] = useState("/");
 
   useEffect(() => {
-    try {
-      const last = sessionStorage.getItem("lockpro_last_path");
-      if (last) {
-        const cleanPath = last.split("?")[0];
-        let label = KNOWN_ROUTES[cleanPath];
-        if (!label && cleanPath.startsWith("/heroes/")) {
-          label = "o Herói";
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const last = sessionStorage.getItem("lockpro_last_path");
+        if (last) {
+          const cleanPath = last.split("?")[0];
+          let label = KNOWN_ROUTES[cleanPath];
+          if (!label && cleanPath.startsWith("/heroes/")) {
+            label = "o Herói";
+          }
+          if (label) {
+            setTargetLabel(label);
+            setTargetHref(last);
+          }
         }
-        if (label) {
-          setTargetLabel(label);
-          setTargetHref(last);
-        }
-      }
-    } catch {}
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleClick = (e: React.MouseEvent) => {

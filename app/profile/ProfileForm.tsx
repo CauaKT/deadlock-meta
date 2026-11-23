@@ -416,10 +416,11 @@ export default function ProfileForm({
   const [bannerHeroId, setBannerHeroId] = useState<number | null>(initialProfile.banner_hero_id);
   const [bannerImage, setBannerImage] = useState<string | null>(initialProfile.banner_image);
   const [bannerNsfw, setBannerNsfw] = useState<boolean>(Boolean(initialProfile.banner_nsfw));
-
-  useEffect(() => {
+  const [prevInitialBannerNsfw, setPrevInitialBannerNsfw] = useState(initialProfile.banner_nsfw);
+  if (initialProfile.banner_nsfw !== prevInitialBannerNsfw) {
+    setPrevInitialBannerNsfw(initialProfile.banner_nsfw);
     setBannerNsfw(Boolean(initialProfile.banner_nsfw));
-  }, [initialProfile.banner_nsfw]);
+  }
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [verifyFeedback, setVerifyFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -488,11 +489,14 @@ export default function ProfileForm({
     });
   };
 
+  const [prevEditing, setPrevEditing] = useState(editing);
+  if (editing !== prevEditing) {
+    setPrevEditing(editing);
+    if (!editing) setActionsInView(true);
+  }
+
   useEffect(() => {
-    if (!editing) {
-      setActionsInView(true);
-      return;
-    }
+    if (!editing) return;
     const el = actionsAnchorRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(

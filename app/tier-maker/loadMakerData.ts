@@ -1,17 +1,32 @@
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchWikiColors, extractColor, TIER_THRESHOLDS, fetchPatches, MIN_HERO_MATCHES } from "@/lib/deadlock";
+import {
+  calculateTier,
+  computeHeroMatchStats,
+  extractColor,
+  fetchHeroesAnalytics,
+  fetchHeroesAssets,
+  fetchPatches,
+  fetchWikiColors,
+  getDefaultRank,
+  isPlayableHero,
+  minMatchesForRank,
+  resolveHeroMedia,
+  resolvePatchWindow,
+} from "@/lib/deadlock";
 import type { MakerHero } from "@/app/tiers";
-
-const MIN_MATCHES = MIN_HERO_MATCHES;
 
 export async function loadMakerData(): Promise<{
   makerHeroes: MakerHero[];
   metaTiers: Record<string, number[]>;
 }> {
   const patches = await fetchPatches();
+  const { selectedPatch, patchUntil } = resolvePatchWindow(patches);
+  const defaultRank = getDefaultRank();
+  const minMatches = minMatchesForRank(defaultRank.tier);
+
   const [heroesMap, wikiColors, stats] = await Promise.all([
     fetchHeroesAssets(),
     fetchWikiColors(),
-    fetchHeroesAnalytics(patches[0].since),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil, defaultRank.minBadge),
   ]);
 
   const statsById = new Map(stats.map((s) => [s.hero_id, s]));
@@ -20,48 +35,29 @@ export async function loadMakerData(): Promise<{
     .filter((h) => {
       if (extractColor(h, wikiColors) === null || h.name.startsWith("hero_")) return false;
       const st = statsById.get(h.id);
-      return (
-        (st?.matches ?? 0) > 0 ||
-        (h.player_selectable === true && h.disabled !== true && h.in_development !== true)
-      );
+      return (st?.matches ?? 0) > 0 || isPlayableHero(h);
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     .map((h) => {
-      const images = h.images || {};
-      const defaultImg = images.icon_hero_card || images.icon_image_small || images.minimap_image || "";
-
-      const gloatKey = Object.keys(images).find((k) => k.toLowerCase().includes("gloat"));
-      const critKey = Object.keys(images).find((k) => k.toLowerCase().includes("crit") || k.toLowerCase().includes("low"));
-
+      const media = resolveHeroMedia(h);
       return {
         id: h.id,
         name: h.name,
-        image: defaultImg,
-        gloatImage: gloatKey ? images[gloatKey] : defaultImg,
-        critImage: critKey ? images[critKey] : defaultImg,
+        image: media.card,
+        gloatImage: media.gloatImage,
+        critImage: media.critImage,
         rgb: extractColor(h, wikiColors),
       };
     });
 
-  const calculateTierKey = (wr: number) => {
-    if (wr >= TIER_THRESHOLDS.META) return "META";
-    if (wr >= TIER_THRESHOLDS.A) return "A";
-    if (wr >= TIER_THRESHOLDS.B) return "B";
-    if (wr >= TIER_THRESHOLDS.C) return "C";
-    if (wr >= TIER_THRESHOLDS.D) return "D";
-    return "F";
-  };
-
   const rankedHeroes = stats
-    .filter((s) => (s.matches || 0) >= MIN_MATCHES)
+    .filter((s) => isPlayableHero(heroesMap[s.hero_id]) && (s.matches || 0) >= minMatches)
     .map((s) => {
-      const matches = s.matches || 0;
-      const wins = s.wins ?? Math.round((matches * (s.win_rate ?? 50)) / 100);
-      const winRate = s.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+      const { winRate } = computeHeroMatchStats(s);
       return {
         id: s.hero_id,
         winRate,
-        tier: calculateTierKey(winRate),
+        tier: calculateTier(winRate),
       };
     })
     .sort((a, b) => b.winRate - a.winRate);

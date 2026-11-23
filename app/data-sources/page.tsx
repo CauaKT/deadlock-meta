@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import SlantFrame from "@/components/ui/SlantFrame";
+import { MIN_HERO_MATCHES } from "@/lib/deadlock";
 import SourcesAccordion, { BackButton } from "./SourcesAccordion";
 
 export const instant = false;
@@ -106,7 +107,10 @@ export default async function DataSourcesPage() {
           <ul className="space-y-2 text-xs text-neutral-300 leading-relaxed list-disc pl-4">
             <li>
               <strong>Amostra mínima:</strong> a Tier List considera apenas heróis com pelo menos{" "}
-              <span className="text-[#f4efe6] font-semibold">1.000 partidas</span> na janela e patente selecionadas para evitar distorções estatísticas.
+              <span className="text-[#f4efe6] font-semibold">
+                {MIN_HERO_MATCHES.toLocaleString("pt-BR")} partidas
+              </span>{" "}
+              (ou menor conforme filtro de patente) na janela selecionada para evitar distorções estatísticas.
             </li>
             <li>
               <strong>Atraso e cache:</strong> estatísticas de meta são revalidadas a cada 1 hora; dados de jogador ficam em cache por 15 minutos e leaderboard por 30 minutos no PostgreSQL.

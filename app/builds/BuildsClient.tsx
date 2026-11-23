@@ -74,7 +74,6 @@ export default function BuildsClient({ heroes, items }: Props) {
   }, []);
 
   useEffect(() => {
-    setLoadingBuilds(true);
     void getCommunityBuilds()
       .then(setBuilds)
       .finally(() => setLoadingBuilds(false));

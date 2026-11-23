@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  LEADERBOARD_CONFIG,
+  LEADERBOARD_REGIONS,
+  RANK_NAMES,
+  formatRankInfo,
+  getRankIconUrl,
+  getRankTierFromEntry,
+} from "@/lib/data/config";
 
 export interface LeaderboardHeroOption {
   id: number;
@@ -37,84 +45,10 @@ interface RankDistributionTier {
 
 type SortKey = "points" | "winrate" | "matches" | "rank";
 
-const PAGE_SIZE = 25;
-
-const REGIONS = [
-  { id: "Global", label: "Global" },
-  { id: "SAmerica", label: "América do Sul" },
-  { id: "NAmerica", label: "América do Norte" },
-  { id: "Europe", label: "Europa" },
-  { id: "Asia", label: "Ásia" },
-  { id: "Oceania", label: "Oceania" },
-];
-
-const RANK_NAMES: Record<number, string> = {
-  1: "Iniciado",
-  2: "Aspirante",
-  3: "Acólito",
-  4: "Sentinela",
-  5: "Místico",
-  6: "Ritualista",
-  7: "Emissário",
-  8: "Oráculo",
-  9: "Fantasma",
-  10: "Ascendente",
-  11: "Eterno",
-};
-
-const ROMAN = ["", "I", "II", "III", "IV", "V", "VI"];
-
-function tierIconUrl(tier: number, sub = 6): string {
-  if (tier < 1) {
-    return "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank00_sm.webp";
-  }
-  return `https://api.deadlock-api.com/v1/assets/ranks/${tier}/${sub}/image?format=webp`;
-}
-
-function getEntryTier(entry: LeaderboardEntry): number {
-  if (typeof entry.rankedRank === "number" && entry.rankedRank >= 1) {
-    return entry.rankedRank;
-  }
-  if (typeof entry.badgeLevel === "number" && entry.badgeLevel >= 11) {
-    return Math.floor(entry.badgeLevel / 10);
-  }
-  if (typeof entry.points === "number" && entry.points >= 0) {
-    return Math.min(11, Math.max(1, Math.floor(entry.points / 6500) + 1));
-  }
-  return 0;
-}
-
-function formatRankInfo(entry: LeaderboardEntry): { tier: number; label: string; iconUrl: string } {
-  let tier = entry.rankedRank;
-  let sub = entry.rankedSubrank;
-  if ((tier === null || sub === null) && entry.badgeLevel !== null && entry.badgeLevel >= 11) {
-    tier = Math.floor(entry.badgeLevel / 10);
-    sub = entry.badgeLevel % 10;
-  }
-  if (!tier || tier < 1) {
-    if (typeof entry.points === "number" && entry.points >= 0) {
-      const approxTier = Math.min(11, Math.max(1, Math.floor(entry.points / 6500) + 1));
-      return {
-        tier: approxTier,
-        label: RANK_NAMES[approxTier] ?? `Tier ${approxTier}`,
-        iconUrl: tierIconUrl(approxTier, 1),
-      };
-    }
-    return {
-      tier: 0,
-      label: "Obscuro",
-      iconUrl: tierIconUrl(0),
-    };
-  }
-  const validSub = sub && sub >= 1 && sub <= 6 ? sub : 1;
-  const name = RANK_NAMES[tier] ?? `Tier ${tier}`;
-  const roman = ROMAN[validSub] ?? String(validSub);
-  return {
-    tier,
-    label: `${name} ${roman}`,
-    iconUrl: tierIconUrl(tier, validSub),
-  };
-}
+const PAGE_SIZE = LEADERBOARD_CONFIG.pageSize;
+const REGIONS = LEADERBOARD_REGIONS;
+const tierIconUrl = getRankIconUrl;
+const getEntryTier = getRankTierFromEntry;
 
 function ChevronIcon({ dir }: { dir: "left" | "right" }) {
   return (
@@ -144,11 +78,13 @@ function PaginationBar({
   loading: boolean;
   onPageChange: (next: number) => void;
 }) {
+  const [prevPage, setPrevPage] = useState(page);
   const [draft, setDraft] = useState(String(page));
 
-  useEffect(() => {
+  if (page !== prevPage) {
+    setPrevPage(page);
     setDraft(String(page));
-  }, [page]);
+  }
 
   const commit = () => {
     const parsed = Number.parseInt(draft, 10);
@@ -288,8 +224,6 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     window.history.replaceState(null, "", nextUrl);
   }, [region, heroIdsKey, selectedTier, page, sortBy]);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const [rankDist, setRankDist] = useState<RankDistributionTier[]>([]);
@@ -317,10 +251,14 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     };
   }, [region]);
 
+  const requestKey = `${region}|${debouncedHeroIdsKey}|${page}|${reloadKey}|${tierParam ?? ""}|${debouncedSearch.length >= 2 ? debouncedSearch : ""}`;
+  const [loadedKey, setLoadedKey] = useState("");
+  const [errorState, setErrorState] = useState<{ key: string; message: string } | null>(null);
+  const loading = loadedKey !== requestKey;
+  const error = errorState?.key === requestKey ? errorState.message : null;
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -353,8 +291,8 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
             setTotalPages(
               typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1,
             );
-            setError(null);
-            setLoading(false);
+            setErrorState(null);
+            setLoadedKey(requestKey);
           }
           return;
         } catch (err) {
@@ -367,8 +305,11 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
 
       if (!cancelled) {
         setEntries([]);
-        setError(lastError || "Não foi possível carregar o leaderboard.");
-        setLoading(false);
+        setErrorState({
+          key: requestKey,
+          message: lastError || "Não foi possível carregar o leaderboard.",
+        });
+        setLoadedKey(requestKey);
       }
     };
 
@@ -377,7 +318,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     return () => {
       cancelled = true;
     };
-  }, [region, debouncedHeroIdsKey, page, reloadKey, tierParam, debouncedSearch]);
+  }, [region, debouncedHeroIdsKey, page, reloadKey, tierParam, debouncedSearch, requestKey]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -410,7 +351,7 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     });
 
     return list;
-  }, [entries, search, sortBy, selectedTier, tierParam]);
+  }, [entries, search, sortBy, selectedTier, tierParam, debouncedSearch.length]);
 
   const regionLabel = REGIONS.find((r) => r.id === region)?.label ?? region;
 

@@ -1,6 +1,23 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, fetchPatches, resolvePatchWindow, minMatchesForRank, RANK_FILTERS, DEFAULT_RANK_ID } from "@/lib/deadlock";
+import {
+  calculateTier,
+  computeHeroMatchStats,
+  DEFAULT_RANK_ID,
+  extractColor,
+  fetchHeroBlurbs,
+  fetchHeroesAnalytics,
+  fetchHeroesAssets,
+  fetchPatches,
+  fetchWikiColors,
+  isPlayableHero,
+  minMatchesForRank,
+  RANK_FILTERS,
+  resolveHeroMedia,
+  resolvePatchWindow,
+  resolveRankFilter,
+  type MergedHero,
+} from "@/lib/deadlock";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import PatchSelect from "@/app/PatchSelect";
@@ -15,14 +32,6 @@ function tagColors(rgb?: [number, number, number] | null) {
   const bg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
   const lum = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
   return { backgroundColor: bg, color: lum > 150 ? "#1a1608" : "#ffffff" };
-}
-function calculateTier(winRate: number): TierKey {
-  if (winRate >= TIER_THRESHOLDS.META) return "META";
-  if (winRate >= TIER_THRESHOLDS.A) return "A";
-  if (winRate >= TIER_THRESHOLDS.B) return "B";
-  if (winRate >= TIER_THRESHOLDS.C) return "C";
-  if (winRate >= TIER_THRESHOLDS.D) return "D";
-  return "F";
 }
 
 const heroesDir = path.join(process.cwd(), "public", "heroes");
@@ -43,8 +52,7 @@ export default async function Home({
     fetchPatches(),
   ]);
   const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
-  const defaultRank = RANK_FILTERS.find((r) => r.id === DEFAULT_RANK_ID) ?? RANK_FILTERS[0];
-  const selectedRank = RANK_FILTERS.find((r) => r.id === rankParam) ?? defaultRank;
+  const selectedRank = resolveRankFilter(rankParam);
   const minMatches = minMatchesForRank(selectedRank.tier);
   const [heroesMap, stats, blurbs, wikiColors] = await Promise.all([
     fetchHeroesAssets(),
@@ -53,61 +61,28 @@ export default async function Home({
     fetchWikiColors(),
   ]);
 
+  const heroLinkParams = new URLSearchParams();
+  if (selectedPatch.id !== patches[0]?.id) heroLinkParams.set("patch", selectedPatch.id);
+  if (selectedRank.id !== DEFAULT_RANK_ID) heroLinkParams.set("rank", selectedRank.id);
+  const heroLinkQs = heroLinkParams.toString();
+  const heroHrefSuffix = heroLinkQs ? `?${heroLinkQs}` : "";
+
   const heroesRanking: (MergedHero & { tier: TierKey })[] = stats
     .map((stat) => {
       const hero = heroesMap[stat.hero_id];
-      const matches = stat.matches || 0;
-      const wins = stat.wins ?? Math.round((matches * (stat.win_rate ?? 50)) / 100);
-      const losses = stat.losses ?? (matches - wins);
-      const winRate = stat.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
+      const { matches, wins, losses, winRate } = computeHeroMatchStats(stat);
       const tier = calculateTier(winRate);
+      const media = resolveHeroMedia(hero, localHeroFiles);
 
-      const images = hero?.images || {};
-      const defaultImage =
-        images.icon_hero_card ||
-        images.icon_image_small ||
-        images.minimap_image ||
-        "";
-
-      let image = defaultImage;
-
-      if (tier === "META") {
-        const gloatKey = Object.keys(images).find((k) =>
-          k.toLowerCase().includes("gloat")
-        );
-        if (gloatKey && images[gloatKey]) {
-          image = images[gloatKey];
-        }
-      }
-
-      if (tier === "F") {
-        const critKey = Object.keys(images).find((k) =>
-          k.toLowerCase().includes("crit") || k.toLowerCase().includes("low")
-        );
-        if (critKey && images[critKey]) {
-          image = images[critKey];
-        }
-      }
-
-      const heroSlug = (hero?.name || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-
-      const matchedFile = heroSlug
-        ? localHeroFiles.find((f) => f.toLowerCase().startsWith(heroSlug))
-        : undefined;
-      let bannerImage = matchedFile ? `/heroes/${matchedFile}` : defaultImage;
-
-      if (bannerImage === defaultImage && hero?.name) {
-        const formattedName = hero.name.trim().replace(/ /g, "_");
-        bannerImage = `https://cdn.deadlock.wiki/thumb/${formattedName}_Render.png/800px-${formattedName}_Render.png`;
-      }
+      let image = media.card;
+      if (tier === "META") image = media.gloatImage;
+      if (tier === "F") image = media.critImage;
 
       return {
         id: stat.hero_id,
         name: hero?.name || `Herói #${stat.hero_id}`,
         image,
-        bannerImage,
+        bannerImage: media.bannerImage,
         rgb: extractColor(hero, wikiColors),
         tags: blurbs[stat.hero_id]?.tags ?? [],
         matches,
@@ -117,7 +92,7 @@ export default async function Home({
         tier,
       };
     })
-    .filter((h) => h.matches >= minMatches && !h.name.startsWith("hero_"))
+    .filter((h) => isPlayableHero(heroesMap[h.id]) && h.matches >= minMatches)
     .sort((a, b) => b.winRate - a.winRate);
 
   const heroesByTier = TIERS.reduce((acc, tier) => {
@@ -146,7 +121,7 @@ export default async function Home({
             className="group relative inline-flex w-fit shrink-0 items-center gap-2 overflow-hidden rounded-[5px] border border-amber-300/70 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_14px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_22px_rgba(245,158,11,0.6)] active:scale-[0.98]"
           >
             <span className="relative z-10 flex items-center gap-2 leading-none">
-              <span>TierMaker</span>
+              <span>Faça sua própria Tier List</span>
               <svg
                 aria-hidden
                 viewBox="0 0 16 16"
@@ -215,7 +190,7 @@ export default async function Home({
                   heroesInTier.map((hero) => (
                     <Link
                       key={hero.id}
-                      href={`/heroes/${hero.id}?patch=${selectedPatch.id}`}
+                      href={`/heroes/${hero.id}${heroHrefSuffix}`}
                       className="group relative flex flex-col items-center bg-neutral-900/40 border border-neutral-800/70 rounded-xl w-[76px] sm:w-[84px] hover:border-amber-500/80 hover:scale-105 hover:z-30 transition-all duration-150 shadow-md cursor-pointer"
                       style={{ "--hc": hero.rgb ? hero.rgb.join(" ") : "245 158 11" } as CSSProperties}
                     >

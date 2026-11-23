@@ -49,8 +49,24 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
   };
 
   useEffect(() => {
-    void loadData(1, "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    Promise.all([
+      getAdminOverview(),
+      getAdminUsers({ page: 1, limit: 15, search: "" }),
+      getCommunityTierLists(),
+    ]).then(([ov, usr, tls]) => {
+      if (cancelled) return;
+      setOverview(ov);
+      if (usr) {
+        setUsers(usr.items);
+        setTotalUsers(usr.total);
+      }
+      setTierLists(tls);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {

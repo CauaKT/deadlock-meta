@@ -280,31 +280,38 @@ export default function CompareClient({
   const isUnloadingRef = useRef(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(RECENT_PROFILES_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as RecentCompareProfile[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setRecentProfiles(parsed.filter((p) => p?.label && p?.raw).slice(0, 6));
-          return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const raw = localStorage.getItem(RECENT_PROFILES_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as RecentCompareProfile[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecentProfiles(parsed.filter((p) => p?.label && p?.raw).slice(0, 6));
+            return;
+          }
         }
-      }
 
-      const trackerRaw = localStorage.getItem("lp_recent_tracker_searches");
-      if (trackerRaw) {
-        const parsed = JSON.parse(trackerRaw) as Array<{ label?: string; href?: string }>;
-        if (Array.isArray(parsed)) {
-          const fromTracker = parsed
-            .filter((p) => p?.label && p?.href?.startsWith("/player/"))
-            .map((p) => ({
-              label: p.label!,
-              raw: p.href!.replace("/player/", ""),
-            }))
-            .slice(0, 6);
-          if (fromTracker.length > 0) setRecentProfiles(fromTracker);
+        const trackerRaw = localStorage.getItem("lp_recent_tracker_searches");
+        if (trackerRaw) {
+          const parsed = JSON.parse(trackerRaw) as Array<{ label?: string; href?: string }>;
+          if (Array.isArray(parsed)) {
+            const fromTracker = parsed
+              .filter((p) => p?.label && p?.href?.startsWith("/player/"))
+              .map((p) => ({
+                label: p.label!,
+                raw: p.href!.replace("/player/", ""),
+              }))
+              .slice(0, 6);
+            if (fromTracker.length > 0) setRecentProfiles(fromTracker);
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const saveRecentProfiles = (entries: RecentCompareProfile[]) => {
@@ -421,35 +428,40 @@ export default function CompareClient({
   };
 
   useEffect(() => {
+    let cancelled = false;
     const onBeforeUnload = () => {
       isUnloadingRef.current = true;
     };
     window.addEventListener("beforeunload", onBeforeUnload);
 
-    if (initialA.trim() && initialB.trim()) {
-      void runCompare(initialA, initialB);
-    } else {
-      try {
-        const navEntry = performance.getEntriesByType("navigation")[0] as
-          | PerformanceNavigationTiming
-          | undefined;
-        if (navEntry?.type === "reload") {
-          const raw = sessionStorage.getItem(COMPARE_STORAGE_KEY);
-          if (raw) {
-            const saved = JSON.parse(raw) as { a?: string; b?: string };
-            if (saved.a && saved.b) {
-              setIdA(saved.a);
-              setIdB(saved.b);
-              void runCompare(saved.a, saved.b);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (initialA.trim() && initialB.trim()) {
+        void runCompare(initialA, initialB);
+      } else {
+        try {
+          const navEntry = performance.getEntriesByType("navigation")[0] as
+            | PerformanceNavigationTiming
+            | undefined;
+          if (navEntry?.type === "reload") {
+            const raw = sessionStorage.getItem(COMPARE_STORAGE_KEY);
+            if (raw) {
+              const saved = JSON.parse(raw) as { a?: string; b?: string };
+              if (saved.a && saved.b) {
+                setIdA(saved.a);
+                setIdB(saved.b);
+                void runCompare(saved.a, saved.b);
+              }
             }
+          } else {
+            sessionStorage.removeItem(COMPARE_STORAGE_KEY);
           }
-        } else {
-          sessionStorage.removeItem(COMPARE_STORAGE_KEY);
-        }
-      } catch {}
-    }
+        } catch {}
+      }
+    });
 
     return () => {
+      cancelled = true;
       window.removeEventListener("beforeunload", onBeforeUnload);
       if (!isUnloadingRef.current) {
         try {

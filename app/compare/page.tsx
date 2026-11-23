@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
-import { extractColor, fetchHeroesAssets, fetchWikiColors } from "@/lib/deadlock";
+import {
+  extractColor,
+  fetchHeroesAssets,
+  fetchWikiColors,
+  getPlayableHeroes,
+  resolveHeroMedia,
+} from "@/lib/deadlock";
 import CompareBackButton from "./CompareBackButton";
 import CompareClient, { type CompareHeroMeta } from "./CompareClient";
 
@@ -21,23 +27,17 @@ export default async function ComparePage({
     fetchHeroesAssets(),
     fetchWikiColors(),
   ]);
-  const heroes: CompareHeroMeta[] = Object.values(heroesMap)
-    .filter((h) => h.player_selectable !== false && h.disabled !== true)
-    .map((h) => {
-      const file = h.name.trim().replace(/ /g, "_");
-      return {
-        id: h.id,
-        name: h.name,
-        image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
-        banner:
-          h.images?.background_image_webp ??
-          h.images?.background_image ??
-          h.images?.icon_hero_card ??
-          null,
-        art: `https://cdn.deadlock.wiki/thumb/${file}_Render.png/400px-${file}_Render.png`,
-        rgb: extractColor(h, wikiColors),
-      };
-    });
+  const heroes: CompareHeroMeta[] = getPlayableHeroes(heroesMap).map((h) => {
+    const media = resolveHeroMedia(h);
+    return {
+      id: h.id,
+      name: h.name,
+      image: media.icon,
+      banner: media.bg || media.card || null,
+      art: media.art,
+      rgb: extractColor(h, wikiColors),
+    };
+  });
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-8">

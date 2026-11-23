@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { getServerAuthUser } from "@/lib/backend/server";
-import { fetchHeroesAssets } from "@/lib/deadlock";
+import { fetchHeroesAssets, getPlayableHeroes, resolveHeroMedia } from "@/lib/deadlock";
 import LfgClient, { type LfgHeroOption, type LfgPostItem } from "./LfgClient";
 
 export const instant = false;
@@ -35,14 +35,11 @@ export default async function LfgPage() {
     fetchInitialLfg(),
   ]);
 
-  const heroes: LfgHeroOption[] = Object.values(heroesMap)
-    .filter((h) => h.player_selectable !== false && h.disabled !== true)
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const heroes: LfgHeroOption[] = getPlayableHeroes(heroesMap).map((h) => ({
+    id: h.id,
+    name: h.name,
+    image: resolveHeroMedia(h).icon,
+  }));
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 lg:p-10 space-y-8">

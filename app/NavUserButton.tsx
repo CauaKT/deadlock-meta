@@ -46,12 +46,19 @@ export default function NavUserButton({
   const [switchError, setSwitchError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("lockpro_user_status") as UserStatus;
-      if (saved === "online" || saved === "dnd" || saved === "invisible") {
-        setStatus(saved);
-      }
-    } catch {}
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const saved = localStorage.getItem("lockpro_user_status") as UserStatus;
+        if (saved === "online" || saved === "dnd" || saved === "invisible") {
+          setStatus(saved);
+        }
+      } catch {}
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const changeStatus = (newStatus: UserStatus) => {
@@ -79,6 +86,7 @@ export default function NavUserButton({
       } else {
         setProfile(null);
       }
+      setSlowApi(false);
       setLoading(false);
     };
 
@@ -87,20 +95,22 @@ export default function NavUserButton({
   }, [pathname, router]);
 
   useEffect(() => {
-    if (!loading) {
-      setSlowApi(false);
-      return;
-    }
+    if (!loading) return;
     const timer = setTimeout(() => setSlowApi(true), 1500);
     return () => clearTimeout(timer);
   }, [loading]);
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setSwitchOpen(false);
       setSwitchError(null);
-      return;
     }
+  }
+
+  useEffect(() => {
+    if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
     };

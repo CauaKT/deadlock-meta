@@ -55,13 +55,40 @@ export default function GlobalSearchModal({
     heroes: SearchHeroItem[];
     items: SearchShopItem[];
   } | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const catalogFetchingRef = useRef(false);
+  const catalogLoading = open && catalog === null;
 
   const [users, setUsers] = useState<CommunityProfileItem[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [steamError, setSteamError] = useState<string | null>(null);
   const [steamResolving, setSteamResolving] = useState(false);
+
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) {
+      setQuery("");
+      setUsers([]);
+      setUsersLoading(false);
+      setActiveIndex(0);
+      setSteamError(null);
+      setSteamResolving(false);
+    }
+  }
+
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
+    setActiveIndex(0);
+    const clean = query.trim().replace(/^@+/, "");
+    if (clean.length < 2) {
+      setUsers([]);
+      setUsersLoading(false);
+    } else {
+      setUsersLoading(true);
+    }
+  }
 
   // Atalho global Ctrl + K / Cmd + K
   useEffect(() => {
@@ -79,19 +106,12 @@ export default function GlobalSearchModal({
 
   // Focar input e carregar catálogo na primeira abertura
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setUsers([]);
-      setActiveIndex(0);
-      setSteamError(null);
-      setSteamResolving(false);
-      return;
-    }
+    if (!open) return;
 
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 20);
 
-    if (!catalog && !catalogLoading) {
-      setCatalogLoading(true);
+    if (catalog === null && !catalogFetchingRef.current) {
+      catalogFetchingRef.current = true;
       fetch("/api/search-catalog")
         .then((res) => (res.ok ? res.json() : { heroes: [], items: [] }))
         .then((data) => {
@@ -101,24 +121,21 @@ export default function GlobalSearchModal({
           });
         })
         .catch(() => setCatalog({ heroes: [], items: [] }))
-        .finally(() => setCatalogLoading(false));
+        .finally(() => {
+          catalogFetchingRef.current = false;
+        });
     }
 
     return () => clearTimeout(focusTimer);
-  }, [open, catalog, catalogLoading]);
+  }, [open, catalog]);
 
   // Busca de usuários na API com debounce
   useEffect(() => {
     if (!open) return;
     const clean = query.trim().replace(/^@+/, "");
-    if (clean.length < 2) {
-      setUsers([]);
-      setUsersLoading(false);
-      return;
-    }
+    if (clean.length < 2) return;
 
     let cancelled = false;
-    setUsersLoading(true);
     const timer = setTimeout(async () => {
       try {
         const list = await searchCommunityProfiles({ search: clean, limit: 5 });
@@ -223,9 +240,11 @@ export default function GlobalSearchModal({
     };
   }, [query, catalog, users]);
 
-  useEffect(() => {
+  const [prevResultsLen, setPrevResultsLen] = useState(flatResults.length);
+  if (flatResults.length !== prevResultsLen) {
+    setPrevResultsLen(flatResults.length);
     setActiveIndex(0);
-  }, [flatResults.length, query]);
+  }
 
   if (!open) return null;
 

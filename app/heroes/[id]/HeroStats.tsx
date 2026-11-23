@@ -3,7 +3,9 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HeroWeapon } from "@/lib/deadlock";
 import SlantFrame, { type Slant } from "@/components/ui/SlantFrame";
+import { TACTICAL_PLATE_CLASS } from "@/components/ui/TacticalPlate";
 
+const PLATE = TACTICAL_PLATE_CLASS;
 const MAX_BOONS = 35;
 
 const n1 = (n: number) => n.toFixed(1);
@@ -230,8 +232,6 @@ const THEMES = {
   },
 } as const;
 type Theme = keyof typeof THEMES;
-
-const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
 
 const GAME_ICON_BASE = "https://assets-bucket.deadlock-api.com/assets-api-res/icons";
 const GAME_ICONS: Record<string, string> = {

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { PatchWinRatePoint } from "@/lib/deadlock";
+import { TACTICAL_PLATE_CLASS, TacticalSection } from "@/components/ui/TacticalPlate";
 
-const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
+const PLATE = TACTICAL_PLATE_CLASS;
 
 export default function HeroPatchEvolution({
   history,
@@ -13,6 +14,12 @@ export default function HeroPatchEvolution({
   accent: string;
 }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const [prevLen, setPrevLen] = useState(history.length);
+
+  if (history.length !== prevLen) {
+    setPrevLen(history.length);
+    setActiveIdx(null);
+  }
 
   if (history.length < 2) {
     return null;
@@ -41,6 +48,7 @@ export default function HeroPatchEvolution({
   const chartH = height - padY * 2;
 
   const stepX = chartW / (history.length - 1);
+  const xLabelStep = Math.max(1, Math.ceil(history.length / 7));
 
   const points = history.map((h, i) => {
     const x = padX + i * stepX;
@@ -58,26 +66,21 @@ export default function HeroPatchEvolution({
   }
 
   const fiftyY = 50 >= minY && 50 <= maxY ? padY + ((maxY - 50) / rangeY) * chartH : null;
-  const active = activeIdx !== null ? points[activeIdx] : points[points.length - 1];
+  const safeIdx =
+    activeIdx !== null ? Math.min(activeIdx, points.length - 1) : points.length - 1;
+  const active = points[safeIdx];
 
   return (
-    <div
-      className="dl-noise dl-halftone relative overflow-hidden rounded-[3px_8px_3px_6px] border-2 p-5 sm:p-6 space-y-5"
-      style={{
-        borderColor: `color-mix(in srgb, ${accent} 45%, #1b2621)`,
-        background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 20%, #0c1110), #0c1110 70%)`,
-        boxShadow: "inset 0 0 40px rgba(0,0,0,0.65), 0 10px 28px rgba(0,0,0,0.85)",
-      }}
-    >
+    <TacticalSection accent={accent}>
       {/* Cabeçalho no padrão das seções de combate */}
       <div className="border-b border-black/30 pb-3">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
             <span
               className="font-deadlock text-base font-black uppercase tracking-wider"
               style={{ color: `color-mix(in srgb, ${accent} 60%, #ffffff)` }}
             >
-              Histórico de Desempenho
+              Histórico de Desempenho ({history.length} patches)
             </span>
           </div>
           <p className="text-[11px] font-semibold text-[#d6c9b4]/80">
@@ -199,7 +202,7 @@ export default function HeroPatchEvolution({
             filter="url(#patchGlow)"
           />
 
-          {/* Faixas Verticais Invisíveis de Interação (Captura em qualquer altura da coluna) */}
+          {/* Faixas Verticais Invisíveis de Interação */}
           {points.map((p, i) => {
             const isFirst = i === 0;
             const isLast = i === points.length - 1;
@@ -222,8 +225,11 @@ export default function HeroPatchEvolution({
           })}
 
           {/* Pontos e Rótulos Visuais */}
-          {points.map((p) => {
+          {points.map((p, i) => {
             const isSelected = active.patchId === p.patchId;
+            const showDateLabel =
+              isSelected || i === 0 || i === points.length - 1 || i % xLabelStep === 0;
+
             return (
               <g
                 key={p.patchId}
@@ -242,21 +248,23 @@ export default function HeroPatchEvolution({
                 <circle
                   cx={p.x}
                   cy={p.y}
-                  r={isSelected ? "6" : "4"}
+                  r={isSelected ? "6" : "3.5"}
                   fill={isSelected ? "#ffffff" : accent}
                   stroke="#0c1110"
                   strokeWidth="2.5"
                 />
-                <text
-                  x={p.x}
-                  y={height - padY + 16}
-                  fill={isSelected ? "#f4efe6" : "#8a9994"}
-                  fontSize="10"
-                  fontWeight={isSelected ? "900" : "600"}
-                  textAnchor="middle"
-                >
-                  {p.dateLabel}
-                </text>
+                {showDateLabel && (
+                  <text
+                    x={p.x}
+                    y={height - padY + 16}
+                    fill={isSelected ? "#f4efe6" : "#8a9994"}
+                    fontSize="10"
+                    fontWeight={isSelected ? "900" : "600"}
+                    textAnchor="middle"
+                  >
+                    {p.dateLabel}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -280,7 +288,7 @@ export default function HeroPatchEvolution({
           </h4>
           <p className="text-xs text-[#d6c9b4]/80">
             Amostra competitiva auditada:{" "}
-            <strong className="text-[#f4efe6]">{active.matches.toLocaleString()} partidas</strong>
+            <strong className="text-[#f4efe6]">{active.matches.toLocaleString("pt-BR")} partidas</strong>
           </p>
         </div>
 
@@ -318,7 +326,7 @@ export default function HeroPatchEvolution({
       </div>
 
       {/* Timeline de Botões dos Patches em Placas Militares */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 max-h-72 overflow-y-auto lp-scroll pr-1">
         {history.map((item, idx) => {
           const isSelected = active.patchId === item.patchId;
           return (
@@ -355,6 +363,6 @@ export default function HeroPatchEvolution({
           );
         })}
       </div>
-    </div>
+    </TacticalSection>
   );
 }

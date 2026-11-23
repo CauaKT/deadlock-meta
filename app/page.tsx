@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
 import {
+  calculateTier,
+  computeHeroMatchStats,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchShopItems,
   fetchPatches,
-  TIER_THRESHOLDS,
+  fetchShopItems,
+  getDefaultRank,
+  getPlayableHeroes,
+  isPlayableHero,
+  minMatchesForRank,
+  resolvePatchWindow,
+  SAMPLE_THRESHOLDS,
 } from "@/lib/deadlock";
 import HomeTracker, {
   type HomeMetaHero,
@@ -21,58 +28,45 @@ export const metadata: Metadata = {
     "Busque jogadores por link da Steam, Steam ID ou @handle, compare perfis 1v1, confira partidas e acompanhe o meta e o leaderboard.",
 };
 
-function calcTier(winRate: number): string {
-  if (winRate >= TIER_THRESHOLDS.META) return "META";
-  if (winRate >= TIER_THRESHOLDS.A) return "A";
-  if (winRate >= TIER_THRESHOLDS.B) return "B";
-  if (winRate >= TIER_THRESHOLDS.C) return "C";
-  if (winRate >= TIER_THRESHOLDS.D) return "D";
-  return "F";
-}
-
 export default async function Home() {
   const patches = await fetchPatches();
   const datedPatches = patches.filter((p) => typeof p.since === "number");
   const currentPatch = datedPatches[0];
   const prevPatch = datedPatches[1];
+  const { patchUntil } = resolvePatchWindow(patches, currentPatch?.id);
+  const defaultRank = getDefaultRank();
+  const minMetaMatches = minMatchesForRank(defaultRank.tier);
 
   const [heroesMap, shopItems, statsNow, statsPrev] = await Promise.all([
     fetchHeroesAssets(),
     fetchShopItems(),
-    currentPatch ? fetchHeroesAnalytics(currentPatch.since) : fetchHeroesAnalytics(),
+    currentPatch
+      ? fetchHeroesAnalytics(currentPatch.since, patchUntil, defaultRank.minBadge)
+      : fetchHeroesAnalytics(undefined, undefined, defaultRank.minBadge),
     prevPatch && currentPatch
-      ? fetchHeroesAnalytics(prevPatch.since, currentPatch.since)
+      ? fetchHeroesAnalytics(prevPatch.since, currentPatch.since, defaultRank.minBadge)
       : Promise.resolve([]),
   ]);
 
-  const heroes: HomeTrackerHero[] = Object.values(heroesMap)
-    .filter(
-      (h) =>
-        h.player_selectable === true &&
-        h.disabled !== true &&
-        h.in_development !== true &&
-        !h.name.startsWith("hero_"),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
-    }));
+  const heroes: HomeTrackerHero[] = getPlayableHeroes(heroesMap).map((h) => ({
+    id: h.id,
+    name: h.name,
+    image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
+  }));
 
   const metaTop: HomeMetaHero[] = statsNow
-    .map((s) => {
+    .map((s): HomeMetaHero | null => {
       const h = heroesMap[s.hero_id];
-      if (!h || h.name.startsWith("hero_") || !s.matches || s.matches < 500) return null;
-      const wins = s.wins ?? Math.round((s.matches * (s.win_rate ?? 50)) / 100);
-      const winRate = s.win_rate ?? (wins / s.matches) * 100;
+      if (!isPlayableHero(h)) return null;
+      const { matches, winRate } = computeHeroMatchStats(s);
+      if (matches < minMetaMatches) return null;
       return {
         id: h.id,
         name: h.name,
         image: h.images?.icon_image_small ?? h.images?.icon_hero_card ?? null,
-        matches: s.matches,
+        matches,
         winRate,
-        tier: calcTier(winRate),
+        tier: calculateTier(winRate),
       };
     })
     .filter((x): x is HomeMetaHero => x !== null)
@@ -84,14 +78,19 @@ export default async function Home() {
 
   for (const now of statsNow) {
     const prev = prevByHero.get(now.hero_id);
-    if (!prev || now.matches < 300 || prev.matches < 300) continue;
     const h = heroesMap[now.hero_id];
-    if (!h || h.name.startsWith("hero_")) continue;
+    if (!prev || !isPlayableHero(h)) continue;
+    const currStats = computeHeroMatchStats(now);
+    const prevStats = computeHeroMatchStats(prev);
+    if (
+      currStats.matches < SAMPLE_THRESHOLDS.patchTrackerHero ||
+      prevStats.matches < SAMPLE_THRESHOLDS.patchTrackerHero
+    ) {
+      continue;
+    }
 
-    const winsNow = now.wins ?? Math.round((now.matches * (now.win_rate ?? 50)) / 100);
-    const winsPrev = prev.wins ?? Math.round((prev.matches * (prev.win_rate ?? 50)) / 100);
-    const wrNow = now.win_rate ?? (winsNow / now.matches) * 100;
-    const wrPrev = prev.win_rate ?? (winsPrev / prev.matches) * 100;
+    const wrNow = currStats.winRate;
+    const wrPrev = prevStats.winRate;
 
     allMovers.push({
       id: h.id,

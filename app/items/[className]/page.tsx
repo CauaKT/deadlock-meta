@@ -2,15 +2,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchShopItemByClassName, fetchShopItems, type ItemSlot } from "@/lib/deadlock";
+import { SLOT_META } from "@/lib/data/config";
+import { fetchShopItemByClassName, fetchShopItems } from "@/lib/deadlock";
 
 export const instant = false;
-
-const SLOT_META: Record<ItemSlot, { label: string; vendor: string; accent: string; plate: string }> = {
-  weapon: { label: "Arma", vendor: "Fairfax", accent: "#e2a23f", plate: "#3b2d1a" },
-  vitality: { label: "Vitalidade", vendor: "MPS", accent: "#8fc43a", plate: "#394d2d" },
-  spirit: { label: "Espírito", vendor: "Curiosity Catalog", accent: "#c79af0", plate: "#3a2d3d" },
-};
 
 const KIND_LABEL: Record<string, string> = { passive: "Passivo", active: "Ativo" };
 

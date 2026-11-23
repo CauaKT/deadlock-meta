@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import GlobalSearchModal from "./GlobalSearchModal";
 import NotificationBell from "./NotificationBell";
 import NavUserButton from "./NavUserButton";
@@ -195,9 +195,30 @@ const NAV_SECTIONS: NavItem[][] = [
   ],
 ];
 
+const subscribeSidebarCollapsed = (cb: () => void) => {
+  window.addEventListener("lp-sidebar-toggle", cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener("lp-sidebar-toggle", cb);
+    window.removeEventListener("storage", cb);
+  };
+};
+
+const getSidebarCollapsedSnapshot = () => {
+  try {
+    return localStorage.getItem("lp_sidebar_collapsed") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export default function AppSidebar() {
   const pathname = usePathname() || "/";
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    getSidebarCollapsedSnapshot,
+    () => false,
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
@@ -211,8 +232,11 @@ export default function AppSidebar() {
     }
     return initial;
   });
+  const [prevPathname, setPrevPathname] = useState(pathname);
 
-  useEffect(() => {
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setMobileOpen(false);
     setExpandedGroups((prev) => {
       let changed = false;
       const next = { ...prev };
@@ -226,18 +250,9 @@ export default function AppSidebar() {
       }
       return changed ? next : prev;
     });
-  }, [pathname]);
+  }
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem("lp_sidebar_collapsed") === "1") {
-        setCollapsed(true);
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    setMobileOpen(false);
     const matchedPrefix = [
       "/tier-list",
       "/tier-maker",
@@ -276,13 +291,10 @@ export default function AppSidebar() {
   }, [mobileOpen]);
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("lp_sidebar_collapsed", next ? "1" : "0");
-      } catch {}
-      return next;
-    });
+    try {
+      localStorage.setItem("lp_sidebar_collapsed", collapsed ? "0" : "1");
+    } catch {}
+    window.dispatchEvent(new Event("lp-sidebar-toggle"));
   };
 
   const renderLinks = (isCompact: boolean) => (

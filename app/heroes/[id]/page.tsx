@@ -1,23 +1,31 @@
 // app/heroes/[id]/page.tsx
 /* eslint-disable @next/next/no-img-element, @typescript-eslint/no-explicit-any */
 import {
-  fetchHeroDetails,
-  fetchHeroesAssets,
-  fetchHeroesAnalytics,
-  fetchWikiColors,
+  buildHeroMatchups,
+  calculateTier,
+  computeHeroMatchStats,
+  DEFAULT_RANK_ID,
+  extractHeroTheme,
   fetchHeroAbilitiesFull,
-  fetchHeroWeapon,
   fetchHeroBuild,
+  fetchHeroCounterStats,
+  fetchHeroDetails,
   fetchHeroPatchHistory,
   fetchHeroSynergyStats,
-  fetchHeroCounterStats,
-  buildHeroMatchups,
-  extractHeroTheme,
-  TIER_THRESHOLDS,
+  fetchHeroWeapon,
+  fetchHeroesAnalytics,
+  fetchHeroesAssets,
   fetchPatches,
+  fetchWikiColors,
+  RANK_FILTERS,
+  resolveHeroMedia,
   resolvePatchWindow,
+  resolveRankFilter,
+  TIER_BADGE_STYLES,
 } from "@/lib/deadlock";
 import Link from "next/link";
+import PatchSelect from "@/app/PatchSelect";
+import RankSelect from "@/app/RankSelect";
 import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
@@ -73,15 +81,6 @@ function extractTags(h: any): string[] {
   return [];
 }
 
-function calculateTier(winRate: number) {
-  if (winRate >= TIER_THRESHOLDS.META) return { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" };
-  if (winRate >= TIER_THRESHOLDS.A) return { label: "TIER A", bg: "bg-green-500 text-black border-green-400" };
-  if (winRate >= TIER_THRESHOLDS.B) return { label: "TIER B", bg: "bg-lime-400 text-black border-lime-300" };
-  if (winRate >= TIER_THRESHOLDS.C) return { label: "TIER C", bg: "bg-yellow-400 text-black border-yellow-300" };
-  if (winRate >= TIER_THRESHOLDS.D) return { label: "TIER D", bg: "bg-orange-500 text-black border-orange-400" };
-  return { label: "TIER F", bg: "bg-red-600 text-white border-red-500" };
-}
-
 async function CommunityHeroBuilds({
   heroId,
   heroName,
@@ -132,19 +131,20 @@ export default async function HeroPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ patch?: string }>;
+  searchParams: Promise<{ patch?: string; rank?: string }>;
 }) {
   const { id } = await params;
-  const { patch: patchParam } = await searchParams;
+  const { patch: patchParam, rank: rankParam } = await searchParams;
   const heroId = parseInt(id);
 
   const patches = await fetchPatches();
   const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
+  const selectedRank = resolveRankFilter(rankParam);
 
   const [heroDetails, heroesMap, stats, wikiColors, synergyStats, counterStats] = await Promise.all([
     fetchHeroDetails(heroId),
     fetchHeroesAssets(),
-    fetchHeroesAnalytics(selectedPatch.since, patchUntil),
+    fetchHeroesAnalytics(selectedPatch.since, patchUntil, selectedRank.minBadge),
     fetchWikiColors(),
     fetchHeroSynergyStats(selectedPatch.since, patchUntil),
     fetchHeroCounterStats(selectedPatch.since, patchUntil),
@@ -160,19 +160,17 @@ export default async function HeroPage({
       <div className="max-w-4xl mx-auto p-10 text-center">
         <h1 className="text-3xl font-black text-rose-500">Herói Não Encontrado</h1>
         <Link
-          href="/"
+          href="/tier-list"
           className="mt-6 inline-block px-5 py-2.5 rounded-xl bg-amber-500 text-black font-bold text-sm hover:bg-amber-400 transition-colors"
         >
-          ← Voltar para a Tier List
+          Voltar para a Tier List
         </Link>
       </div>
     );
   }
 
-  const matches = stat?.matches || 0;
-  const wins = stat?.wins ?? Math.round((matches * (stat?.win_rate ?? 50)) / 100);
-  const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
-  const tier = calculateTier(winRate);
+  const { matches, winRate } = computeHeroMatchStats(stat);
+  const tier = TIER_BADGE_STYLES[calculateTier(winRate)];
   const enName = heroesMap[heroId]?.name ?? hero.name; // nome em inglês, para buscas e imagem
 
 // 1. Títulos do herói (3 títulos oficiais)
@@ -187,24 +185,23 @@ export default async function HeroPage({
   const heroLore = cleanText(rawLore) || "Guerreiro destemido lutando nas ruas da Cidade Amaldiçoada em busca de almas para os rituais dos Patronos.";
 
  // 4. Imagem de Corpo Inteiro
-  const heroSlug = enName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const heroesDir = path.join(process.cwd(), "public", "heroes");
+  const localHeroFiles = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
   const formattedName = enName.trim().replace(/ /g, "_");
   const heroNameSvg = `https://cdn.deadlock.wiki/${formattedName}_name.svg`;
-  let heroArt = `https://cdn.deadlock.wiki/thumb/${formattedName}_Render.png/800px-${formattedName}_Render.png`;
-
-  if (fs.existsSync(heroesDir)) {
-    const files = fs.readdirSync(heroesDir);
-    const matched = files.find((f) => f.toLowerCase().startsWith(heroSlug));
-    if (matched) heroArt = `/heroes/${matched}`;
-  }
+  const { art: heroArt } = resolveHeroMedia({ name: enName, images: hero.images }, localHeroFiles);
 
   const [abilities, weapon, build, patchHistory] = await Promise.all([
     fetchHeroAbilitiesFull(heroId, hero.items),
     fetchHeroWeapon(hero.items?.weapon_primary),
     fetchHeroBuild(heroesMap[heroId]?.popular_items),
-    fetchHeroPatchHistory(heroId),
+    fetchHeroPatchHistory(heroId, { minAverageBadge: selectedRank.minBadge }),
   ]);
+
+  const backParams = new URLSearchParams();
+  if (selectedPatch.id !== patches[0]?.id) backParams.set("patch", selectedPatch.id);
+  if (selectedRank.id !== DEFAULT_RANK_ID) backParams.set("rank", selectedRank.id);
+  const backQs = backParams.toString();
 
   const weaponImage = hero.shop_stat_display?.weapon_stats_display?.weapon_image_webp;
   const weaponAttributes = hero.shop_stat_display?.weapon_stats_display?.weapon_attributes;
@@ -215,10 +212,24 @@ export default async function HeroPage({
   return (
     <div className="relative max-w-6xl mx-auto p-4 md:p-10 space-y-10">
       <HeroAtmosphere rgb={rgb} />
-      {/* Botão de Voltar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <NavButton href={`/?patch=${selectedPatch.id}`} label="Voltar para a Tier List" tagBg={tagBg} icon="back" />
-        <NavButton href="/heroes" label="Todos os Heróis" tagBg={tagBg} icon="grid" flip />
+      {/* Botão de Voltar + Filtros */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <NavButton
+            href={backQs ? `/tier-list?${backQs}` : "/tier-list"}
+            label="Voltar para a Tier List"
+            tagBg={tagBg}
+            icon="back"
+          />
+          <NavButton href="/heroes" label="Todos os Heróis" tagBg={tagBg} icon="grid" flip />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <RankSelect ranks={RANK_FILTERS} selected={selectedRank.id} />
+          <PatchSelect
+            patches={patches.map(({ id, label }) => ({ id, label }))}
+            selected={selectedPatch.id}
+          />
+        </div>
       </div>
 
       {/* ========================================================================= */}
