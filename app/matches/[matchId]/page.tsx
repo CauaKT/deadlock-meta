@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchHeroesAssets, fetchShopItems } from "@/lib/deadlock";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 export const instant = false;
 

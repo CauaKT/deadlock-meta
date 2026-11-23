@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+
+const BOX_SIZE = 300; // Tamanho do viewport de visualização expandido para 300px
 import { useRouter } from "next/navigation";
 import {
   getCurrentClientUser,
@@ -36,6 +38,24 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const cropImageRef = useRef<HTMLImageElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+
+  // Calcula e trava os limites lendo as dimensões reais da ref em tempo real
+  const clampPan = useCallback((x: number, y: number, currentZoom: number) => {
+    const { width, height } = imgSizeRef.current;
+    if (!width || !height) return { x: 0, y: 0 };
+
+    const baseScale = Math.max(BOX_SIZE / width, BOX_SIZE / height);
+    const scale = baseScale * currentZoom;
+
+    // Se estiver em 100% de zoom e a imagem cobrir o eixo, o deslocamento é travado em 0
+    const maxPanX = Math.max(0, (width * scale - BOX_SIZE) / 2);
+    const maxPanY = Math.max(0, (height * scale - BOX_SIZE) / 2);
+
+    return {
+      x: Math.min(maxPanX, Math.max(-maxPanX, x)),
+      y: Math.min(maxPanY, Math.max(-maxPanY, y)),
+    };
+  }, []);
 
   // Listener nativo não-passivo que impede a rolagem da página ao dar zoom no wheel
   useEffect(() => {
@@ -81,7 +101,7 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
       el.removeEventListener("wheel", onWheel);
       document.body.style.overflow = "";
     };
-  }, [cropModalOpen]);
+  }, [cropModalOpen, clampPan]);
 
   useEffect(() => {
     getCurrentClientUser().then(async (u) => {
@@ -110,9 +130,7 @@ export default function WelcomeClient({ heroNames }: { heroNames: string[] }) {
     });
   }, [router]);
 
-const BOX_SIZE = 300; // Tamanho do viewport de visualização expandido para 300px
-
-  // Ao selecionar a imagem, abre o modal de redimensionamento
+// Ao selecionar a imagem, abre o modal de redimensionamento
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,24 +164,6 @@ const BOX_SIZE = 300; // Tamanho do viewport de visualização expandido para 30
     e.preventDefault();
     setIsDragging(true);
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-  };
-
-  // Calcula e trava os limites lendo as dimensões reais da ref em tempo real
-  const clampPan = (x: number, y: number, currentZoom: number) => {
-    const { width, height } = imgSizeRef.current;
-    if (!width || !height) return { x: 0, y: 0 };
-
-    const baseScale = Math.max(BOX_SIZE / width, BOX_SIZE / height);
-    const scale = baseScale * currentZoom;
-
-    // Se estiver em 100% de zoom e a imagem cobrir o eixo, o deslocamento é travado em 0
-    const maxPanX = Math.max(0, (width * scale - BOX_SIZE) / 2);
-    const maxPanY = Math.max(0, (height * scale - BOX_SIZE) / 2);
-
-    return {
-      x: Math.min(maxPanX, Math.max(-maxPanX, x)),
-      y: Math.min(maxPanY, Math.max(-maxPanY, y)),
-    };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {

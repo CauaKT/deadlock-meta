@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 import {
   acceptFriendRequest,
   changeOwnPassword,
@@ -28,7 +29,7 @@ import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { AvatarEditButton, BannerEditOverlay } from "./ProfileEditControls";
 import ProfileBanner, { type BannerMode } from "./ProfileBanner";
 import CommunitySearchModal from "./CommunitySearchModal";
-import HeroAtmosphere from "@/app/heroes/[id]/HeroAtmosphere";
+import HeroAtmosphere from "@/components/ui/HeroAtmosphere";
 import FavoriteHeroSelect from "./FavoriteHeroSelect";
 import PlayerDeadlockStats from "./PlayerDeadlockStats";
 
@@ -357,6 +358,8 @@ export default function ProfileForm({
     setFriendBusy(false);
   };
 
+  const { confirm, modal } = useConfirm();
+
   const handleRemoveFriend = async (friendshipId: string) => {
     if (friendBusy) return;
     setFriendBusy(true);
@@ -366,6 +369,17 @@ export default function ProfileForm({
       router.refresh();
     }
     setFriendBusy(false);
+  };
+
+  const confirmRemoveFriend = async (
+    friendshipId: string,
+    title: string,
+    description: string,
+    confirmLabel = "Remover",
+    tone: "danger" | "warning" = "danger",
+  ) => {
+    const ok = await confirm({ title, description, confirmLabel, tone });
+    if (ok) await handleRemoveFriend(friendshipId);
   };
 
   // Estados do formulário de edição
@@ -419,7 +433,6 @@ export default function ProfileForm({
   const [emailBusy, setEmailBusy] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -1075,11 +1088,15 @@ export default function ProfileForm({
                     <button
                       type="button"
                       disabled={friendBusy}
-                      onClick={() => {
-                        if (window.confirm("Desfazer amizade com este jogador?")) {
-                          void handleRemoveFriend(rel.friendshipId);
-                        }
-                      }}
+                      onClick={() =>
+                        void confirmRemoveFriend(
+                          rel.friendshipId,
+                          "Desfazer amizade?",
+                          "Vocês deixarão de estar conectados na lista de amigos.",
+                          "Desfazer",
+                          "danger",
+                        )
+                      }
                       className="cursor-pointer rounded-xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-emerald-300 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
                     >
                       Amigos ✓
@@ -1091,7 +1108,15 @@ export default function ProfileForm({
                     <button
                       type="button"
                       disabled={friendBusy}
-                      onClick={() => void handleRemoveFriend(rel.friendshipId)}
+                      onClick={() =>
+                        void confirmRemoveFriend(
+                          rel.friendshipId,
+                          "Cancelar pedido enviado?",
+                          "A solicitação de amizade pendente será cancelada.",
+                          "Cancelar pedido",
+                          "warning",
+                        )
+                      }
                       className="cursor-pointer rounded-xl border border-amber-500/50 bg-amber-950/30 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-amber-300 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
                     >
                       Pedido enviado
@@ -1112,7 +1137,15 @@ export default function ProfileForm({
                       <button
                         type="button"
                         disabled={friendBusy}
-                        onClick={() => void handleRemoveFriend(rel.friendshipId)}
+                        onClick={() =>
+                          void confirmRemoveFriend(
+                            rel.friendshipId,
+                            "Recusar pedido de amizade?",
+                            "A solicitação recebida será recusada.",
+                            "Recusar",
+                            "danger",
+                          )
+                        }
                         className="cursor-pointer rounded-xl border border-neutral-700 bg-black/60 px-3 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 transition-colors hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
                       >
                         Recusar
@@ -1342,13 +1375,19 @@ export default function ProfileForm({
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!window.confirm("Deseja excluir esta tier list permanentemente?")) return;
+                          const ok = await confirm({
+                            title: "Excluir tier list?",
+                            description: `A tier list "${item.title}" será removida permanentemente.`,
+                            confirmLabel: "Excluir",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
                           const res = await deleteTierList(item.id);
                           if (res.ok) {
                             setSavedTierLists((prev) => prev.filter((tl) => tl.id !== item.id));
                           }
                         }}
-                        className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-rose-300 hover:border-rose-500 transition-colors"
+                        className="cursor-pointer rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1.5 font-deadlock text-xs font-black uppercase text-rose-300 hover:border-rose-500 transition-colors"
                       >
                         Excluir
                       </button>
@@ -1399,7 +1438,15 @@ export default function ProfileForm({
                           <button
                             type="button"
                             disabled={friendBusy}
-                            onClick={() => void handleRemoveFriend(f.friendshipId)}
+                            onClick={() =>
+                              void confirmRemoveFriend(
+                                f.friendshipId,
+                                `Recusar pedido de ${f.username}?`,
+                                "A solicitação de amizade recebida será recusada.",
+                                "Recusar",
+                                "danger",
+                              )
+                            }
                             className="cursor-pointer rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-bold uppercase text-neutral-300 hover:border-rose-500 hover:text-rose-300"
                           >
                             Recusar
@@ -1435,7 +1482,15 @@ export default function ProfileForm({
                         <button
                           type="button"
                           disabled={friendBusy}
-                          onClick={() => void handleRemoveFriend(f.friendshipId)}
+                          onClick={() =>
+                            void confirmRemoveFriend(
+                              f.friendshipId,
+                              `Cancelar pedido para ${f.username}?`,
+                              "A solicitação de amizade enviada será cancelada.",
+                              "Cancelar pedido",
+                              "warning",
+                            )
+                          }
                           className="shrink-0 cursor-pointer rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-bold uppercase text-neutral-300 hover:border-rose-500 hover:text-rose-300"
                         >
                           Cancelar
@@ -1488,11 +1543,15 @@ export default function ProfileForm({
                       <button
                         type="button"
                         disabled={friendBusy}
-                        onClick={() => {
-                          if (window.confirm(`Remover ${f.username} da sua lista de amigos?`)) {
-                            void handleRemoveFriend(f.friendshipId);
-                          }
-                        }}
+                        onClick={() =>
+                          void confirmRemoveFriend(
+                            f.friendshipId,
+                            `Remover ${f.username} dos amigos?`,
+                            `${f.username} sairá da sua lista de amigos.`,
+                            "Remover",
+                            "danger",
+                          )
+                        }
                         className="shrink-0 cursor-pointer rounded-lg border border-neutral-800 px-2.5 py-1 text-[10px] font-bold uppercase text-neutral-400 hover:border-rose-500/60 hover:text-rose-300"
                       >
                         Remover
@@ -1909,34 +1968,23 @@ export default function ProfileForm({
               <p className="text-xs text-neutral-400">
                 Remove permanentemente sua conta e seu perfil. Suas tier lists publicadas permanecem anônimas na comunidade.
               </p>
-              {confirmDeleteAccount ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={deletingAccount}
-                    onClick={() => void handleDeleteOwnAccount()}
-                    className="cursor-pointer rounded-xl border border-rose-500 bg-rose-600 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-white hover:bg-rose-500 disabled:opacity-50"
-                  >
-                    {deletingAccount ? "Apagando..." : "Confirmar Exclusão"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deletingAccount}
-                    onClick={() => setConfirmDeleteAccount(false)}
-                    className="cursor-pointer rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteAccount(true)}
-                  className="cursor-pointer rounded-xl border border-rose-900/70 bg-rose-950/30 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-rose-300 hover:border-rose-500 hover:bg-rose-950/50"
-                >
-                  Apagar minha conta
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Apagar conta permanentemente?",
+                    description:
+                      "Sua conta e seu perfil serão excluídos de forma irreversível. Tier lists publicadas permanecem anônimas na comunidade.",
+                    confirmLabel: "Apagar minha conta",
+                    tone: "danger",
+                  });
+                  if (ok) void handleDeleteOwnAccount();
+                }}
+                className="cursor-pointer rounded-xl border border-rose-900/70 bg-rose-950/30 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-rose-300 hover:border-rose-500 hover:bg-rose-950/50 disabled:opacity-50"
+              >
+                {deletingAccount ? "Apagando..." : "Apagar minha conta"}
+              </button>
               {deleteError && <p className="text-xs font-semibold text-rose-300">{deleteError}</p>}
             </section>
           </div>
@@ -1944,6 +1992,7 @@ export default function ProfileForm({
           </div>
         </div>
       )}
+      {modal}
     </div>
   );
 }

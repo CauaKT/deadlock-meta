@@ -2,7 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import { useConfirm } from "@/components/ui/ConfirmModal";
+import SlantFrame from "@/components/ui/SlantFrame";
 import type { AuthUser } from "@/lib/backend/types";
 
 export interface LfgHeroOption {
@@ -66,6 +67,7 @@ export default function LfgClient({
   initialPosts: LfgPostItem[];
   initialUser: AuthUser | null;
 }) {
+  const { confirm, modal } = useConfirm();
   const heroMap = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
 
   const [posts, setPosts] = useState<LfgPostItem[]>(initialPosts);
@@ -116,6 +118,13 @@ export default function LfgClient({
   };
 
   const handleDelete = async (id: string) => {
+    const ok = await confirm({
+      title: "Excluir anúncio LFG?",
+      description: "Seu anúncio será removido da listagem de procura de grupo.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
     const res = await fetch(`/api/backend/lfg/${id}`, {
       method: "DELETE",
       credentials: "include",
@@ -337,6 +346,7 @@ export default function LfgClient({
           ))
         )}
       </div>
+      {modal}
     </div>
   );
 }

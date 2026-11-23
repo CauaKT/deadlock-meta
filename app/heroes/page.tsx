@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import fs from "fs";
 import path from "path";
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, fetchHeroAbilitiesFull, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, fetchHeroAbilitiesFull, extractColor, extractHeroTheme, fetchPatches, MIN_HERO_MATCHES } from "@/lib/deadlock";
 import HeroSelect, { type SelectHero } from "./HeroSelect";
 
 export const instant = false;
 
-// Mesmo limite da Home: abaixo disso o winrate é amostra pequena demais para ordenar
-const MIN_MATCHES = 1000;
+const MIN_MATCHES = MIN_HERO_MATCHES;
 
 export const metadata: Metadata = {
   title: "LockPro • Heróis de Deadlock",
@@ -15,11 +14,12 @@ export const metadata: Metadata = {
 };
 
 export default async function HeroesPage() {
+  const patches = await fetchPatches();
   const [heroesMap, blurbs, wikiColors, stats] = await Promise.all([
     fetchHeroesAssets(),
     fetchHeroBlurbs(),
     fetchWikiColors(),
-    fetchHeroesAnalytics(PATCHES[0].since),
+    fetchHeroesAnalytics(patches[0].since),
     new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
 
@@ -75,7 +75,7 @@ export default async function HeroesPage() {
           Não foi possível carregar os heróis agora. Tente novamente em alguns minutos.
         </p>
       ) : (
-        <HeroSelect heroes={heroes} statsLabel={PATCHES[0].label} />
+        <HeroSelect heroes={heroes} statsLabel={patches[0].label} />
       )}
     </div>
   );

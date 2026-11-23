@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PATCHES, type HeroBuild, type ItemSlot, type PopularItem, type ShopItem } from "@/lib/deadlock";
+import { PATCHES, type HeroBuild, type ItemSlot, type Patch, type PopularItem, type ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
-import SlantFrame from "./SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 const PLATE = "rounded-[3px] border border-black/40 bg-black/45 shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]";
 const MAX_COMPLEXITY = 4;
@@ -82,11 +82,13 @@ export default function HeroGuide({
   heroType,
   complexity,
   build,
+  patches = PATCHES,
   accent,
 }: {
   heroType?: string;
   complexity?: number;
   build: HeroBuild | null;
+  patches?: Patch[];
   accent: string;
 }) {
   const typeLabel = heroType ? (HERO_TYPE_LABELS[heroType] ?? heroType) : null;
@@ -96,7 +98,7 @@ export default function HeroGuide({
     ? new Date(updatedAt * 1000).toLocaleDateString("pt-BR", { timeZone: "UTC" })
     : null;
   const patch = updatedAt
-    ? PATCHES.find((p) => p.since !== undefined && p.since <= updatedAt)
+    ? patches.find((p) => p.since !== undefined && p.since <= updatedAt)
     : undefined;
   const titleColor = `color-mix(in srgb, ${accent} 55%, #ffffff)`;
 

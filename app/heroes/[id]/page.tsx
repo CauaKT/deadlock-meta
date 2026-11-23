@@ -12,20 +12,18 @@ import {
   fetchHeroSynergyStats,
   fetchHeroCounterStats,
   buildHeroMatchups,
-  extractColor,
   extractHeroTheme,
-  ensureVibrantTextColor,
   TIER_THRESHOLDS,
-  PATCHES,
+  fetchPatches,
+  resolvePatchWindow,
 } from "@/lib/deadlock";
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import AbilityBar from "./AbilityBar";
 import LoreText from "./LoreText";
 import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
 import HeroMatchups from "./HeroMatchups";
-import HeroAtmosphere from "./HeroAtmosphere";
+import HeroAtmosphere from "@/components/ui/HeroAtmosphere";
 import HeroPatchEvolution from "./HeroPatchEvolution";
 import { getServerBuilds } from "@/lib/backend/server";
 import NavButton from "./NavButton";
@@ -140,11 +138,8 @@ export default async function HeroPage({
   const { patch: patchParam } = await searchParams;
   const heroId = parseInt(id);
 
-  // Mesmo recorte de datas da tier list
-  const selectedPatch = PATCHES.find((p) => p.id === patchParam) ?? PATCHES[0];
-  const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
-  const patchUntil =
-    selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
+  const patches = await fetchPatches();
+  const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
 
   const [heroDetails, heroesMap, stats, wikiColors, synergyStats, counterStats] = await Promise.all([
     fetchHeroDetails(heroId),
@@ -179,8 +174,6 @@ export default async function HeroPage({
   const winRate = stat?.win_rate ?? (matches > 0 ? (wins / matches) * 100 : 50);
   const tier = calculateTier(winRate);
   const enName = heroesMap[heroId]?.name ?? hero.name; // nome em inglês, para buscas e imagem
-
-  const heroKey = enName.toLowerCase();
 
 // 1. Títulos do herói (3 títulos oficiais)
   const apiTags = extractTags(hero);
@@ -373,6 +366,7 @@ export default async function HeroPage({
           heroType={heroesMap[heroId]?.hero_type}
           complexity={heroesMap[heroId]?.complexity}
           build={build}
+          patches={patches}
           accent={tagBg}
         />
       </section>

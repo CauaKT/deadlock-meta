@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 import type { AuthUser } from "@/lib/backend/types";
 
 export interface TournamentMatchItem {

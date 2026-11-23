@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 import {
   getCurrentClientUser,
   getSavedAccounts,
@@ -23,6 +24,7 @@ export default function NavUserButton({
   placement?: "header" | "sidebar";
   compact?: boolean;
 }) {
+  const { confirm, modal } = useConfirm();
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -152,6 +154,14 @@ export default function NavUserButton({
 
   const handleRemoveAccount = async (acc: SavedAccount, e: React.MouseEvent) => {
     e.stopPropagation();
+    const label = acc.username || (acc.handle ? `@${acc.handle}` : acc.email);
+    const ok = await confirm({
+      title: "Remover conta da lista?",
+      description: `A conta ${label} será desconectada da troca rápida neste navegador.`,
+      confirmLabel: "Remover",
+      tone: "danger",
+    });
+    if (!ok) return;
     const res = await removeSavedAccount(acc.id);
     if (!res.ok) return;
     setAccounts((prev) => prev.filter((item) => item.id !== acc.id));
@@ -586,6 +596,7 @@ export default function NavUserButton({
           </button>
         </div>
       </div>
+      {modal}
     </div>
   );
 }

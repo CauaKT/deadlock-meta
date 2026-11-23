@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
-import { RouteTracker } from "@/app/data-sources/SourcesAccordion";
+import RouteTracker from "@/components/RouteTracker";
 import AppSidebar from "./AppSidebar";
 import EmailVerifyBanner from "./EmailVerifyBanner";
 import PageTransitionBar from "./PageTransitionBar";

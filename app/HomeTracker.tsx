@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 
 export interface HomeTrackerHero {
   id: number;
@@ -590,7 +591,16 @@ export default function HomeTracker({
     });
   };
 
-  const clearRecent = () => {
+  const { confirm, modal: confirmModal } = useConfirm();
+
+  const clearRecent = async () => {
+    const ok = await confirm({
+      title: "Limpar pesquisas recentes?",
+      description: "O histórico de pesquisas rápidas salvo neste navegador será apagado.",
+      confirmLabel: "Limpar",
+      tone: "warning",
+    });
+    if (!ok) return;
     setRecent([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -893,7 +903,7 @@ export default function HomeTracker({
                     </span>
                     <button
                       type="button"
-                      onClick={clearRecent}
+                      onClick={() => void clearRecent()}
                       className="text-[10px] font-semibold text-neutral-500 hover:text-rose-400 cursor-pointer"
                     >
                       Limpar
@@ -1536,6 +1546,7 @@ export default function HomeTracker({
           )}
         </div>
       </div>
+      {confirmModal}
     </section>
   );
 }

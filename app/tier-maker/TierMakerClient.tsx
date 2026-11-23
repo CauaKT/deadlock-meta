@@ -4,7 +4,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties, type DragEvent } from "react";
-import type { MakerHero } from "@/app/TierMaker";
+import { useConfirm } from "@/components/ui/ConfirmModal";
+import type { MakerHero } from "@/app/tiers";
 import {
   createTierList,
   deleteTierList,
@@ -52,6 +53,7 @@ export default function TierMakerClient({
   heroes: MakerHero[];
   metaTiers: Record<string, number[]>;
 }) {
+  const { confirm, modal } = useConfirm();
   const pathname = usePathname();
   const tab: "builder" | "community" = pathname.startsWith("/tier-maker/comunidade") ? "community" : "builder";
   // Troca só a URL, sem remontar o editor: o quadro em montagem não se perde ao ver a Comunidade
@@ -287,11 +289,19 @@ export default function TierMakerClient({
     setBoard((prev) => ({ ...prev, [newId]: [] }));
   };
 
-  const deleteTier = (tierId: string) => {
+  const deleteTier = async (tierId: string) => {
     if (tiers.length <= 1) {
       setFeedback({ type: "error", text: "A tier list precisa ter pelo menos uma categoria." });
       return;
     }
+    const tierLabel = tiers.find((t) => t.id === tierId)?.label.trim() || "este tier";
+    const ok = await confirm({
+      title: `Remover tier "${tierLabel}"?`,
+      description: "Os heróis desta linha voltarão para a bandeja de seleção.",
+      confirmLabel: "Remover",
+      tone: "warning",
+    });
+    if (!ok) return;
     const heroesToFree = board[tierId] || [];
 
     setBoard((prev) => {
@@ -346,7 +356,14 @@ export default function TierMakerClient({
     setBoard(next);
   };
 
-  const clearBoard = () => {
+  const clearBoard = async () => {
+    const ok = await confirm({
+      title: "Limpar tabuleiro?",
+      description: "Todos os heróis posicionados nos tiers voltarão para a bandeja.",
+      confirmLabel: "Limpar",
+      tone: "warning",
+    });
+    if (!ok) return;
     setBoard(createEmptyBoard(heroes, tiers));
   };
 
@@ -486,7 +503,16 @@ export default function TierMakerClient({
 
   const deletePublished = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Deseja excluir esta tier list permanentemente?")) return;
+    const target = publishedLists.find((l) => l.id === id);
+    const ok = await confirm({
+      title: "Excluir tier list?",
+      description: target
+        ? `A tier list "${target.title}" será removida permanentemente da galeria.`
+        : "Esta tier list será removida permanentemente da galeria.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
 
     const res = await deleteTierList(id);
     if (!res.ok) {
@@ -739,7 +765,7 @@ export default function TierMakerClient({
               {/* Limpar */}
               <button
                 type="button"
-                onClick={clearBoard}
+                onClick={() => void clearBoard()}
                 className="group inline-flex items-center gap-1.5 rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-400 shadow transition-all duration-150 hover:border-rose-500/70 hover:bg-rose-950/30 hover:text-rose-300 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <svg
@@ -937,7 +963,7 @@ export default function TierMakerClient({
                       title="Remover este tier (heróis voltam para a bandeja)"
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteTier(tier.id);
+                        void deleteTier(tier.id);
                       }}
                       className="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-rose-950/60 hover:text-rose-400 transition-colors"
                     >
@@ -1230,6 +1256,7 @@ export default function TierMakerClient({
           )}
         </div>
       )}
+      {modal}
     </div>
   );
 }

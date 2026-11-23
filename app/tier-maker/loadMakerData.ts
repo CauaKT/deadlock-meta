@@ -1,16 +1,17 @@
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchWikiColors, extractColor, TIER_THRESHOLDS, PATCHES } from "@/lib/deadlock";
-import type { MakerHero } from "@/app/TierMaker";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchWikiColors, extractColor, TIER_THRESHOLDS, fetchPatches, MIN_HERO_MATCHES } from "@/lib/deadlock";
+import type { MakerHero } from "@/app/tiers";
 
-const MIN_MATCHES = 1000;
+const MIN_MATCHES = MIN_HERO_MATCHES;
 
 export async function loadMakerData(): Promise<{
   makerHeroes: MakerHero[];
   metaTiers: Record<string, number[]>;
 }> {
+  const patches = await fetchPatches();
   const [heroesMap, wikiColors, stats] = await Promise.all([
     fetchHeroesAssets(),
     fetchWikiColors(),
-    fetchHeroesAnalytics(PATCHES[0].since),
+    fetchHeroesAnalytics(patches[0].since),
   ]);
 
   const statsById = new Map(stats.map((s) => [s.hero_id, s]));

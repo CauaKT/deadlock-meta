@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 import SourcesAccordion, { BackButton } from "./SourcesAccordion";
 
 export const instant = false;

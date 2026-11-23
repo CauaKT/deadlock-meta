@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 export interface PatchHeroDelta {
   id: number;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 import {
   deleteAdminUser,
   deleteTierList,
@@ -20,6 +21,7 @@ const accountLabel = (u: AdminUserItem) =>
   u.profile?.username ? `${u.profile.username} (${u.email})` : u.email;
 
 export default function AdminClient({ currentUserId }: { currentUserId: string }) {
+  const { confirm, modal } = useConfirm();
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -58,9 +60,13 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
   };
 
   const handleDeleteUser = async (u: AdminUserItem) => {
-    if (!window.confirm(`Tem certeza que deseja apagar permanentemente a conta ${accountLabel(u)}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Apagar conta permanentemente?",
+      description: `A conta ${accountLabel(u)} e seus dados vinculados serão removidos de forma irreversível.`,
+      confirmLabel: "Apagar conta",
+      tone: "danger",
+    });
+    if (!ok) return;
     setDeletingUserId(u.id);
     setFeedback(null);
     const res = await deleteAdminUser(u.id);
@@ -74,6 +80,13 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
   };
 
   const handleDeleteTierList = async (tl: TierListItem) => {
+    const ok = await confirm({
+      title: "Excluir tier list?",
+      description: `A tier list "${tl.title}" será removida permanentemente da comunidade.`,
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
     setFeedback(null);
     const res = await deleteTierList(tl.id);
     if (!res.ok) {
@@ -285,6 +298,7 @@ export default function AdminClient({ currentUserId }: { currentUserId: string }
           ))}
         </div>
       </section>
+      {modal}
     </div>
   );
 }

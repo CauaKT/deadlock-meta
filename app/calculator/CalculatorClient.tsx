@@ -1,9 +1,10 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 export interface CalcHero {
   id: number;
@@ -60,6 +61,7 @@ function parseStatNumber(raw: string): { num: number; isPercent: boolean; unit: 
 }
 
 export default function CalculatorClient({ heroes, items }: Props) {
+  const { confirm, modal } = useConfirm();
   const [selectedHeroId, setSelectedHeroId] = useState<number | "">(heroes[0]?.id ?? "");
   const [equipped, setEquipped] = useState<ShopItem[]>([]);
   const [slotFilter, setSlotFilter] = useState<ItemSlot | "all">("all");
@@ -348,7 +350,15 @@ export default function CalculatorClient({ heroes, items }: Props) {
             {equipped.length > 0 && (
               <button
                 type="button"
-                onClick={() => setEquipped([])}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Limpar todos os itens?",
+                    description: "Todos os itens equipados na simulação atual serão removidos.",
+                    confirmLabel: "Limpar tudo",
+                    tone: "warning",
+                  });
+                  if (ok) setEquipped([]);
+                }}
                 className="text-[11px] font-bold text-rose-400 hover:text-rose-300 cursor-pointer"
               >
                 Limpar tudo
@@ -560,6 +570,7 @@ export default function CalculatorClient({ heroes, items }: Props) {
           y={tip.y}
         />
       )}
+      {modal}
     </div>
   );
 }

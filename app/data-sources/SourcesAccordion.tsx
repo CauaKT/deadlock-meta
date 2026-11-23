@@ -204,8 +204,6 @@ export default function SourcesAccordion() {
   );
 }
 
-import { usePathname } from "next/navigation";
-
 const KNOWN_ROUTES: Record<string, string> = {
   "/": "a Tier List",
   "/heroes": "Heróis",
@@ -217,19 +215,6 @@ const KNOWN_ROUTES: Record<string, string> = {
   "/feed": "o Feed",
   "/profile": "o Perfil",
 };
-
-// Componente invisível que registra a última aba ativa da SPA
-export function RouteTracker() {
-  const pathname = usePathname();
-  useEffect(() => {
-    if (pathname && pathname !== "/data-sources") {
-      try {
-        sessionStorage.setItem("lockpro_last_path", pathname + window.location.search);
-      } catch {}
-    }
-  }, [pathname]);
-  return null;
-}
 
 export function BackButton() {
   const [targetLabel, setTargetLabel] = useState("a Tier List");

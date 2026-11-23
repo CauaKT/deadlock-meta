@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState, useRef, useEffect, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { RankFilterOption } from "@/lib/deadlock";
+import { DEFAULT_RANK_ID, type RankFilterOption } from "@/lib/deadlock";
 
 interface Props {
   ranks: RankFilterOption[];
@@ -39,7 +39,7 @@ export default function RankSelect({ ranks, selected }: Props) {
     setOpen(false);
     if (id === selected) return;
     const params = new URLSearchParams(searchParams.toString());
-    if (id === "all") {
+    if (id === DEFAULT_RANK_ID) {
       params.delete("rank");
     } else {
       params.set("rank", id);
@@ -56,13 +56,6 @@ export default function RankSelect({ ranks, selected }: Props) {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5">
-        <span className="font-deadlock text-[10px] sm:text-[11px] font-black uppercase tracking-[0.16em] text-[#8b9a96]">
-          Faixa de Patente
-        </span>
-        <span className="flex h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-      </div>
-
       <button
         type="button"
         disabled={isPending}
@@ -78,21 +71,8 @@ export default function RankSelect({ ranks, selected }: Props) {
         }`}
       >
         <div className="pointer-events-none absolute left-3 flex items-center">
-          {currentRank?.icon ? (
-            <img src={currentRank.icon} alt="" className="h-5 w-5 object-contain" />
-          ) : (
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="h-4 w-4 text-amber-500/80"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
-            </svg>
+          {currentRank?.icon && (
+            <img src={currentRank.icon} alt="" className="h-6 w-6 object-contain" />
           )}
         </div>
 
@@ -147,23 +127,13 @@ export default function RankSelect({ ranks, selected }: Props) {
                 }`}
               >
                 <span className="flex items-center gap-2.5 min-w-0">
-                  {r.icon ? (
-                    <img src={r.icon} alt="" className="h-5 w-5 shrink-0 object-contain" />
-                  ) : (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-amber-400">
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
-                      </svg>
-                    </span>
+                  {r.icon && (
+                    <img src={r.icon} alt="" className="h-6 w-6 shrink-0 object-contain" />
                   )}
                   <span className="font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider truncate">
                     {r.label}
                   </span>
                 </span>
-
-                {isSelected && (
-                  <span className="ml-2 flex h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.9)]" />
-                )}
               </button>
             );
           })}

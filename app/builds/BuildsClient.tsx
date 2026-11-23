@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useConfirm } from "@/components/ui/ConfirmModal";
 import {
   createBuild,
   deleteBuild,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/backend/client";
 import type { AuthUser, BuildPhases, CommunityBuildItem } from "@/lib/backend/types";
 import type { ItemSlot, ShopItem } from "@/lib/deadlock";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 export interface BuildHeroOption {
   id: number;
@@ -39,6 +40,7 @@ const PHASES: Array<{ key: PhaseKey; label: string; hint: string }> = [
 const EMPTY_PHASES: BuildPhases = { early: [], mid: [], late: [], situational: [] };
 
 export default function BuildsClient({ heroes, items }: Props) {
+  const { confirm, modal } = useConfirm();
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const initialHeroParam = searchParams.get("heroId");
@@ -160,7 +162,14 @@ export default function BuildsClient({ heroes, items }: Props) {
     setFeedback({ type: "success", text: "Build publicada na comunidade!" });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, buildTitle: string) => {
+    const ok = await confirm({
+      title: "Excluir build?",
+      description: `A build "${buildTitle}" será removida permanentemente da comunidade.`,
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
     const res = await deleteBuild(id);
     if (!res.ok) {
       setFeedback({ type: "error", text: res.message });
@@ -463,7 +472,7 @@ export default function BuildsClient({ heroes, items }: Props) {
                       {b.canDelete && (
                         <button
                           type="button"
-                          onClick={() => handleDelete(b.id)}
+                          onClick={() => void handleDelete(b.id, b.title)}
                           className="rounded-[4px] border border-rose-500/40 px-2 py-1 text-[11px] font-bold text-rose-400 hover:bg-rose-500/10 cursor-pointer"
                         >
                           Excluir
@@ -477,6 +486,7 @@ export default function BuildsClient({ heroes, items }: Props) {
           </div>
         )}
       </section>
+      {modal}
     </div>
   );
 }

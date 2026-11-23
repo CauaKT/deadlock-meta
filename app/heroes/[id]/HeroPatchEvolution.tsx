@@ -222,7 +222,7 @@ export default function HeroPatchEvolution({
           })}
 
           {/* Pontos e Rótulos Visuais */}
-          {points.map((p, i) => {
+          {points.map((p) => {
             const isSelected = active.patchId === p.patchId;
             return (
               <g

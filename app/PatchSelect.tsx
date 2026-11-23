@@ -51,14 +51,6 @@ export default function PatchSelect({ patches, selected }: Props) {
         </div>
       )}
 
-      {/* Rótulo superior alinhado com a tipografia do Deadlock */}
-      <div className="flex items-center gap-1.5">
-        <span className="font-deadlock text-[10px] sm:text-[11px] font-black uppercase tracking-[0.16em] text-[#8b9a96]">
-          Dados do Patch
-        </span>
-        <span className="flex h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-      </div>
-
       {/* Botão Gatilho Estilizado no padrão Deadlock */}
       <button
         type="button"
@@ -74,25 +66,8 @@ export default function PatchSelect({ patches, selected }: Props) {
               : "border-neutral-700/80 hover:border-amber-500/70 hover:shadow-[0_0_18px_rgba(245,158,11,0.22)] focus-visible:border-amber-500"
         }`}
       >
-        {/* Ícone de Relógio/Histórico de Patch à esquerda */}
-        <div className="pointer-events-none absolute left-3.5 flex items-center text-amber-500/80 transition-colors group-hover:text-amber-400">
-          <svg
-            aria-hidden
-            viewBox="0 0 16 16"
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="8" cy="8" r="6.5" />
-            <path d="M8 4.5v3.8l2.5 1.5" />
-          </svg>
-        </div>
-
         {/* Texto do Patch Centralizado */}
-        <span className="font-deadlock w-full py-2.5 pl-10 pr-10 text-center text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
+        <span className="font-deadlock w-full py-2.5 pl-9 pr-9 text-center text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
           {currentPatch?.label}
         </span>
 
@@ -147,10 +122,6 @@ export default function PatchSelect({ patches, selected }: Props) {
                 <span className="font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider truncate">
                   {p.label}
                 </span>
-
-                {isSelected && (
-                  <span className="ml-2 flex h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.9)]" />
-                )}
               </button>
             );
           })}

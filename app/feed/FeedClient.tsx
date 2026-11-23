@@ -2,7 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useState } from "react";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import { useConfirm } from "@/components/ui/ConfirmModal";
+import SlantFrame from "@/components/ui/SlantFrame";
 import {
   createFeedComment,
   createFeedPost,
@@ -57,6 +58,7 @@ export default function FeedClient({
   initialFeed: FeedResponse;
   initialUser: AuthUser | null;
 }) {
+  const { confirm, modal } = useConfirm();
   const [posts, setPosts] = useState<FeedPost[]>(initialFeed.items);
   const [page, setPage] = useState(initialFeed.page);
   const [hasMore, setHasMore] = useState(initialFeed.hasMore);
@@ -91,6 +93,13 @@ export default function FeedClient({
   };
 
   const handleDeletePost = async (id: string) => {
+    const confirmed = await confirm({
+      title: "Excluir publicação?",
+      description: "A publicação e todos os comentários nela serão removidos permanentemente.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const { ok, error: err } = await deleteFeedPost(id);
     if (!ok) {
       setError(err ?? "Não foi possível excluir.");
@@ -138,6 +147,13 @@ export default function FeedClient({
   };
 
   const handleDeleteComment = async (postId: string, commentId: string) => {
+    const confirmed = await confirm({
+      title: "Excluir comentário?",
+      description: "Este comentário será removido permanentemente da publicação.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const { ok, error: err } = await deleteFeedComment(commentId);
     if (!ok) {
       setError(err ?? "Não foi possível excluir o comentário.");
@@ -390,6 +406,7 @@ export default function FeedClient({
           )}
         </div>
       )}
+      {modal}
     </div>
   );
 }

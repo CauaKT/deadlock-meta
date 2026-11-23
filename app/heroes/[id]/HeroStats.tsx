@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { HeroWeapon } from "@/lib/deadlock";
-import SlantFrame, { type Slant } from "./SlantFrame";
+import SlantFrame, { type Slant } from "@/components/ui/SlantFrame";
 
 const MAX_BOONS = 35;
 

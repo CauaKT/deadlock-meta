@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import { useConfirm } from "@/components/ui/ConfirmModal";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 const COMPARE_STORAGE_KEY = "lp_compare_last";
 const RECENT_PROFILES_KEY = "lp_recent_compare_profiles";
@@ -259,6 +260,7 @@ export default function CompareClient({
   initialA?: string;
   initialB?: string;
 }) {
+  const { confirm, modal } = useConfirm();
   const router = useRouter();
   const heroMap = new Map(heroes.map((h) => [h.id, h]));
 
@@ -705,10 +707,17 @@ export default function CompareClient({
                 </span>
                 <button
                   type="button"
-                  onMouseDown={(e) => {
+                  onMouseDown={async (e) => {
                     e.preventDefault();
-                    setRecentProfiles([]);
                     setActiveDropdown(null);
+                    const ok = await confirm({
+                      title: "Limpar perfis recentes?",
+                      description: "A lista de perfis recentes do comparador será removida deste navegador.",
+                      confirmLabel: "Limpar",
+                      tone: "warning",
+                    });
+                    if (!ok) return;
+                    setRecentProfiles([]);
                     try {
                       localStorage.removeItem(RECENT_PROFILES_KEY);
                     } catch {}
@@ -1188,6 +1197,7 @@ export default function CompareClient({
           </div>
         </div>
       )}
+      {modal}
     </div>
   );
 }

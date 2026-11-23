@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { CommunityBuildItem } from "@/lib/backend/types";
 import type { ShopItem } from "@/lib/deadlock";
-import SlantFrame from "@/app/heroes/[id]/SlantFrame";
+import SlantFrame from "@/components/ui/SlantFrame";
 
 interface Props {
   build: CommunityBuildItem;

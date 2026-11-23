@@ -84,16 +84,6 @@ function getEntryTier(entry: LeaderboardEntry): number {
   return 0;
 }
 
-function getEntrySubrank(entry: LeaderboardEntry): number {
-  if (typeof entry.rankedSubrank === "number" && entry.rankedSubrank >= 1) {
-    return entry.rankedSubrank;
-  }
-  if (typeof entry.badgeLevel === "number" && entry.badgeLevel >= 11) {
-    return entry.badgeLevel % 10;
-  }
-  return 0;
-}
-
 function formatRankInfo(entry: LeaderboardEntry): { tier: number; label: string; iconUrl: string } {
   let tier = entry.rankedRank;
   let sub = entry.rankedSubrank;
@@ -298,7 +288,6 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
     window.history.replaceState(null, "", nextUrl);
   }, [region, heroIdsKey, selectedTier, page, sortBy]);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -364,7 +353,6 @@ export default function LeaderboardClient({ heroes }: { heroes: LeaderboardHeroO
             setTotalPages(
               typeof data.totalPages === "number" && data.totalPages > 0 ? data.totalPages : 1,
             );
-            setFetchedAt(data.fetchedAt ?? null);
             setError(null);
             setLoading(false);
           }

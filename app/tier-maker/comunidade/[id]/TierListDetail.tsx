@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { MakerHero } from "@/app/TierMaker";
+import type { MakerHero } from "@/app/tiers";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import { getTierListById } from "@/lib/backend/client";
 import type { TierListItem } from "@/lib/backend/types";

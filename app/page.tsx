@@ -3,7 +3,7 @@ import {
   fetchHeroesAnalytics,
   fetchHeroesAssets,
   fetchShopItems,
-  PATCHES,
+  fetchPatches,
   TIER_THRESHOLDS,
 } from "@/lib/deadlock";
 import HomeTracker, {
@@ -31,7 +31,8 @@ function calcTier(winRate: number): string {
 }
 
 export default async function Home() {
-  const datedPatches = PATCHES.filter((p) => typeof p.since === "number");
+  const patches = await fetchPatches();
+  const datedPatches = patches.filter((p) => typeof p.since === "number");
   const currentPatch = datedPatches[0];
   const prevPatch = datedPatches[1];
 

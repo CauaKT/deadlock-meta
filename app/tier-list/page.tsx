@@ -1,12 +1,10 @@
 // app/page.tsx
 /* eslint-disable @next/next/no-img-element */
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, PATCHES, RANK_FILTERS } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, MergedHero, TIER_THRESHOLDS, fetchPatches, resolvePatchWindow, minMatchesForRank, RANK_FILTERS, DEFAULT_RANK_ID } from "@/lib/deadlock";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import PatchSelect from "@/app/PatchSelect";
 import RankSelect from "@/app/RankSelect";
-import TierListTabs from "@/app/TierListTabs";
-import type { MakerHero } from "@/app/TierMaker";
 import { TIERS, TIER_BY_KEY, type TierKey } from "@/app/tiers";
 import fs from "fs";
 import path from "path";
@@ -27,11 +25,10 @@ function calculateTier(winRate: number): TierKey {
   return "F";
 }
 
-const MIN_MATCHES = 1000;
-const TAG_ROTATIONS = ["-rotate-[3deg] sm:-rotate-[4deg]", "rotate-[3deg] sm:rotate-[4deg]", "-rotate-[2deg] sm:-rotate-[3deg]"];
-
 const heroesDir = path.join(process.cwd(), "public", "heroes");
 const localHeroFiles = fs.existsSync(heroesDir) ? fs.readdirSync(heroesDir) : [];
+
+const TAG_TILTS = ["-rotate-[3deg]", "rotate-[3deg]", "-rotate-[2deg]"];
 
 const fmt = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -41,14 +38,14 @@ export default async function Home({
 }: {
   searchParams: Promise<{ patch?: string; rank?: string }>;
 }) {
-  const { patch: patchParam, rank: rankParam } = await searchParams;
-  const selectedPatch = PATCHES.find((p) => p.id === patchParam) ?? PATCHES[0];
-  const selectedRank = RANK_FILTERS.find((r) => r.id === rankParam) ?? RANK_FILTERS[0];
-  const minMatchesForRank =
-    selectedRank.tier >= 9 ? 100 : selectedRank.tier >= 1 ? 300 : MIN_MATCHES;
-  const selectedIndex = PATCHES.findIndex((p) => p.id === selectedPatch.id);
-  const patchUntil =
-    selectedPatch.since && selectedIndex > 0 ? PATCHES[selectedIndex - 1].since : undefined;
+  const [{ patch: patchParam, rank: rankParam }, patches] = await Promise.all([
+    searchParams,
+    fetchPatches(),
+  ]);
+  const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
+  const defaultRank = RANK_FILTERS.find((r) => r.id === DEFAULT_RANK_ID) ?? RANK_FILTERS[0];
+  const selectedRank = RANK_FILTERS.find((r) => r.id === rankParam) ?? defaultRank;
+  const minMatches = minMatchesForRank(selectedRank.tier);
   const [heroesMap, stats, blurbs, wikiColors] = await Promise.all([
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil, selectedRank.minBadge),
@@ -120,7 +117,7 @@ export default async function Home({
         tier,
       };
     })
-    .filter((h) => h.matches >= minMatchesForRank && !h.name.startsWith("hero_"))
+    .filter((h) => h.matches >= minMatches && !h.name.startsWith("hero_"))
     .sort((a, b) => b.winRate - a.winRate);
 
   const heroesByTier = TIERS.reduce((acc, tier) => {
@@ -128,43 +125,25 @@ export default async function Home({
     return acc;
   }, {} as Record<TierKey, (MergedHero & { tier: TierKey })[]>);
 
-  // Montador: apenas heróis lançados (com partidas registradas ou liberados na API)
-  const statsById = new Map(stats.map((s) => [s.hero_id, s]));
-  const makerHeroes: MakerHero[] = Object.values(heroesMap)
-    .filter((h) => {
-      if (extractColor(h, wikiColors) === null || h.name.startsWith("hero_")) return false;
-      const st = statsById.get(h.id);
-      return (
-        (st?.matches ?? 0) > 0 ||
-        (h.player_selectable === true && h.disabled !== true && h.in_development !== true)
-      );
-    })
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .map((h) => ({
-      id: h.id,
-      name: h.name,
-      image: h.images?.icon_hero_card || h.images?.icon_image_small || h.images?.minimap_image || "",
-      rgb: extractColor(h, wikiColors),
-    }));
-  const metaTiers = Object.fromEntries(
-    TIERS.map((t) => [t.key, heroesByTier[t.key].map((h) => h.id)]),
-  ) as Record<TierKey, number[]>;
+  const totalMatches = Math.round(
+    stats.reduce((sum, s) => sum + (s.matches || 0), 0) / 12,
+  );
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10">
-      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#f4efe6]">
-            Deadlock <span className="text-amber-500">Tier List</span>
-          </h1>
-          <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-2">
-            A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2.5 shrink-0">
+      <header className="mb-6 space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#f4efe6]">
+              Deadlock <span className="text-amber-500">Tier List</span>
+            </h1>
+            <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-1.5">
+              A hierarquia das almas na Cidade Amaldiçoada. Desempenho e domínio ritualístico calculados a partir dos dados da Deadlock API.
+            </p>
+          </div>
           <Link
             href="/tier-maker"
-            className="group relative inline-flex items-center gap-2 overflow-hidden rounded-[5px] border border-amber-300/70 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_14px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_22px_rgba(245,158,11,0.6)] active:scale-[0.98]"
+            className="group relative inline-flex w-fit shrink-0 items-center gap-2 overflow-hidden rounded-[5px] border border-amber-300/70 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_14px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_22px_rgba(245,158,11,0.6)] active:scale-[0.98]"
           >
             <span className="relative z-10 flex items-center gap-2 leading-none">
               <span>TierMaker</span>
@@ -182,13 +161,19 @@ export default async function Home({
               </svg>
             </span>
           </Link>
-          <div className="flex flex-wrap items-end justify-end gap-3">
-            <RankSelect ranks={RANK_FILTERS} selected={selectedRank.id} />
-            <PatchSelect
-              patches={PATCHES.map(({ id, label }) => ({ id, label }))}
-              selected={selectedPatch.id}
-            />
-          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+          <RankSelect ranks={RANK_FILTERS} selected={selectedRank.id} />
+          <PatchSelect
+            patches={patches.map(({ id, label }) => ({ id, label }))}
+            selected={selectedPatch.id}
+          />
+          {totalMatches > 0 && (
+            <span className="text-xs font-medium text-neutral-400">
+              {totalMatches.toLocaleString("pt-BR")} partidas analisadas
+            </span>
+          )}
         </div>
       </header>
       
@@ -302,12 +287,14 @@ export default async function Home({
                                 ].map(
                                   (row, rowIndex) =>
                                     row.length > 0 && (
-                                      <div key={rowIndex} className="flex gap-1">
-                                        {row.map((tag) => (
+                                      <div key={rowIndex} className="flex gap-1.5">
+                                        {row.map((tag, tagIndex) => (
                                           <span
                                             key={tag}
                                             style={tagColors(hero.rgb)}
-                                            className="font-deadlock shrink-0 px-2 py-0.5 font-black text-[10px] tracking-wider uppercase shadow -skew-x-6"
+                                            className={`font-deadlock shrink-0 px-2 py-0.5 font-black text-[10px] tracking-wider uppercase shadow -skew-x-6 ${
+                                              TAG_TILTS[(rowIndex * 2 + tagIndex) % TAG_TILTS.length]
+                                            }`}
                                           >
                                             {tag}
                                           </span>
@@ -332,14 +319,14 @@ export default async function Home({
                             </p>
                           </div>
                         </div>
-                        <div className="relative z-20 w-24 text-center">
-                          <div className="hero-tip-stat hero-tip-stat-hero py-1 px-1">
-                            <p className="text-[9px] text-[rgb(var(--hc)/0.8)] uppercase font-bold">
-                              Jogos
-                            </p>
-                            <p className="font-deadlock text-sm leading-tight font-black text-[rgb(var(--hc))]">
+                        <div className="relative z-20 flex items-center">
+                          <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
+                            <span className="font-deadlock text-xs font-black text-[#f4efe6]">
                               {fmt(hero.matches)}
-                            </p>
+                            </span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                              Partidas
+                            </span>
                           </div>
                         </div>
                       </div>

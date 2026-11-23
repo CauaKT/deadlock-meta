@@ -269,22 +269,141 @@ export interface Patch {
 // do post da Valve no Steam; os que só têm dia usam 00:00 UTC desse dia, então
 // podem incluir algumas horas de partidas anteriores ao patch.
 export const PATCHES: Patch[] = [
-  { id: "halloween-2026", label: "Halloween + Gameplay Update (30/10/2026)", since: 1793393460 },
-  { id: "minor-10-14", label: "Minor Update 14/10/2026", since: 1792033860 },
-  { id: "minor-10-05", label: "Minor Update 05/10/2026", since: 1791241500 },
-  { id: "city-never-sleeps", label: "City Never Sleeps (29/09/2026)", since: 1790713511 },
-  { id: "minor-09-16", label: "Minor Update 16/09/2026", since: 1789516800 },
-  { id: "minor-08-22", label: "Minor Update 22/08/2026", since: 1787356800 },
-  { id: "ranked-season-1", label: "Matchmaking Update / Ranked Season 1 (30/07/2026)", since: 1785430800 },
-  { id: "minor-06-04", label: "Minor Update 04/06/2026", since: 1780531200 },
-  { id: "update-05-22", label: "Atualização 22/05/2026", since: 1779408000 },
-  { id: "update-04-30", label: "Atualização 30/04/2026", since: 1777507200 },
-  { id: "update-03-21", label: "Atualização 21/03/2026", since: 1774051200 },
-  { id: "update-03-06", label: "Atualização 06/03/2026", since: 1772833020 },
-  { id: "update-01-30", label: "Atualização 30/01/2026", since: 1769731200 },
-  { id: "old-gods-new-blood", label: "Old Gods, New Blood (22/01/2026)", since: 1769122593 },
-  { id: "default", label: "Últimos 30 dias (padrão da API)" },
+  { id: "minor-2026-11-04", label: "04/11/2026 - Minor Update", since: 1793854950 },
+  { id: "halloween-2026", label: "30/10/2026 - Halloween + Gameplay", since: 1793393460 },
+  { id: "minor-10-14", label: "14/10/2026 - Minor Update", since: 1792033860 },
+  { id: "minor-10-05", label: "05/10/2026 - Minor Update", since: 1791241500 },
+  { id: "city-never-sleeps", label: "29/09/2026 - City Never Sleeps", since: 1790713511 },
+  { id: "minor-09-16", label: "16/09/2026 - Minor Update", since: 1789516800 },
+  { id: "minor-08-22", label: "22/08/2026 - Minor Update", since: 1787356800 },
+  { id: "ranked-season-1", label: "30/07/2026 - Ranked Season 1", since: 1785430800 },
+  { id: "minor-06-04", label: "04/06/2026 - Minor Update", since: 1780531200 },
+  { id: "update-05-22", label: "22/05/2026 - Minor Update", since: 1779408000 },
+  { id: "update-04-30", label: "30/04/2026 - Minor Update", since: 1777507200 },
+  { id: "update-03-21", label: "21/03/2026 - Minor Update", since: 1774051200 },
+  { id: "update-03-06", label: "06/03/2026 - Minor Update", since: 1772833020 },
+  { id: "update-01-30", label: "30/01/2026 - Minor Update", since: 1769731200 },
+  { id: "old-gods-new-blood", label: "22/01/2026 - Old Gods, New Blood", since: 1769122593 },
+  { id: "update-2025-12-29", label: "29/12/2025 - Minor Update", since: 1766966400 },
+  { id: "update-2025-12-16", label: "16/12/2025 - Minor Update", since: 1765843200 },
+  { id: "update-2025-11-21", label: "21/11/2025 - Minor Update", since: 1763683200 },
+  { id: "update-2025-10-24", label: "24/10/2025 - Minor Update", since: 1761264000 },
+  { id: "update-2025-10-02", label: "02/10/2025 - Minor Update", since: 1759363200 },
+  { id: "update-2025-09-04", label: "04/09/2025 - Minor Update", since: 1756944000 },
+  { id: "update-2025-08-18", label: "18/08/2025 - Minor Update", since: 1755475200 },
+  { id: "update-2025-07-29", label: "29/07/2025 - Minor Update", since: 1753747200 },
+  { id: "shop-rework-2025", label: "08/05/2025 - Shop Rework Update", since: 1746732792 },
+  { id: "map-rework-2025", label: "25/02/2025 - Map Rework Update", since: 1740520159 },
+  { id: "four-heroes-2025", label: "17/01/2025 - Holliday, Vyper, Calico & Sinclair", since: 1737139201 },
+  { id: "winter-visual-2024", label: "17/12/2024 - Winter Visual Update", since: 1734468800 },
+  { id: "update-2024-12-06", label: "06/12/2024 - Minor Update", since: 1733516709 },
+  { id: "update-2024-11-07", label: "07/11/2024 - Minor Update", since: 1731027988 },
+  { id: "update-2024-10-24", label: "24/10/2024 - Minor Update", since: 1729814181 },
 ];
+
+const PATCH_TITLE_REGEX =
+  /update|ranked|season|city never sleeps|old gods|rework|six new heroes|holliday|halloween/i;
+
+function formatSteamPatch(unixSec: number, rawTitle: string): { id: string; label: string } {
+  const mdy = rawTitle.match(/(\d{2})-(\d{2})-(\d{4})/);
+  let dateLabel: string;
+  let isoKey: string;
+
+  if (mdy) {
+    const [, mm, dd, yyyy] = mdy;
+    dateLabel = `${dd}/${mm}/${yyyy}`;
+    isoKey = `${yyyy}-${mm}-${dd}`;
+  } else {
+    const d = new Date(unixSec * 1000);
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const yyyy = String(d.getUTCFullYear());
+    dateLabel = `${dd}/${mm}/${yyyy}`;
+    isoKey = `${yyyy}-${mm}-${dd}`;
+  }
+
+  let cleanName = rawTitle
+    .replace(/\s*-\s*\d{2}-\d{2}-\d{4}\s*/g, " ")
+    .replace(/^\d{2}-\d{2}-\d{4}\s*Update$/i, "Minor Update")
+    .replace(/\b20\d{2}\b\s*\+\s*/g, "+ ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/^halloween \+ gameplay update$/i.test(cleanName)) {
+    cleanName = "Halloween + Gameplay";
+  } else if (/^ranked\s*-\s*beta season/i.test(cleanName)) {
+    cleanName = cleanName.replace(/\s*-\s*/, " ");
+  } else if (!cleanName) {
+    cleanName = "Minor Update";
+  }
+
+  const slug = cleanName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 24);
+
+  return {
+    id: `${slug || "patch"}-${isoKey}`,
+    label: `${dateLabel} - ${cleanName}`,
+  };
+}
+
+export async function fetchPatches(): Promise<Patch[]> {
+  try {
+    const res = await fetch(
+      "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1422450&count=100&feeds=steam_community_announcements",
+      { next: { revalidate: 3600 } },
+    );
+    if (!res.ok) return PATCHES;
+    const json = (await res.json()) as {
+      appnews?: { newsitems?: Array<{ title?: string; date?: number }> };
+    };
+    const items = json?.appnews?.newsitems;
+    if (!Array.isArray(items) || items.length === 0) return PATCHES;
+
+    const merged: Patch[] = [...PATCHES];
+    const ONE_DAY = 86400;
+
+    for (const item of items) {
+      const title = item.title?.trim() ?? "";
+      const date = Number(item.date ?? 0);
+      if (!title || !Number.isFinite(date) || date <= 0) continue;
+      if (!PATCH_TITLE_REGEX.test(title)) continue;
+
+      const tooClose = merged.some(
+        (existing) => typeof existing.since === "number" && Math.abs(existing.since - date) < ONE_DAY,
+      );
+      if (tooClose) continue;
+
+      const formatted = formatSteamPatch(date, title);
+      merged.push({ id: formatted.id, label: formatted.label, since: date });
+    }
+
+    return merged.sort((a, b) => (b.since ?? 0) - (a.since ?? 0));
+  } catch {
+    return PATCHES;
+  }
+}
+
+export const MIN_HERO_MATCHES = 1000;
+
+export function minMatchesForRank(tier: number): number {
+  if (tier >= 9) return 100;
+  if (tier >= 1) return 300;
+  return MIN_HERO_MATCHES;
+}
+
+export function resolvePatchWindow(
+  patches: Patch[],
+  patchId?: string,
+): { selectedPatch: Patch; patchUntil: number | undefined } {
+  const selectedPatch = patches.find((p) => p.id === patchId) ?? patches[0];
+  const selectedIndex = patches.findIndex((p) => p.id === selectedPatch.id);
+  const patchUntil =
+    selectedPatch.since && selectedIndex > 0 ? patches[selectedIndex - 1].since : undefined;
+  return { selectedPatch, patchUntil };
+}
 
 export interface RankFilterOption {
   id: string;
@@ -295,7 +414,7 @@ export interface RankFilterOption {
 }
 
 export const RANK_FILTERS: RankFilterOption[] = [
-  { id: "all", tier: 0, label: "Todas as Patentes" },
+  { id: "all", tier: 0, label: "Todas as Patentes", icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank00_lg.png" },
   { id: "1", tier: 1, label: "Iniciado+", minBadge: 11, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank01_lg.png" },
   { id: "2", tier: 2, label: "Aspirante+", minBadge: 21, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank02_lg.png" },
   { id: "3", tier: 3, label: "Acólito+", minBadge: 31, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank03_lg.png" },
@@ -308,6 +427,8 @@ export const RANK_FILTERS: RankFilterOption[] = [
   { id: "10", tier: 10, label: "Ascendente+", minBadge: 101, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank10_lg.png" },
   { id: "11", tier: 11, label: "Eterno", minBadge: 111, icon: "https://assets-bucket.deadlock-api.com/assets-api-res/images/ranks/rank11_lg.png" },
 ];
+
+export const DEFAULT_RANK_ID = "7";
 
 export async function fetchHeroesAnalytics(
   minUnixTimestamp?: number,
@@ -1073,7 +1194,8 @@ export interface PatchWinRatePoint {
 
 // Coleta o desempenho do herói ao longo dos últimos patches cronológicos
 export async function fetchHeroPatchHistory(heroId: number, count = 6): Promise<PatchWinRatePoint[]> {
-  const patchesWithSince = PATCHES.filter((p) => typeof p.since === "number").slice(0, count);
+  const allPatches = await fetchPatches();
+  const patchesWithSince = allPatches.filter((p) => typeof p.since === "number").slice(0, count);
   if (patchesWithSince.length === 0) return [];
 
   const results = await Promise.all(

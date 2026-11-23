@@ -138,7 +138,7 @@ export default function GlobalSearchModal({
     };
   }, [open, query]);
 
-  const { matchedHeroes, matchedItems, flatResults } = useMemo(() => {
+  const { directEntries, matchedHeroes, matchedItems, matchedUsers, flatResults } = useMemo(() => {
     const q = normalize(query.replace(/^@+/, ""));
     const isHandleOnly = query.trim().startsWith("@");
 
@@ -162,6 +162,31 @@ export default function GlobalSearchModal({
       /steamcommunity\.com\/(id|profiles)\//i.test(rawTrimmed) ||
       /s\.team\/p\//i.test(rawTrimmed);
 
+    const direct = isSteamUrl
+      ? [
+          {
+            label: "Abrir Perfil Steam",
+            href: `steam-url:${rawTrimmed}`,
+            tag: "Steam URL" as const,
+          },
+        ]
+      : numericId
+        ? [
+            {
+              label: `Ver Jogador #${numericId}`,
+              href: `/player/${numericId}`,
+              tag: "Steam ID" as const,
+            },
+            {
+              label: `Ver Partida #${numericId}`,
+              href: `/matches/${numericId}`,
+              tag: "Match ID" as const,
+            },
+          ]
+        : [];
+
+    const uList = users.filter((u) => Boolean(u.handle));
+
     const flat: ResultEntry[] = [
       ...(isSteamUrl
         ? [{ kind: "playerId" as const, href: `steam-url:${rawTrimmed}`, id: rawTrimmed }]
@@ -182,16 +207,20 @@ export default function GlobalSearchModal({
         href: `/items/${data.className}`,
         data,
       })),
-      ...users
-        .filter((u) => Boolean(u.handle))
-        .map((data): ResultEntry => ({
-          kind: "user",
-          href: `/profile/${data.handle}`,
-          data,
-        })),
+      ...uList.map((data): ResultEntry => ({
+        kind: "user",
+        href: `/profile/${data.handle}`,
+        data,
+      })),
     ];
 
-    return { matchedHeroes: hList, matchedItems: iList, flatResults: flat };
+    return {
+      directEntries: direct,
+      matchedHeroes: hList,
+      matchedItems: iList,
+      matchedUsers: uList,
+      flatResults: flat,
+    };
   }, [query, catalog, users]);
 
   useEffect(() => {
@@ -241,7 +270,9 @@ export default function GlobalSearchModal({
   };
 
   const hasQuery = query.trim().length > 0;
-  let globalIdx = -1;
+  const heroOffset = directEntries.length;
+  const itemOffset = heroOffset + matchedHeroes.length;
+  const userOffset = itemOffset + matchedItems.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-16 sm:pt-24">
@@ -314,38 +345,18 @@ export default function GlobalSearchModal({
                 <p className="px-2.5 py-1 text-xs font-semibold text-rose-400">{steamError}</p>
               )}
 
-              {(/^\d{5,20}$/.test(query.trim().replace(/^@+/, "")) ||
-                /steamcommunity\.com\/(id|profiles)\//i.test(query.trim()) ||
-                /s\.team\/p\//i.test(query.trim())) && (
+              {directEntries.length > 0 && (
                 <div className="space-y-1">
                   <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
                     Tracker Direto
                   </p>
-                  {(/steamcommunity\.com\/(id|profiles)\//i.test(query.trim()) ||
-                  /s\.team\/p\//i.test(query.trim())
-                    ? [
-                        {
-                          label: steamResolving ? "Resolvendo perfil Steam..." : "Abrir Perfil Steam",
-                          href: `steam-url:${query.trim().replace(/^@+/, "")}`,
-                          tag: "Steam URL",
-                        },
-                      ]
-                    : [
-                        {
-                          label: `Ver Jogador #${query.trim().replace(/^@+/, "")}`,
-                          href: `/player/${query.trim().replace(/^@+/, "")}`,
-                          tag: "Steam ID",
-                        },
-                        {
-                          label: `Ver Partida #${query.trim().replace(/^@+/, "")}`,
-                          href: `/matches/${query.trim().replace(/^@+/, "")}`,
-                          tag: "Match ID",
-                        },
-                      ]
-                  ).map((entry) => {
-                    globalIdx += 1;
-                    const idx = globalIdx;
+                  {directEntries.map((entry, i) => {
+                    const idx = i;
                     const active = activeIndex === idx;
+                    const label =
+                      entry.tag === "Steam URL" && steamResolving
+                        ? "Resolvendo perfil Steam..."
+                        : entry.label;
                     return (
                       <button
                         key={entry.href}
@@ -356,7 +367,7 @@ export default function GlobalSearchModal({
                           active ? "bg-amber-500/15 text-amber-300" : "text-[#f4efe6] hover:bg-neutral-900"
                         }`}
                       >
-                        <span className="truncate font-mono text-xs font-bold">{entry.label}</span>
+                        <span className="truncate font-mono text-xs font-bold">{label}</span>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
                           {entry.tag}
                         </span>
@@ -371,9 +382,8 @@ export default function GlobalSearchModal({
                   <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
                     Heróis
                   </p>
-                  {matchedHeroes.map((hero) => {
-                    globalIdx += 1;
-                    const idx = globalIdx;
+                  {matchedHeroes.map((hero, i) => {
+                    const idx = heroOffset + i;
                     const active = activeIndex === idx;
                     return (
                       <button
@@ -411,9 +421,8 @@ export default function GlobalSearchModal({
                   <p className="px-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
                     Itens
                   </p>
-                  {matchedItems.map((item) => {
-                    globalIdx += 1;
-                    const idx = globalIdx;
+                  {matchedItems.map((item, i) => {
+                    const idx = itemOffset + i;
                     const active = activeIndex === idx;
                     const slotMeta = SLOT_LABEL[item.slot];
                     return (
@@ -460,11 +469,8 @@ export default function GlobalSearchModal({
                   {usersLoading && users.length === 0 ? (
                     <p className="px-2.5 py-2 text-xs text-neutral-500">Buscando usuários...</p>
                   ) : (
-                    users
-                      .filter((u) => Boolean(u.handle))
-                      .map((u) => {
-                        globalIdx += 1;
-                        const idx = globalIdx;
+                    matchedUsers.map((u, i) => {
+                        const idx = userOffset + i;
                         const active = activeIndex === idx;
                         return (
                           <button

@@ -6,7 +6,7 @@ import {
   fetchItemsAnalytics,
   fetchShopItems,
   fetchWikiColors,
-  PATCHES,
+  fetchPatches,
 } from "@/lib/deadlock";
 import PatchTrackerClient, {
   type PatchHeroDelta,
@@ -44,8 +44,11 @@ export default async function PatchesPage({
 }: {
   searchParams: Promise<{ patch?: string }>;
 }) {
-  const { patch: patchParam } = await searchParams;
-  const datedPatches = PATCHES.filter((p) => typeof p.since === "number");
+  const [{ patch: patchParam }, patches] = await Promise.all([
+    searchParams,
+    fetchPatches(),
+  ]);
+  const datedPatches = patches.filter((p) => typeof p.since === "number");
   const selectablePatches = datedPatches.slice(0, -1); // precisa de um patch anterior para comparar
 
   const selectedIdx = Math.max(

@@ -10,7 +10,7 @@ import {
   getServerFriendsOverview,
   getServerTierLists,
 } from "@/lib/backend/server";
-import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, PATCHES } from "@/lib/deadlock";
+import { fetchHeroesAssets, fetchHeroesAnalytics, fetchHeroBlurbs, fetchWikiColors, extractColor, extractHeroTheme, fetchPatches } from "@/lib/deadlock";
 import ProfileForm from "./ProfileForm";
 import fs from "fs";
 import path from "path";
@@ -34,11 +34,12 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   // Sem @handle confirmado o onboarding em /welcome é obrigatório (mesma regra do NavUserButton, agora também no servidor)
   if (!user.profile?.handle || !user.profile?.handle_confirmed) redirect("/welcome");
 
+  const patches = await fetchPatches();
   const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     getOwnFullProfile(user.id),
     fetchHeroesAssets(),
     fetchWikiColors(),
-    fetchHeroesAnalytics(PATCHES[0].since),
+    fetchHeroesAnalytics(patches[0].since),
     fetchHeroBlurbs(),
   ]);
   const withMatches = new Set(stats.filter((s) => (s.matches || 0) > 0).map((s) => s.hero_id));

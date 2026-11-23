@@ -1,6 +1,15 @@
 // app/tiers.ts
-// Tiers compartilhados entre a prancha do meta (page.tsx) e o montador (TierMaker.tsx).
+// Tipos e faixas compartilhados entre /tier-list e /tier-maker.
 // Fica fora de page.tsx porque arquivos de rota não podem exportar valores arbitrários.
+
+export interface MakerHero {
+  id: number;
+  name: string;
+  image: string;
+  gloatImage?: string;
+  critImage?: string;
+  rgb: [number, number, number] | null;
+}
 
 export type TierKey = "META" | "A" | "B" | "C" | "D" | "F";
 
