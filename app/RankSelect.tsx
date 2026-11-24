@@ -62,7 +62,7 @@ export default function RankSelect({ ranks, selected }: Props) {
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className={`group relative flex min-w-[240px] sm:min-w-[260px] items-center justify-center rounded-[5px] border bg-[#0a0e0d] shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 outline-none cursor-pointer ${
+        className={`group relative flex min-w-[210px] sm:min-w-[230px] items-center justify-center rounded-[5px] border bg-[#0a0e0d] shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 outline-none cursor-pointer ${
           open
             ? "border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/50"
             : isPending
@@ -76,7 +76,7 @@ export default function RankSelect({ ranks, selected }: Props) {
           )}
         </div>
 
-        <span className="font-deadlock w-full py-2.5 pl-10 pr-10 text-center text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
+        <span className="font-deadlock w-full py-2.5 pl-9 pr-9 text-center text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
           {currentRank?.label}
         </span>
 
@@ -104,7 +104,7 @@ export default function RankSelect({ ranks, selected }: Props) {
 
       <div
         role="listbox"
-        className={`absolute right-0 top-full z-50 mt-2 w-full sm:min-w-[260px] origin-top overflow-hidden rounded-[6px] border border-neutral-800/90 bg-neutral-950/95 shadow-[0_20px_40px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all duration-200 ease-out ${
+        className={`absolute left-0 top-full z-50 mt-2 min-w-full w-max max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-[6px] border border-neutral-800/90 bg-neutral-950/95 shadow-[0_20px_40px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all duration-200 ease-out ${
           open
             ? "translate-y-0 scale-100 opacity-100 pointer-events-auto"
             : "-translate-y-2 scale-95 opacity-0 pointer-events-none"
@@ -120,19 +120,17 @@ export default function RankSelect({ ranks, selected }: Props) {
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => selectRank(r.id)}
-                className={`group flex w-full items-center justify-between gap-2.5 rounded-[4px] px-3 py-2 text-left transition-colors cursor-pointer ${
+                className={`group flex w-full items-center justify-start gap-2.5 rounded-[4px] px-3 py-2 text-left transition-colors cursor-pointer ${
                   isSelected
                     ? "bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold"
                     : "text-neutral-300 hover:bg-neutral-800/70 hover:text-[#f4efe6] border border-transparent"
                 }`}
               >
-                <span className="flex items-center gap-2.5 min-w-0">
-                  {r.icon && (
-                    <img src={r.icon} alt="" className="h-6 w-6 shrink-0 object-contain" />
-                  )}
-                  <span className="font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider truncate">
-                    {r.label}
-                  </span>
+                {r.icon && (
+                  <img src={r.icon} alt="" className="h-6 w-6 shrink-0 object-contain" />
+                )}
+                <span className="font-deadlock text-left text-xs sm:text-sm font-black uppercase tracking-wider whitespace-nowrap">
+                  {r.label}
                 </span>
               </button>
             );

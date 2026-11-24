@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import {
   DEADLOCK_DATA_CONFIG,
   DEFAULT_RANK_ID,
+  DEFAULT_TIER_METRIC,
   MIN_HERO_MATCHES,
   PATCHES,
   PATCH_HISTORY_LIMIT,
@@ -12,37 +13,68 @@ import {
   RANK_FILTERS,
   SAMPLE_THRESHOLDS,
   TIER_BADGE_STYLES,
+  TIER_METRIC_OPTIONS,
   TIER_THRESHOLDS,
+  META_SCORE_LABELS,
+  META_SCORE_WEIGHTS,
+  TIER_THRESHOLDS_BY_METRIC,
+  assignTiersByRank,
   calculateTier,
+  calculateTierForMetric,
+  computeMetaScoreBreakdowns,
+  computeMetaScores,
   getDefaultRank,
   isPlayableHero,
   minMatchesForRank,
   resolveHeroMedia,
   resolvePatchWindow,
   resolveRankFilter,
+  resolveTierMetric,
+  type MetaScoreBreakdownItem,
+  type MetaScoreInput,
+  type MetaScoreResult,
+  type MetaScoreStatKey,
   type Patch,
   type RankFilterOption,
+  type TierMetricId,
+  type TierMetricOption,
 } from "@/lib/data/config";
 
 export {
   DEADLOCK_DATA_CONFIG,
   DEFAULT_RANK_ID,
+  DEFAULT_TIER_METRIC,
+  META_SCORE_LABELS,
+  META_SCORE_WEIGHTS,
   MIN_HERO_MATCHES,
   PATCHES,
   PATCH_HISTORY_LIMIT,
   RANK_FILTERS,
   SAMPLE_THRESHOLDS,
   TIER_BADGE_STYLES,
+  TIER_METRIC_OPTIONS,
   TIER_THRESHOLDS,
+  TIER_THRESHOLDS_BY_METRIC,
+  assignTiersByRank,
   calculateTier,
+  calculateTierForMetric,
+  computeMetaScoreBreakdowns,
+  computeMetaScores,
   getDefaultRank,
   isPlayableHero,
   minMatchesForRank,
   resolveHeroMedia,
   resolvePatchWindow,
   resolveRankFilter,
+  resolveTierMetric,
+  type MetaScoreBreakdownItem,
+  type MetaScoreInput,
+  type MetaScoreResult,
+  type MetaScoreStatKey,
   type Patch,
   type RankFilterOption,
+  type TierMetricId,
+  type TierMetricOption,
 };
 
 export interface HeroAbility {
@@ -83,6 +115,13 @@ export interface HeroAnalytics {
   [key: string]: any;
 }
 
+export interface HeroBanAnalytics {
+  hero_id: number;
+  bans: number;
+  matches: number;
+  bucket?: number;
+}
+
 export interface MergedHero {
   id: number;
   name: string;
@@ -92,6 +131,9 @@ export interface MergedHero {
   wins: number;
   losses: number;
   winRate: number;
+  pickRate?: number;
+  bans?: number;
+  banRate?: number;
   rgb?: [number, number, number] | null;
   tags?: string[];
 }
@@ -437,6 +479,34 @@ export async function fetchHeroesAnalytics(
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : Object.values(data);
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchHeroBanStats(
+  minUnixTimestamp?: number,
+  maxUnixTimestamp?: number,
+  minAverageBadge?: number,
+): Promise<HeroBanAnalytics[]> {
+  try {
+    const url = new URL(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/analytics/hero-ban-stats`);
+    if (minUnixTimestamp) {
+      url.searchParams.set("min_unix_timestamp", String(minUnixTimestamp));
+    }
+    if (maxUnixTimestamp) {
+      url.searchParams.set("max_unix_timestamp", String(maxUnixTimestamp));
+    }
+    if (minAverageBadge) {
+      url.searchParams.set("min_average_badge", String(minAverageBadge));
+    }
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.analyticsSeconds },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }

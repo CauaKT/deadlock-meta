@@ -86,6 +86,23 @@ export const RANK_FILTERS: RankFilterOption[] = [
 
 export const DEFAULT_RANK_ID = "7";
 
+export type TierMetricId = "winrate" | "pickrate" | "banrate" | "metascore";
+
+export interface TierMetricOption {
+  id: TierMetricId;
+  label: string;
+  shortLabel: string;
+}
+
+export const DEFAULT_TIER_METRIC: TierMetricId = "winrate";
+
+export const TIER_METRIC_OPTIONS: TierMetricOption[] = [
+  { id: "metascore", label: "Meta Score", shortLabel: "Meta Score" },
+  { id: "winrate", label: "Winrate", shortLabel: "Win Rate" },
+  { id: "pickrate", label: "Pickrate", shortLabel: "Pick Rate" },
+  { id: "banrate", label: "Banrate", shortLabel: "Ban Rate" },
+];
+
 export const TIER_THRESHOLDS = {
   META: 53.5,
   A: 51.5,
@@ -93,6 +110,16 @@ export const TIER_THRESHOLDS = {
   C: 48.5,
   D: 47.0,
 } as const;
+
+export const TIER_THRESHOLDS_BY_METRIC: Record<
+  TierMetricId,
+  { META: number; A: number; B: number; C: number; D: number }
+> = {
+  metascore: { META: 70.0, A: 58.0, B: 50.0, C: 42.0, D: 34.0 },
+  winrate: TIER_THRESHOLDS,
+  pickrate: { META: 45.0, A: 33.0, B: 24.0, C: 18.0, D: 12.0 },
+  banrate: { META: 20.0, A: 12.0, B: 6.5, C: 4.0, D: 2.4 },
+};
 
 export const TIER_BADGE_STYLES: Record<TierKey, { label: string; bg: string }> = {
   META: { label: "META", bg: "bg-cyan-400 text-black border-cyan-300" },
@@ -122,12 +149,176 @@ export const SAMPLE_THRESHOLDS = {
 export const MIN_HERO_MATCHES = SAMPLE_THRESHOLDS.heroDefault;
 
 export function calculateTier(winRate: number): TierKey {
-  if (winRate >= TIER_THRESHOLDS.META) return "META";
-  if (winRate >= TIER_THRESHOLDS.A) return "A";
-  if (winRate >= TIER_THRESHOLDS.B) return "B";
-  if (winRate >= TIER_THRESHOLDS.C) return "C";
-  if (winRate >= TIER_THRESHOLDS.D) return "D";
+  return calculateTierForMetric("winrate", winRate);
+}
+
+export function calculateTierForMetric(metric: TierMetricId, value: number): TierKey {
+  const t = TIER_THRESHOLDS_BY_METRIC[metric];
+  if (value >= t.META) return "META";
+  if (value >= t.A) return "A";
+  if (value >= t.B) return "B";
+  if (value >= t.C) return "C";
+  if (value >= t.D) return "D";
   return "F";
+}
+
+export function resolveTierMetric(metricId?: string): TierMetricOption {
+  const defaultMetric =
+    TIER_METRIC_OPTIONS.find((m) => m.id === DEFAULT_TIER_METRIC) ?? TIER_METRIC_OPTIONS[0];
+  if (!metricId) return defaultMetric;
+  return TIER_METRIC_OPTIONS.find((m) => m.id === metricId) ?? defaultMetric;
+}
+
+export const META_SCORE_WEIGHTS = {
+  winRate: 0.35,
+  pickRate: 0.20,
+  banRate: 0.14,
+  assists: 0.08,
+  kills: 0.06,
+  playerDamage: 0.05,
+  damageTaken: 0.03,
+  maxHealth: 0.02,
+  deaths: -0.12,
+  bossDamage: 0.06,
+  netWorth: 0.04,
+  lastHits: 0.03,
+  denies: 0.02,
+  creepDamage: 0.02,
+  neutralDamage: 0.02,
+} as const;
+
+export type MetaScoreStatKey = keyof typeof META_SCORE_WEIGHTS;
+
+export type MetaScoreInput = Record<MetaScoreStatKey, number>;
+
+export const META_SCORE_LABELS: Record<MetaScoreStatKey, string> = {
+  winRate: "Winrate",
+  pickRate: "Pickrate",
+  banRate: "Banrate",
+  assists: "Assists",
+  kills: "Kills",
+  playerDamage: "Dano Heróis",
+  damageTaken: "Dano Receb.",
+  maxHealth: "Vida Máx.",
+  deaths: "Deaths",
+  bossDamage: "Objetivos",
+  netWorth: "Almas",
+  lastHits: "Last Hits",
+  denies: "Denies",
+  creepDamage: "Dano Tropas",
+  neutralDamage: "Dano Neutrais",
+};
+
+export interface MetaScoreBreakdownItem {
+  key: MetaScoreStatKey;
+  label: string;
+  points: number;
+  pct: number;
+}
+
+export interface MetaScoreResult {
+  score: number;
+  breakdown: MetaScoreBreakdownItem[];
+}
+
+export function computeMetaScoreBreakdowns(
+  rows: MetaScoreInput[],
+  hasBanData: boolean,
+): MetaScoreResult[] {
+  if (rows.length === 0) return [];
+
+  const activeEntries = (
+    Object.entries(META_SCORE_WEIGHTS) as Array<[MetaScoreStatKey, number]>
+  ).filter(([key]) => hasBanData || key !== "banRate");
+
+  // Mantém soma líquida = 1.00 mesmo em patches antigos sem dados de ban
+  const netWeight = activeEntries.reduce((sum, [, w]) => sum + w, 0) || 1;
+
+  if (rows.length === 1) {
+    return [
+      {
+        score: 50,
+        breakdown: activeEntries.map(([key, weight]) => ({
+          key,
+          label: META_SCORE_LABELS[key],
+          points: 50 * (weight / netWeight),
+          pct: 50,
+        })),
+      },
+    ];
+  }
+
+  const normalizedByKey = new Map<MetaScoreStatKey, number[]>();
+  for (const [key] of activeEntries) {
+    const vals = rows.map((r) => r[key]);
+    const mean = vals.reduce((sum, v) => sum + v, 0) / vals.length;
+    const variance = vals.reduce((sum, v) => sum + (v - mean) ** 2, 0) / vals.length;
+    const sd = Math.sqrt(variance) || 1;
+    normalizedByKey.set(
+      key,
+      vals.map((v) => 100 / (1 + Math.exp(-((v - mean) / sd) * 1.25))),
+    );
+  }
+
+  return rows.map((_, idx) => {
+    const breakdown: MetaScoreBreakdownItem[] = activeEntries.map(([key, weight]) => {
+      const col = normalizedByKey.get(key)!;
+      return {
+        key,
+        label: META_SCORE_LABELS[key],
+        points: col[idx] * (weight / netWeight),
+        pct: col[idx],
+      };
+    });
+    const raw = breakdown.reduce((sum, item) => sum + item.points, 0);
+    return {
+      score: Math.min(100, Math.max(0, raw)),
+      breakdown,
+    };
+  });
+}
+
+export function computeMetaScores(rows: MetaScoreInput[], hasBanData: boolean): number[] {
+  return computeMetaScoreBreakdowns(rows, hasBanData).map((r) => r.score);
+}
+
+const TIER_ORDER: TierKey[] = ["META", "A", "B", "C", "D", "F"];
+const TIER_DISTRIBUTION_WEIGHTS = [0.09, 0.18, 0.25, 0.23, 0.16, 0.09] as const;
+
+export function assignTiersByRank<T>(sortedDescItems: T[]): Array<T & { tier: TierKey }> {
+  const total = sortedDescItems.length;
+  if (total === 0) return [];
+
+  if (total < TIER_ORDER.length) {
+    return sortedDescItems.map((item, idx) => ({
+      ...item,
+      tier: TIER_ORDER[idx],
+    }));
+  }
+
+  const extra = total - TIER_ORDER.length;
+  const exact = TIER_DISTRIBUTION_WEIGHTS.map((w) => 1 + extra * w);
+  const counts = exact.map((v) => Math.floor(v));
+  const remainder = total - counts.reduce((sum, c) => sum + c, 0);
+
+  const orderByFrac = exact
+    .map((v, idx) => ({ idx, frac: v - counts[idx] }))
+    .sort((a, b) => b.frac - a.frac);
+
+  for (let i = 0; i < remainder; i++) {
+    counts[orderByFrac[i].idx] += 1;
+  }
+
+  const result: Array<T & { tier: TierKey }> = [];
+  let cursor = 0;
+  for (let t = 0; t < TIER_ORDER.length; t++) {
+    const tierKey = TIER_ORDER[t];
+    const count = counts[t];
+    for (let j = 0; j < count && cursor < total; j++) {
+      result.push({ ...sortedDescItems[cursor++], tier: tierKey });
+    }
+  }
+  return result;
 }
 
 export function minMatchesForRank(tier: number): number {
@@ -163,12 +354,15 @@ export function isPlayableHero(h: unknown): boolean {
     player_selectable?: unknown;
     disabled?: unknown;
     in_development?: unknown;
+    development_state?: unknown;
+    prerelease_only?: unknown;
     name?: unknown;
   };
   return (
     hero.player_selectable === true &&
     hero.disabled !== true &&
-    hero.in_development !== true &&
+    hero.prerelease_only !== true &&
+    (hero.in_development !== true || hero.development_state === "release") &&
     typeof hero.name === "string" &&
     !hero.name.startsWith("hero_")
   );

@@ -58,7 +58,7 @@ export default function PatchSelect({ patches, selected }: Props) {
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className={`group relative flex min-w-[280px] sm:min-w-[340px] items-center justify-center rounded-[5px] border bg-[#0a0e0d] shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 outline-none cursor-pointer ${
+        className={`group relative flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-[5px] border bg-[#0a0e0d] shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 outline-none cursor-pointer ${
           open
             ? "border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/50"
             : isPending
@@ -66,13 +66,11 @@ export default function PatchSelect({ patches, selected }: Props) {
               : "border-neutral-700/80 hover:border-amber-500/70 hover:shadow-[0_0_18px_rgba(245,158,11,0.22)] focus-visible:border-amber-500"
         }`}
       >
-        {/* Texto do Patch Centralizado */}
-        <span className="font-deadlock w-full py-2.5 pl-9 pr-9 text-center text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
+        <span className="font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-[#f4efe6] truncate">
           {currentPatch?.label}
         </span>
 
-        {/* Indicador à direita: Spinner ou Chevron animado com rotação */}
-        <div className="pointer-events-none absolute right-3.5 flex items-center">
+        <div className="pointer-events-none flex shrink-0 items-center">
           {isPending ? (
             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
           ) : (
@@ -97,14 +95,14 @@ export default function PatchSelect({ patches, selected }: Props) {
       {/* Menu Dropdown com Animação de Escala, Deslize e Opacidade */}
       <div
         role="listbox"
-        className={`absolute right-0 top-full z-50 mt-2 w-full sm:min-w-[340px] origin-top overflow-hidden rounded-xl border border-neutral-800/90 bg-neutral-950/95 shadow-[0_20px_40px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all duration-200 ease-out ${
+        className={`absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2 min-w-full w-max max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-xl border border-neutral-800/90 bg-neutral-950/95 shadow-[0_20px_40px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all duration-200 ease-out ${
           open
             ? "translate-y-0 scale-100 opacity-100 pointer-events-auto"
             : "-translate-y-2 scale-95 opacity-0 pointer-events-none"
         }`}
       >
         <div className="lp-scroll max-h-[340px] overflow-y-auto p-1.5 pr-2 space-y-1">
-          {patches.map((p) => {
+          {patches.map((p, idx) => {
             const isSelected = p.id === selected;
             return (
               <button
@@ -113,15 +111,20 @@ export default function PatchSelect({ patches, selected }: Props) {
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => selectPatch(p.id)}
-                className={`group flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors cursor-pointer ${
+                className={`group flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors cursor-pointer ${
                   isSelected
                     ? "bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold"
                     : "text-neutral-300 hover:bg-neutral-800/70 hover:text-[#f4efe6] border border-transparent"
                 }`}
               >
-                <span className="font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider truncate">
+                <span className="font-deadlock text-left text-xs sm:text-sm font-black uppercase tracking-wider whitespace-nowrap">
                   {p.label}
                 </span>
+                {idx === 0 && (
+                  <span className="shrink-0 rounded-[4px] border border-amber-400/50 bg-amber-500/20 px-1.5 py-0.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-200">
+                    Atual
+                  </span>
+                )}
               </button>
             );
           })}
