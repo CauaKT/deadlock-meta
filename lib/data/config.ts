@@ -97,10 +97,10 @@ export interface TierMetricOption {
 export const DEFAULT_TIER_METRIC: TierMetricId = "winrate";
 
 export const TIER_METRIC_OPTIONS: TierMetricOption[] = [
-  { id: "metascore", label: "Meta Score", shortLabel: "Meta Score" },
   { id: "winrate", label: "Winrate", shortLabel: "Win Rate" },
   { id: "pickrate", label: "Pickrate", shortLabel: "Pick Rate" },
   { id: "banrate", label: "Banrate", shortLabel: "Ban Rate" },
+  { id: "metascore", label: "Meta Score", shortLabel: "Meta Score" },
 ];
 
 export const TIER_THRESHOLDS = {

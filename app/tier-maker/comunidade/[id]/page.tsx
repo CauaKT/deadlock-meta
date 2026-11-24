@@ -16,7 +16,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     };
   }
 
-  const total = item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
+  const total =
+    item.style === "quadrant" && item.quadrant
+      ? item.quadrant.items.length
+      : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
   const title = `${item.title} • LockPro`;
   const description = `Tier list de Deadlock por ${item.author}, com ${total} ${total === 1 ? "herói" : "heróis"}.`;
 

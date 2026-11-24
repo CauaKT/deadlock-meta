@@ -331,6 +331,23 @@ h1, h2, h3, h4 {
     #0c0f0e;
 }
 
+.hero-card-name {
+  background: radial-gradient(
+    ellipse 62% 68% at 50% 52%,
+    rgb(var(--hc) / 0.14),
+    rgb(var(--hc) / 0.04) 48%,
+    transparent 74%
+  );
+}
+.group:hover .hero-card-name {
+  background: radial-gradient(
+    ellipse 68% 72% at 50% 52%,
+    rgb(var(--hc) / 0.22),
+    rgb(var(--hc) / 0.06) 50%,
+    transparent 76%
+  );
+}
+
 /* Página do herói: brilho no topo e fumaça (--atm = RGB do herói) */
 .hero-glow {
   background: radial-gradient(

@@ -87,10 +87,26 @@ export interface CommunityProfileItem {
   mutual_friends_count?: number;
 }
 
+export type TierListStyle = "classic" | "quadrant";
+
 export interface TierRowData {
   label: string;
   color: string;
   heroes: number[];
+}
+
+export interface TierQuadrantItem {
+  heroId: number;
+  x: number;
+  y: number;
+}
+
+export interface TierQuadrantData {
+  topLabel: string;
+  bottomLabel: string;
+  leftLabel: string;
+  rightLabel: string;
+  items: TierQuadrantItem[];
 }
 
 export interface TierListItem {
@@ -98,10 +114,13 @@ export interface TierListItem {
   title: string;
   author: string;
   authorHandle: string | null;
+  authorAvatarUrl?: string | null;
   userId: string | null;
   createdAt: string;
   updatedAt: string;
+  style?: TierListStyle;
   tiers: TierRowData[];
+  quadrant?: TierQuadrantData | null;
   canEdit: boolean;
   canDelete: boolean;
 }
@@ -109,7 +128,9 @@ export interface TierListItem {
 export interface SaveTierListInput {
   title: string;
   authorName?: string;
+  style?: TierListStyle;
   tiers: TierRowData[];
+  quadrant?: TierQuadrantData | null;
 }
 
 export interface AdminOverview {

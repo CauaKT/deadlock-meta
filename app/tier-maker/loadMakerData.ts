@@ -44,6 +44,7 @@ export async function loadMakerData(): Promise<{
         id: h.id,
         name: h.name,
         image: media.card,
+        icon: media.icon ?? media.card,
         gloatImage: media.gloatImage,
         critImage: media.critImage,
         rgb: extractColor(h, wikiColors),

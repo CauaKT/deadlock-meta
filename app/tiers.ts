@@ -6,6 +6,7 @@ export interface MakerHero {
   id: number;
   name: string;
   image: string;
+  icon?: string;
   gloatImage?: string;
   critImage?: string;
   rgb: [number, number, number] | null;

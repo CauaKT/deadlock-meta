@@ -2,6 +2,7 @@ export interface ExportTierHero {
   id: number;
   name: string;
   image: string;
+  rgb?: [number, number, number] | null;
 }
 
 export interface ExportTierRow {
@@ -10,11 +11,26 @@ export interface ExportTierRow {
   heroes: ExportTierHero[];
 }
 
+export interface ExportQuadrantHero extends ExportTierHero {
+  x: number;
+  y: number;
+}
+
+export interface ExportQuadrantBoard {
+  topLabel: string;
+  bottomLabel: string;
+  leftLabel: string;
+  rightLabel: string;
+  heroes: ExportQuadrantHero[];
+}
+
 export interface ExportTierListOptions {
   title: string;
   author?: string;
   dateLabel?: string;
+  style?: "classic" | "quadrant";
   tiers: ExportTierRow[];
+  quadrant?: ExportQuadrantBoard | null;
 }
 
 async function loadBitmap(url: string): Promise<ImageBitmap | null> {
@@ -72,7 +88,223 @@ function drawRoundedRect(
   ctx.roundRect(x, y, w, h, r);
 }
 
+async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise<void> {
+  const quadrant = options.quadrant;
+  if (!quadrant) return;
+
+  const WIDTH = 1080;
+  const PADDING = 36;
+  const HEADER_H = 88;
+  const BOARD_SIZE = WIDTH - PADDING * 2;
+  const totalHeight = PADDING + HEADER_H + BOARD_SIZE + PADDING;
+
+  const uniqueUrls = Array.from(
+    new Set(quadrant.heroes.map((h) => h.image).filter(Boolean)),
+  );
+  const bitmaps = new Map<string, ImageBitmap | null>();
+  await Promise.all(
+    uniqueUrls.map(async (url) => {
+      bitmaps.set(url, await loadBitmap(url));
+    }),
+  );
+
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = WIDTH * scale;
+  canvas.height = totalHeight * scale;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D indisponível neste navegador.");
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#090c0b";
+  ctx.fillRect(0, 0, WIDTH, totalHeight);
+
+  const cleanTitle = options.title.trim() || "Minha Tier List";
+  ctx.fillStyle = "#f4efe6";
+  ctx.font = "900 32px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.textBaseline = "top";
+  ctx.fillText(cleanTitle, PADDING, PADDING, WIDTH - PADDING * 2 - 220);
+
+  const metaParts: string[] = [];
+  if (options.author?.trim()) metaParts.push(`Por ${options.author.trim()}`);
+  if (options.dateLabel?.trim()) metaParts.push(options.dateLabel.trim());
+  if (metaParts.length > 0) {
+    ctx.fillStyle = "#a3a3a3";
+    ctx.font = "600 14px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText(metaParts.join("  •  "), PADDING, PADDING + 42);
+  }
+
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#f59e0b";
+  ctx.font = "900 20px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("LOCKPRO", WIDTH - PADDING, PADDING + 6);
+  ctx.fillStyle = "#737373";
+  ctx.font = "600 11px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("lockpro.vercel.app", WIDTH - PADDING, PADDING + 32);
+  ctx.textAlign = "left";
+
+  const bx = PADDING;
+  const by = PADDING + HEADER_H;
+  const cx = bx + BOARD_SIZE / 2;
+  const cy = by + BOARD_SIZE / 2;
+
+  ctx.save();
+  drawRoundedRect(ctx, bx, by, BOARD_SIZE, BOARD_SIZE, 18);
+  ctx.fillStyle = "#070a09";
+  ctx.fill();
+  ctx.clip();
+
+  const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, BOARD_SIZE * 0.55);
+  glow.addColorStop(0, "rgba(245, 158, 11, 0.08)");
+  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(bx, by, BOARD_SIZE, BOARD_SIZE);
+
+  // Grade sutil
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.035)";
+  ctx.lineWidth = 1;
+  const step = BOARD_SIZE / 8;
+  for (let i = 1; i < 8; i++) {
+    const px = bx + i * step;
+    const py = by + i * step;
+    ctx.beginPath();
+    ctx.moveTo(px, by);
+    ctx.lineTo(px, by + BOARD_SIZE);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx, py);
+    ctx.lineTo(bx + BOARD_SIZE, py);
+    ctx.stroke();
+  }
+
+  // Eixos centrais
+  const hGrad = ctx.createLinearGradient(bx + 24, cy, bx + BOARD_SIZE - 24, cy);
+  hGrad.addColorStop(0, "rgba(244, 239, 230, 0.12)");
+  hGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.45)");
+  hGrad.addColorStop(1, "rgba(244, 239, 230, 0.12)");
+  ctx.strokeStyle = hGrad;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(bx + 24, cy);
+  ctx.lineTo(bx + BOARD_SIZE - 24, cy);
+  ctx.stroke();
+
+  const vGrad = ctx.createLinearGradient(cx, by + 24, cx, by + BOARD_SIZE - 24);
+  vGrad.addColorStop(0, "rgba(244, 239, 230, 0.12)");
+  vGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.45)");
+  vGrad.addColorStop(1, "rgba(244, 239, 230, 0.12)");
+  ctx.strokeStyle = vGrad;
+  ctx.beginPath();
+  ctx.moveTo(cx, by + 24);
+  ctx.lineTo(cx, by + BOARD_SIZE - 24);
+  ctx.stroke();
+
+  // Ponto central
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#090d0c";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(245, 158, 11, 0.65)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Heróis posicionados
+  const HERO_SIZE = 74;
+  for (const h of quadrant.heroes) {
+    const hx = bx + (Math.min(95, Math.max(5, h.x)) / 100) * BOARD_SIZE;
+    const hy = by + (Math.min(95, Math.max(5, h.y)) / 100) * BOARD_SIZE;
+    const rgb = h.rgb ? `${h.rgb[0]}, ${h.rgb[1]}, ${h.rgb[2]}` : "245, 158, 11";
+
+    const aura = ctx.createRadialGradient(hx, hy, 4, hx, hy, HERO_SIZE * 0.68);
+    aura.addColorStop(0, `rgba(${rgb}, 0.34)`);
+    aura.addColorStop(0.6, `rgba(${rgb}, 0.08)`);
+    aura.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(hx, hy, HERO_SIZE * 0.68, 0, Math.PI * 2);
+    ctx.fill();
+
+    const bmp = bitmaps.get(h.image);
+    if (bmp) {
+      const ratio = bmp.width / bmp.height;
+      const drawW = ratio >= 1 ? HERO_SIZE : HERO_SIZE * ratio;
+      const drawH = ratio >= 1 ? HERO_SIZE / ratio : HERO_SIZE;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 14;
+      ctx.drawImage(bmp, hx - drawW / 2, hy - drawH / 2, drawW, drawH);
+      ctx.restore();
+    }
+  }
+
+  // Rótulos dos 4 eixos
+  const drawPill = (text: string, x: number, y: number, align: "center" | "left" | "right") => {
+    const label = text.trim().toUpperCase();
+    ctx.font = "900 13px system-ui, -apple-system, Segoe UI, sans-serif";
+    const textW = Math.min(260, ctx.measureText(label).width);
+    const pillW = textW + 24;
+    const pillH = 28;
+    const pillX =
+      align === "center" ? x - pillW / 2 : align === "left" ? x : x - pillW;
+    const pillY = y - pillH / 2;
+
+    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+    ctx.fillStyle = "rgba(9, 13, 12, 0.92)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "#f4efe6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, pillX + pillW / 2, y, pillW - 16);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+  };
+
+  drawPill(quadrant.topLabel, cx, by + 30, "center");
+  drawPill(quadrant.bottomLabel, cx, by + BOARD_SIZE - 30, "center");
+  drawPill(quadrant.leftLabel, bx + 18, cy, "left");
+  drawPill(quadrant.rightLabel, bx + BOARD_SIZE - 18, cy, "right");
+
+  ctx.restore();
+
+  drawRoundedRect(ctx, bx, by, BOARD_SIZE, BOARD_SIZE, 18);
+  ctx.strokeStyle = "#262626";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  bitmaps.forEach((bmp) => bmp?.close());
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
+  if (!blob) throw new Error("Não foi possível gerar a imagem PNG.");
+
+  const slug =
+    cleanTitle
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "tier-list";
+
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = `${slug}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
 export async function exportTierListToPng(options: ExportTierListOptions): Promise<void> {
+  if (options.style === "quadrant" && options.quadrant) {
+    return exportQuadrantBoardToPng(options);
+  }
   const WIDTH = 1200;
   const PADDING = 36;
   const HEADER_H = 88;

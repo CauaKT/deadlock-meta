@@ -80,6 +80,7 @@ interface HeroOption {
   id: number;
   name: string;
   image: string;
+  head?: string;
   banner?: string;
   art: string;
   tagBg: string;
@@ -1335,7 +1336,16 @@ export default function ProfileForm({
                     </span>
                   </div>
                   <p className="text-xs text-neutral-400">
-                    Contém {item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0)} heróis distribuídos.
+                    {item.style === "quadrant" && item.quadrant ? (
+                      <>
+                        Quadrante 2D · Contém {item.quadrant.items.length}{" "}
+                        {item.quadrant.items.length === 1 ? "herói" : "heróis"} posicionados.
+                      </>
+                    ) : (
+                      <>
+                        Contém {item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0)} heróis distribuídos.
+                      </>
+                    )}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -1344,19 +1354,50 @@ export default function ProfileForm({
                       onClick={async () => {
                         setExportingTierId(item.id);
                         try {
-                          await exportTierListToPng({
-                            title: item.title,
-                            author: item.author,
-                            dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
-                            tiers: item.tiers.map((t) => ({
-                              label: t.label,
-                              color: t.color,
-                              heroes: (t.heroes || [])
-                                .map((hId) => heroesById.get(hId))
-                                .filter((h): h is HeroOption => Boolean(h))
-                                .map((h) => ({ id: h.id, name: h.name, image: h.image })),
-                            })),
-                          });
+                          if (item.style === "quadrant" && item.quadrant) {
+                            await exportTierListToPng({
+                              title: item.title,
+                              author: item.author,
+                              dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+                              style: "quadrant",
+                              tiers: [],
+                              quadrant: {
+                                topLabel: item.quadrant.topLabel,
+                                bottomLabel: item.quadrant.bottomLabel,
+                                leftLabel: item.quadrant.leftLabel,
+                                rightLabel: item.quadrant.rightLabel,
+                                heroes: item.quadrant.items
+                                  .map((it) => {
+                                    const h = heroesById.get(it.heroId);
+                                    if (!h) return null;
+                                    return {
+                                      id: h.id,
+                                      name: h.name,
+                                      image: h.head || h.image,
+                                      rgb: h.rgb,
+                                      x: it.x,
+                                      y: it.y,
+                                    };
+                                  })
+                                  .filter((h): h is NonNullable<typeof h> => Boolean(h)),
+                              },
+                            });
+                          } else {
+                            await exportTierListToPng({
+                              title: item.title,
+                              author: item.author,
+                              dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+                              style: "classic",
+                              tiers: item.tiers.map((t) => ({
+                                label: t.label,
+                                color: t.color,
+                                heroes: (t.heroes || [])
+                                  .map((hId) => heroesById.get(hId))
+                                  .filter((h): h is HeroOption => Boolean(h))
+                                  .map((h) => ({ id: h.id, name: h.name, image: h.image })),
+                              })),
+                            });
+                          }
                         } finally {
                           setExportingTierId(null);
                         }

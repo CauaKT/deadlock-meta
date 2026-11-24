@@ -15,8 +15,10 @@ import {
   subscribeToAuthChanges,
   updateTierList,
 } from "@/lib/backend/client";
-import type { AuthUser, TierListItem } from "@/lib/backend/types";
+import type { AuthUser, TierListItem, TierListStyle, TierQuadrantData } from "@/lib/backend/types";
 import { exportTierListToPng } from "./exportTierListPng";
+import TierAuthorBadge from "./TierAuthorBadge";
+import TierQuadrantBoard, { DEFAULT_QUADRANT_DATA } from "./TierQuadrantBoard";
 
 export interface CustomTier {
   id: string;
@@ -46,6 +48,37 @@ function createEmptyBoard(heroes: MakerHero[], targetTiers: CustomTier[]): Recor
   return b;
 }
 
+function findDropTargetInZone(
+  zoneEl: HTMLElement,
+  clientX: number,
+  clientY: number,
+  excludeId: number | null,
+): { id: number; position: "before" | "after" } | null {
+  const cards = zoneEl.querySelectorAll<HTMLElement>("[data-chip-hero-id]");
+  let best: { id: number; position: "before" | "after"; dist: number } | null = null;
+
+  for (const card of cards) {
+    const id = Number(card.dataset.chipHeroId);
+    if (!Number.isInteger(id) || id <= 0 || id === excludeId) continue;
+    const rect = card.getBoundingClientRect();
+    if (clientY < rect.top - 8 || clientY > rect.bottom + 8) continue;
+    const distX =
+      clientX < rect.left
+        ? rect.left - clientX
+        : clientX > rect.right
+          ? clientX - rect.right
+          : 0;
+    if (distX > 18) continue;
+    if (!best || distX < best.dist) {
+      const position: "before" | "after" =
+        clientX - rect.left >= rect.width / 2 ? "after" : "before";
+      best = { id, position, dist: distX };
+    }
+  }
+
+  return best ? { id: best.id, position: best.position } : null;
+}
+
 export default function TierMakerClient({
   heroes,
   metaTiers,
@@ -61,14 +94,26 @@ export default function TierMakerClient({
     window.history.pushState(null, "", next === "community" ? "/tier-maker/comunidade" : "/tier-maker");
   }, []);
   const [title, setTitle] = useState("Minha Tier List");
+  const [boardStyle, setBoardStyle] = useState<TierListStyle>("classic");
   const [tiers, setTiers] = useState<CustomTier[]>(DEFAULT_TIERS);
   const [board, setBoard] = useState<Record<string, number[]>>(() =>
     createEmptyBoard(heroes, DEFAULT_TIERS),
   );
+  const [quadrant, setQuadrant] = useState<TierQuadrantData>(DEFAULT_QUADRANT_DATA);
+  const [quadrantPool, setQuadrantPool] = useState<number[]>(() => heroes.map((h) => h.id));
+  const [quadrantDragId, setQuadrantDragId] = useState<number | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const author = currentUser?.suggestedUsername || "";
+  const authorAvatarUrl =
+    currentUser?.profile?.avatar_url || currentUser?.suggestedAvatarUrl || null;
+  const authorDisplay =
+    currentUser?.profile?.username ||
+    (currentUser?.suggestedUsername && !/^steam_\d+$/.test(currentUser.suggestedUsername)
+      ? currentUser.suggestedUsername
+      : null) ||
+    currentUser?.profile?.handle ||
+    "Jogador";
   const [publishedLists, setPublishedLists] = useState<TierListItem[]>([]);
   const [loadingCommunity, setLoadingCommunity] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -83,8 +128,18 @@ export default function TierMakerClient({
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOverZone, setDragOverZone] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: number; position: "before" | "after" } | null>(null);
+  const updateDropTarget = useCallback(
+    (next: { id: number; position: "before" | "after" } | null) => {
+      setDropTarget((prev) => {
+        if (prev?.id === next?.id && prev?.position === next?.position) return prev;
+        return next;
+      });
+    },
+    [],
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const poolRef = useRef<HTMLElement>(null);
   const [dynamicExpressions, setDynamicExpressions] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -107,8 +162,11 @@ export default function TierMakerClient({
   const resetBuilder = useCallback(() => {
     setEditingId(null);
     setTitle("Minha Tier List");
+    setBoardStyle("classic");
     setTiers(DEFAULT_TIERS);
     setBoard(createEmptyBoard(heroes, DEFAULT_TIERS));
+    setQuadrant(DEFAULT_QUADRANT_DATA);
+    setQuadrantPool(heroes.map((h) => h.id));
     setSelected(null);
     if (typeof window !== "undefined" && window.location.search.includes("edit=")) {
       window.history.replaceState(null, "", "/tier-maker");
@@ -119,27 +177,43 @@ export default function TierMakerClient({
     (pub: TierListItem) => {
       setEditingId(pub.id);
       setTitle(pub.title);
-      const newTiers: CustomTier[] = pub.tiers.map((t, i) => ({
-        id: `T${i + 1}`,
-        label: t.label,
-        color: t.color,
-      }));
-      setTiers(newTiers);
+      if (pub.style === "quadrant" && pub.quadrant) {
+        setBoardStyle("quadrant");
+        const validItems = pub.quadrant.items.filter((it) => byId.has(it.heroId));
+        const placed = new Set(validItems.map((it) => it.heroId));
+        setQuadrant({
+          topLabel: pub.quadrant.topLabel,
+          bottomLabel: pub.quadrant.bottomLabel,
+          leftLabel: pub.quadrant.leftLabel,
+          rightLabel: pub.quadrant.rightLabel,
+          items: validItems,
+        });
+        setQuadrantPool(heroes.map((h) => h.id).filter((id) => !placed.has(id)));
+      } else {
+        setBoardStyle("classic");
+        const newTiers: CustomTier[] = pub.tiers.map((t, i) => ({
+          id: `T${i + 1}`,
+          label: t.label,
+          color: t.color,
+        }));
+        setTiers(newTiers.length > 0 ? newTiers : DEFAULT_TIERS);
 
-      const next: Record<string, number[]> = { POOL: [] };
-      const used = new Set<number>();
-      pub.tiers.forEach((t, i) => {
-        const id = `T${i + 1}`;
-        next[id] = t.heroes;
-        t.heroes.forEach((hId) => used.add(hId));
-      });
-      next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
-      setBoard(next);
+        const next: Record<string, number[]> = { POOL: [] };
+        const used = new Set<number>();
+        pub.tiers.forEach((t, i) => {
+          const id = `T${i + 1}`;
+          next[id] = t.heroes;
+          t.heroes.forEach((hId) => used.add(hId));
+        });
+        next.POOL = heroes.map((h) => h.id).filter((id) => !used.has(id));
+        setBoard(next);
+        setQuadrantPool(heroes.map((h) => h.id));
+      }
       setSelected(null);
       setFeedback(null);
       setTab("builder");
     },
-    [heroes, setTab],
+    [byId, heroes, setTab],
   );
 
   const refreshCommunity = useCallback(async () => {
@@ -356,15 +430,56 @@ export default function TierMakerClient({
     setBoard(next);
   };
 
+  const placeQuadrantHero = useCallback((heroId: number, x: number, y: number) => {
+    setQuadrant((prev) => ({
+      ...prev,
+      items: [...prev.items.filter((it) => it.heroId !== heroId), { heroId, x, y }],
+    }));
+    setQuadrantPool((prev) => prev.filter((id) => id !== heroId));
+  }, []);
+
+  const removeQuadrantHero = useCallback(
+    (heroId: number, refHeroId?: number, position: "before" | "after" = "before") => {
+      setQuadrant((prev) => ({
+        ...prev,
+        items: prev.items.filter((it) => it.heroId !== heroId),
+      }));
+      setQuadrantPool((prev) => {
+        const next = prev.filter((id) => id !== heroId);
+        if (refHeroId !== undefined) {
+          const at = next.indexOf(refHeroId);
+          if (at >= 0) {
+            const insertIdx = position === "after" ? at + 1 : at;
+            next.splice(insertIdx, 0, heroId);
+            return next;
+          }
+        }
+        next.push(heroId);
+        return next;
+      });
+      setSelected(null);
+    },
+    [],
+  );
+
   const clearBoard = async () => {
     const ok = await confirm({
-      title: "Limpar tabuleiro?",
-      description: "Todos os heróis posicionados nos tiers voltarão para a bandeja.",
+      title: boardStyle === "quadrant" ? "Limpar gráfico?" : "Limpar tabuleiro?",
+      description:
+        boardStyle === "quadrant"
+          ? "Todos os heróis posicionados no gráfico voltarão para a bandeja."
+          : "Todos os heróis posicionados nos tiers voltarão para a bandeja.",
       confirmLabel: "Limpar",
       tone: "warning",
     });
     if (!ok) return;
-    setBoard(createEmptyBoard(heroes, tiers));
+    if (boardStyle === "quadrant") {
+      setQuadrant((prev) => ({ ...prev, items: [] }));
+      setQuadrantPool(heroes.map((h) => h.id));
+      setSelected(null);
+    } else {
+      setBoard(createEmptyBoard(heroes, tiers));
+    }
   };
 
   const publishCurrent = async () => {
@@ -374,8 +489,19 @@ export default function TierMakerClient({
       return;
     }
 
-    if (tiers.some((t) => !t.label.trim())) {
+    if (boardStyle === "classic" && tiers.some((t) => !t.label.trim())) {
       setFeedback({ type: "error", text: "Todas as categorias precisam ter um nome." });
+      return;
+    }
+
+    if (
+      boardStyle === "quadrant" &&
+      (!quadrant.topLabel.trim() ||
+        !quadrant.bottomLabel.trim() ||
+        !quadrant.leftLabel.trim() ||
+        !quadrant.rightLabel.trim())
+    ) {
+      setFeedback({ type: "error", text: "Preencha os 4 rótulos dos eixos do gráfico." });
       return;
     }
 
@@ -391,14 +517,29 @@ export default function TierMakerClient({
     setPublishing(true);
     setFeedback(null);
 
-    const payload = {
-      title: cleanTitle,
-      tiers: tiers.map((t) => ({
-        label: t.label.trim(),
-        color: t.color,
-        heroes: board[t.id] || [],
-      })),
-    };
+    const payload =
+      boardStyle === "quadrant"
+        ? {
+            title: cleanTitle,
+            style: "quadrant" as const,
+            tiers: [],
+            quadrant: {
+              topLabel: quadrant.topLabel.trim(),
+              bottomLabel: quadrant.bottomLabel.trim(),
+              leftLabel: quadrant.leftLabel.trim(),
+              rightLabel: quadrant.rightLabel.trim(),
+              items: quadrant.items,
+            },
+          }
+        : {
+            title: cleanTitle,
+            style: "classic" as const,
+            tiers: tiers.map((t) => ({
+              label: t.label.trim(),
+              color: t.color,
+              heroes: board[t.id] || [],
+            })),
+          };
 
     const res = editingId
       ? await updateTierList(editingId, payload)
@@ -435,31 +576,62 @@ export default function TierMakerClient({
     setExportingId("builder");
     setFeedback(null);
     try {
-      await exportTierListToPng({
-        title: title.trim() || "Minha Tier List",
-        author: author || "Comunidade",
-        dateLabel: new Date().toLocaleDateString("pt-BR"),
-        tiers: tiers.map((t, idx) => {
-          const isTopTier = dynamicExpressions && idx === 0;
-          const isBottomTier = dynamicExpressions && idx === tiers.length - 1;
-          return {
-            label: t.label,
-            color: t.color,
-            heroes: (board[t.id] || [])
-              .map((hId) => byId.get(hId))
-              .filter((h): h is MakerHero => Boolean(h))
-              .map((h) => ({
-                id: h.id,
-                name: h.name,
-                image: isTopTier
-                  ? h.gloatImage || h.image
-                  : isBottomTier
-                    ? h.critImage || h.image
-                    : h.image,
-              })),
-          };
-        }),
-      });
+      if (boardStyle === "quadrant") {
+        await exportTierListToPng({
+          title: title.trim() || "Minha Tier List",
+          author: (currentUser ? authorDisplay : "") || "Comunidade",
+          dateLabel: new Date().toLocaleDateString("pt-BR"),
+          style: "quadrant",
+          tiers: [],
+          quadrant: {
+            topLabel: quadrant.topLabel,
+            bottomLabel: quadrant.bottomLabel,
+            leftLabel: quadrant.leftLabel,
+            rightLabel: quadrant.rightLabel,
+            heroes: quadrant.items
+              .map((it) => {
+                const h = byId.get(it.heroId);
+                if (!h) return null;
+                return {
+                  id: h.id,
+                  name: h.name,
+                  image: h.icon || h.image,
+                  rgb: h.rgb,
+                  x: it.x,
+                  y: it.y,
+                };
+              })
+              .filter((h): h is NonNullable<typeof h> => Boolean(h)),
+          },
+        });
+      } else {
+        await exportTierListToPng({
+          title: title.trim() || "Minha Tier List",
+          author: (currentUser ? authorDisplay : "") || "Comunidade",
+          dateLabel: new Date().toLocaleDateString("pt-BR"),
+          style: "classic",
+          tiers: tiers.map((t, idx) => {
+            const isTopTier = dynamicExpressions && idx === 0;
+            const isBottomTier = dynamicExpressions && idx === tiers.length - 1;
+            return {
+              label: t.label,
+              color: t.color,
+              heroes: (board[t.id] || [])
+                .map((hId) => byId.get(hId))
+                .filter((h): h is MakerHero => Boolean(h))
+                .map((h) => ({
+                  id: h.id,
+                  name: h.name,
+                  image: isTopTier
+                    ? h.gloatImage || h.image
+                    : isBottomTier
+                      ? h.critImage || h.image
+                      : h.image,
+                })),
+            };
+          }),
+        });
+      }
     } catch {
       setFeedback({ type: "error", text: "Não foi possível gerar o arquivo PNG." });
     } finally {
@@ -471,19 +643,50 @@ export default function TierMakerClient({
     setExportingId(item.id);
     setFeedback(null);
     try {
-      await exportTierListToPng({
-        title: item.title,
-        author: item.author,
-        dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
-        tiers: item.tiers.map((t) => ({
-          label: t.label,
-          color: t.color,
-          heroes: (t.heroes || [])
-            .map((hId) => byId.get(hId))
-            .filter((h): h is MakerHero => Boolean(h))
-            .map((h) => ({ id: h.id, name: h.name, image: h.image })),
-        })),
-      });
+      if (item.style === "quadrant" && item.quadrant) {
+        await exportTierListToPng({
+          title: item.title,
+          author: item.author,
+          dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+          style: "quadrant",
+          tiers: [],
+          quadrant: {
+            topLabel: item.quadrant.topLabel,
+            bottomLabel: item.quadrant.bottomLabel,
+            leftLabel: item.quadrant.leftLabel,
+            rightLabel: item.quadrant.rightLabel,
+            heroes: item.quadrant.items
+              .map((it) => {
+                const h = byId.get(it.heroId);
+                if (!h) return null;
+                return {
+                  id: h.id,
+                  name: h.name,
+                  image: h.icon || h.image,
+                  rgb: h.rgb,
+                  x: it.x,
+                  y: it.y,
+                };
+              })
+              .filter((h): h is NonNullable<typeof h> => Boolean(h)),
+          },
+        });
+      } else {
+        await exportTierListToPng({
+          title: item.title,
+          author: item.author,
+          dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+          style: "classic",
+          tiers: item.tiers.map((t) => ({
+            label: t.label,
+            color: t.color,
+            heroes: (t.heroes || [])
+              .map((hId) => byId.get(hId))
+              .filter((h): h is MakerHero => Boolean(h))
+              .map((h) => ({ id: h.id, name: h.name, image: h.image })),
+          })),
+        });
+      }
     } catch {
       setFeedback({ type: "error", text: "Não foi possível gerar o arquivo PNG." });
     } finally {
@@ -497,7 +700,10 @@ export default function TierMakerClient({
     const q = communityQuery.trim().toLowerCase();
     if (!q) return publishedLists;
     return publishedLists.filter(
-      (l) => l.title.toLowerCase().includes(q) || l.author.toLowerCase().includes(q),
+      (l) =>
+        l.title.toLowerCase().includes(q) ||
+        l.author.toLowerCase().includes(q) ||
+        (l.authorHandle?.toLowerCase().includes(q) ?? false),
     );
   }, [publishedLists, communityQuery]);
 
@@ -535,12 +741,16 @@ export default function TierMakerClient({
     applyListToBuilder(pub);
   };
 
+  const poolHeroIds = boardStyle === "quadrant" ? quadrantPool : board.POOL || [];
+
   const renderHeroChip = (id: number, currentTierId: string) => {
     const hero = byId.get(id);
     if (!hero) return null;
 
-    const isTopTier = dynamicExpressions && currentTierId === tiers[0]?.id;
-    const isBottomTier = dynamicExpressions && currentTierId === tiers[tiers.length - 1]?.id;
+    const isTopTier =
+      boardStyle === "classic" && dynamicExpressions && currentTierId === tiers[0]?.id;
+    const isBottomTier =
+      boardStyle === "classic" && dynamicExpressions && currentTierId === tiers[tiers.length - 1]?.id;
     const displayImage = isTopTier
       ? hero.gloatImage || hero.image
       : isBottomTier
@@ -548,17 +758,29 @@ export default function TierMakerClient({
         : hero.image;
 
     const isSelected = selected === id;
-    const isTarget = dropTarget?.id === id && dragId !== null && dragId !== id;
+    const activeDragId = dragId ?? quadrantDragId;
+    const isTarget =
+      dropTarget?.id === id && activeDragId !== null && activeDragId !== id;
     const isTargetBefore = isTarget && dropTarget?.position === "before";
     const isTargetAfter = isTarget && dropTarget?.position === "after";
 
     return (
       <div
         key={id}
+        data-chip-hero-id={id}
+        data-pool-hero-id={currentTierId === "POOL" ? id : undefined}
         draggable
         style={{ "--hc": hero.rgb ? hero.rgb.join(" ") : "245 158 11" } as CSSProperties}
         onClick={(e) => {
           e.stopPropagation();
+          if (boardStyle === "quadrant") {
+            if (selected !== null && selected !== id && currentTierId === "POOL") {
+              removeQuadrantHero(selected, id, "before");
+            } else {
+              setSelected(isSelected ? null : id);
+            }
+            return;
+          }
           if (selected !== null && selected !== id) moveHero(selected, currentTierId, id, "before");
           else setSelected(isSelected ? null : id);
         }}
@@ -592,7 +814,11 @@ export default function TierMakerClient({
           setDropTarget(null);
           setDragOverZone(null);
           if (dragId !== null && dragId !== id) {
-            moveHero(dragId, currentTierId, id, targetPos);
+            if (boardStyle === "quadrant" && currentTierId === "POOL") {
+              removeQuadrantHero(dragId, id, targetPos);
+            } else {
+              moveHero(dragId, currentTierId, id, targetPos);
+            }
           }
           setDragId(null);
         }}
@@ -622,8 +848,8 @@ export default function TierMakerClient({
           />
         </div>
 
-        <div className="pointer-events-none w-full py-1.5 px-1 text-center bg-transparent">
-          <p className="truncate text-[10.5px] font-bold leading-tight text-neutral-200 group-hover:text-amber-400 transition-colors">
+        <div className="hero-card-name pointer-events-none w-full overflow-hidden rounded-b-xl px-1.5 py-1.5 text-center transition-all duration-150">
+          <p className="truncate text-[10.5px] font-extrabold leading-tight text-white transition-colors group-hover:text-amber-300 [paint-order:stroke_fill] [-webkit-text-stroke:2px_rgba(0,0,0,0.95)] [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_6px_rgba(0,0,0,0.9)]">
             {hero.name}
           </p>
         </div>
@@ -688,9 +914,32 @@ export default function TierMakerClient({
                 placeholder="Título da sua Tier List"
                 className="font-deadlock w-full border-b border-neutral-700 bg-transparent text-3xl font-black text-[#f4efe6] outline-none focus:border-amber-500"
               />
-              <p className="text-xs font-semibold text-neutral-400">
-                {currentUser ? `Autor: ${author}` : "Entre na conta para publicar com seu perfil"}
-              </p>
+              {currentUser ? (
+                <div className="pt-0.5">
+                  <TierAuthorBadge
+                    name={authorDisplay}
+                    avatarUrl={authorAvatarUrl}
+                    size="sm"
+                    clickable={false}
+                    showHandle={false}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-neutral-400">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-700 bg-neutral-900/70 text-neutral-500">
+                    <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
+                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                    </svg>
+                  </span>
+                  <span className="font-semibold">Entre na conta para publicar com seu perfil</span>
+                  <Link
+                    href="/login?next=/tier-maker"
+                    className="font-bold text-amber-400 hover:underline"
+                  >
+                    Entrar
+                  </Link>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Configurações da Prancha (Engrenagem) */}
@@ -702,7 +951,7 @@ export default function TierMakerClient({
                   aria-expanded={settingsOpen}
                   onClick={() => setSettingsOpen((prev) => !prev)}
                   className={`flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-[5px] border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
-                    settingsOpen || !dynamicExpressions
+                    settingsOpen || !dynamicExpressions || boardStyle === "quadrant"
                       ? "border-amber-500/80 bg-neutral-800 text-amber-400"
                       : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-amber-500/70 hover:text-white"
                   }`}
@@ -726,41 +975,99 @@ export default function TierMakerClient({
                   <div
                     role="dialog"
                     aria-label="Configurações da prancha"
-                    className="absolute left-0 top-full z-40 mt-2 w-72 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md"
+                    className="absolute left-0 top-full z-40 mt-2 w-76 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md space-y-3"
                   >
                     <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
                       Configurações da Prancha
                     </p>
-                    <div className="pt-2.5">
-                      <label className="flex cursor-pointer items-start gap-2.5">
-                        <input
-                          type="checkbox"
-                          checked={dynamicExpressions}
-                          onChange={(e) => toggleDynamicExpressions(e.target.checked)}
-                          className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
-                        />
-                        <div className="space-y-0.5">
-                          <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
-                            Expressões Dinâmicas
-                          </span>
-                          <span className="block text-[11px] font-medium leading-tight text-neutral-400">
-                            Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
-                          </span>
-                        </div>
-                      </label>
+
+                    <div className="space-y-1.5">
+                      <span className="font-deadlock block text-[11px] font-black uppercase tracking-wider text-[#f4efe6]">
+                        Estilo da Tier List
+                      </span>
+                      <div
+                        role="radiogroup"
+                        aria-label="Estilo da Tier List"
+                        className="grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/80 p-1"
+                      >
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={boardStyle === "classic"}
+                          onClick={() => {
+                            setBoardStyle("classic");
+                            setSelected(null);
+                          }}
+                          className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider transition-all ${
+                            boardStyle === "classic"
+                              ? "bg-amber-500 text-black shadow-sm"
+                              : "text-neutral-300 hover:bg-neutral-800/80 hover:text-white"
+                          }`}
+                        >
+                          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M2 4h12M2 8h12M2 12h12" />
+                          </svg>
+                          <span>Clássica</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={boardStyle === "quadrant"}
+                          onClick={() => {
+                            setBoardStyle("quadrant");
+                            setSelected(null);
+                          }}
+                          className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider transition-all ${
+                            boardStyle === "quadrant"
+                              ? "bg-amber-500 text-black shadow-sm"
+                              : "text-neutral-300 hover:bg-neutral-800/80 hover:text-white"
+                          }`}
+                        >
+                          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M8 2v12M2 8h12" />
+                          </svg>
+                          <span>Quadrante 2D</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {boardStyle === "classic" ? (
+                      <div className="border-t border-neutral-800/80 pt-2.5">
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={dynamicExpressions}
+                            onChange={(e) => toggleDynamicExpressions(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+                              Expressões Dinâmicas
+                            </span>
+                            <span className="block text-[11px] font-medium leading-tight text-neutral-400">
+                              Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    ) : (
+                      <p className="border-t border-neutral-800/80 pt-2.5 text-[11px] font-medium leading-tight text-neutral-400">
+                        Clique nos 4 rótulos do gráfico para editar os eixos e arraste os heróis livremente pelo plano 2D.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Preencher com Meta */}
-              <button
-                type="button"
-                onClick={fillWithMeta}
-                className="rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 shadow transition-all duration-150 hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6] hover:scale-[1.02] active:scale-[0.98]"
-              >
-                Preencher com Meta
-              </button>
+              {boardStyle === "classic" && (
+                <button
+                  type="button"
+                  onClick={fillWithMeta}
+                  className="rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 shadow transition-all duration-150 hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6] hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Preencher com Meta
+                </button>
+              )}
 
               {/* Limpar */}
               <button
@@ -836,6 +1143,26 @@ export default function TierMakerClient({
           </div>
 
           {/* Prancha do Editor */}
+          {boardStyle === "quadrant" ? (
+            <TierQuadrantBoard
+              mode="editor"
+              quadrant={quadrant}
+              byId={byId}
+              poolRef={poolRef}
+              selectedHeroId={selected}
+              dragHeroId={dragId}
+              onSelectHero={setSelected}
+              onPlaceHero={placeQuadrantHero}
+              onRemoveHero={removeQuadrantHero}
+              onChangeLabel={(axis, value) =>
+                setQuadrant((prev) => ({ ...prev, [axis]: value }))
+              }
+              onDragOverPoolChange={(over) => setDragOverZone(over ? "POOL" : null)}
+              onPoolDropHover={setDropTarget}
+              onQuadrantDragChange={setQuadrantDragId}
+              onDragEnd={() => setDragId(null)}
+            />
+          ) : (
           <div className="divide-y divide-neutral-800/90 rounded-2xl border border-neutral-800/90 bg-neutral-900/50 shadow-2xl backdrop-blur-sm overflow-hidden">
             {tiers.map((tier, idx) => {
               const isFirst = idx === 0;
@@ -899,10 +1226,15 @@ export default function TierMakerClient({
 
                   <div
                     onClick={() => selected !== null && moveHero(selected, tier.id)}
-                    onDragOver={(e: DragEvent) => {
+                    onDragOver={(e: DragEvent<HTMLDivElement>) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
-                      if (dragId !== null && dragOverZone !== tier.id) setDragOverZone(tier.id);
+                      if (dragId !== null) {
+                        if (dragOverZone !== tier.id) setDragOverZone(tier.id);
+                        updateDropTarget(
+                          findDropTargetInZone(e.currentTarget, e.clientX, e.clientY, dragId),
+                        );
+                      }
                     }}
                     onDragLeave={(e: DragEvent) => {
                       if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -910,11 +1242,17 @@ export default function TierMakerClient({
                         setDropTarget(null);
                       }
                     }}
-                    onDrop={(e: DragEvent) => {
+                    onDrop={(e: DragEvent<HTMLDivElement>) => {
                       e.preventDefault();
+                      const target =
+                        dragId !== null
+                          ? findDropTargetInZone(e.currentTarget, e.clientX, e.clientY, dragId)
+                          : null;
                       setDragOverZone(null);
                       setDropTarget(null);
-                      if (dragId !== null) moveHero(dragId, tier.id);
+                      if (dragId !== null) {
+                        moveHero(dragId, tier.id, target?.id, target?.position);
+                      }
                       setDragId(null);
                     }}
                     className={`flex flex-1 flex-wrap content-center items-center gap-2 p-3 transition-colors cursor-pointer ${
@@ -991,14 +1329,25 @@ export default function TierMakerClient({
               );
             })}
           </div>
+          )}
 
           {/* Bandeja de Heróis Disponíveis */}
           <section
-            onClick={() => selected !== null && moveHero(selected, "POOL")}
-            onDragOver={(e: DragEvent) => {
+            ref={poolRef}
+            onClick={() => {
+              if (selected === null) return;
+              if (boardStyle === "quadrant") removeQuadrantHero(selected);
+              else moveHero(selected, "POOL");
+            }}
+            onDragOver={(e: DragEvent<HTMLElement>) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
-              if (dragId !== null && dragOverZone !== "POOL") setDragOverZone("POOL");
+              if (dragId !== null) {
+                if (dragOverZone !== "POOL") setDragOverZone("POOL");
+                updateDropTarget(
+                  findDropTargetInZone(e.currentTarget, e.clientX, e.clientY, dragId),
+                );
+              }
             }}
             onDragLeave={(e: DragEvent) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -1006,11 +1355,21 @@ export default function TierMakerClient({
                 setDropTarget(null);
               }
             }}
-            onDrop={(e: DragEvent) => {
+            onDrop={(e: DragEvent<HTMLElement>) => {
               e.preventDefault();
+              const target =
+                dragId !== null
+                  ? findDropTargetInZone(e.currentTarget, e.clientX, e.clientY, dragId)
+                  : null;
               setDragOverZone(null);
               setDropTarget(null);
-              if (dragId !== null) moveHero(dragId, "POOL");
+              if (dragId !== null) {
+                if (boardStyle === "quadrant") {
+                  removeQuadrantHero(dragId, target?.id, target?.position);
+                } else {
+                  moveHero(dragId, "POOL", target?.id, target?.position);
+                }
+              }
               setDragId(null);
             }}
             className={`rounded-2xl border transition-colors p-4 sm:p-5 shadow-xl ${
@@ -1019,7 +1378,7 @@ export default function TierMakerClient({
           >
             <div className="flex items-center justify-between pb-3 text-[11px] font-black uppercase tracking-wider text-neutral-400">
               <span>Heróis Disponíveis</span>
-              <span>{(board.POOL || []).length} restantes</span>
+              <span>{poolHeroIds.length} restantes</span>
             </div>
             <div
               onDragOver={(e: DragEvent) => {
@@ -1028,7 +1387,7 @@ export default function TierMakerClient({
               }}
               className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(78px,1fr))] justify-items-center gap-2.5 p-1"
             >
-              {(board.POOL || []).map((id) => renderHeroChip(id, "POOL"))}
+              {poolHeroIds.map((id) => renderHeroChip(id, "POOL"))}
             </div>
           </section>
         </div>
@@ -1104,7 +1463,11 @@ export default function TierMakerClient({
           ) : (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {filteredPublishedLists.map((item) => {
-                const totalPlaced = item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
+                const isQuadrant = item.style === "quadrant" && Boolean(item.quadrant);
+                const totalPlaced =
+                  isQuadrant && item.quadrant
+                    ? item.quadrant.items.length
+                    : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
                 const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
 
                 return (
@@ -1122,20 +1485,13 @@ export default function TierMakerClient({
                             {item.title}
                           </Link>
                         </h4>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-                          <span>
-                            Por{" "}
-                            {item.authorHandle ? (
-                              <Link
-                                href={`/profile/${item.authorHandle}`}
-                                className="font-bold text-neutral-200 hover:text-amber-400 transition-colors"
-                              >
-                                {item.author}
-                              </Link>
-                            ) : (
-                              <strong className="text-neutral-200">{item.author}</strong>
-                            )}
-                          </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                          <TierAuthorBadge
+                            name={item.author}
+                            handle={item.authorHandle}
+                            avatarUrl={item.authorAvatarUrl}
+                            size="sm"
+                          />
                           <span>•</span>
                           <span>{dateText}</span>
                           <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
@@ -1158,61 +1514,69 @@ export default function TierMakerClient({
                       )}
                     </div>
 
-                    <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
-                      {item.tiers.map((t, idx) => {
-                        const tierHeroes = (t.heroes || [])
-                          .map((hId) => byId.get(hId))
-                          .filter((h): h is NonNullable<typeof h> => Boolean(h));
+                    {isQuadrant && item.quadrant ? (
+                      <TierQuadrantBoard
+                        mode="preview"
+                        quadrant={item.quadrant}
+                        byId={byId}
+                      />
+                    ) : (
+                      <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
+                        {item.tiers.map((t, idx) => {
+                          const tierHeroes = (t.heroes || [])
+                            .map((hId) => byId.get(hId))
+                            .filter((h): h is NonNullable<typeof h> => Boolean(h));
 
-                        const MAX_PREVIEW = 10;
-                        const visibleHeroes = tierHeroes.slice(0, MAX_PREVIEW);
-                        const overflowCount = tierHeroes.length - MAX_PREVIEW;
+                          const MAX_PREVIEW = 10;
+                          const visibleHeroes = tierHeroes.slice(0, MAX_PREVIEW);
+                          const overflowCount = tierHeroes.length - MAX_PREVIEW;
 
-                        return (
-                          <div key={idx} className="flex min-h-[38px] items-stretch">
-                            <div
-                              style={{ backgroundColor: t.color }}
-                              className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
-                            >
-                              <span
-                                className="font-deadlock truncate px-1 text-[11px] font-black uppercase text-black leading-tight"
-                                title={t.label}
+                          return (
+                            <div key={idx} className="flex min-h-[38px] items-stretch">
+                              <div
+                                style={{ backgroundColor: t.color }}
+                                className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
                               >
-                                {t.label.replace(/\n+/g, " ")}
-                              </span>
-                            </div>
+                                <span
+                                  className="font-deadlock truncate px-1 text-[11px] font-black uppercase text-black leading-tight"
+                                  title={t.label}
+                                >
+                                  {t.label.replace(/\n+/g, " ")}
+                                </span>
+                              </div>
 
-                            <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
-                              {tierHeroes.length === 0 ? (
-                                <span className="text-[10px] text-neutral-600 italic px-1">—</span>
-                              ) : (
-                                <>
-                                  {visibleHeroes.map((h) => (
-                                    <div
-                                      key={h.id}
-                                      title={h.name}
-                                      className="relative h-6 w-6 sm:h-7 sm:w-7 shrink-0 overflow-hidden rounded-[4px] border border-neutral-800 bg-neutral-900 shadow-sm"
-                                    >
-                                      <img
-                                        src={h.image}
-                                        alt={h.name}
-                                        className="h-full w-full object-cover"
-                                        loading="lazy"
-                                      />
-                                    </div>
-                                  ))}
-                                  {overflowCount > 0 && (
-                                    <span className="flex h-6 items-center rounded-[4px] border border-neutral-800 bg-neutral-900 px-1.5 text-[9px] font-bold text-neutral-400">
-                                      +{overflowCount}
-                                    </span>
-                                  )}
-                                </>
-                              )}
+                              <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
+                                {tierHeroes.length === 0 ? (
+                                  <span className="text-[10px] text-neutral-600 italic px-1">—</span>
+                                ) : (
+                                  <>
+                                    {visibleHeroes.map((h) => (
+                                      <div
+                                        key={h.id}
+                                        title={h.name}
+                                        className="relative h-6 w-6 sm:h-7 sm:w-7 shrink-0 overflow-hidden rounded-[4px] border border-neutral-800 bg-neutral-900 shadow-sm"
+                                      >
+                                        <img
+                                          src={h.image}
+                                          alt={h.name}
+                                          className="h-full w-full object-cover"
+                                          loading="lazy"
+                                        />
+                                      </div>
+                                    ))}
+                                    {overflowCount > 0 && (
+                                      <span className="flex h-6 items-center rounded-[4px] border border-neutral-800 bg-neutral-900 px-1.5 text-[9px] font-bold text-neutral-400">
+                                        +{overflowCount}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2 pt-1">
                       <button

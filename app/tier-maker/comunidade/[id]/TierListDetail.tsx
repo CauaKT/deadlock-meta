@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { MakerHero } from "@/app/tiers";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
+import TierAuthorBadge from "@/app/tier-maker/TierAuthorBadge";
+import TierQuadrantBoard from "@/app/tier-maker/TierQuadrantBoard";
 import { getTierListById } from "@/lib/backend/client";
 import type { TierListItem } from "@/lib/backend/types";
 
@@ -45,16 +47,47 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
     setExporting(true);
     setExportError(false);
     try {
-      await exportTierListToPng({
-        title: item.title,
-        author: item.author,
-        dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
-        tiers: item.tiers.map((t) => ({
-          label: t.label,
-          color: t.color,
-          heroes: heroesOf(t.heroes).map((h) => ({ id: h.id, name: h.name, image: h.image })),
-        })),
-      });
+      if (item.style === "quadrant" && item.quadrant) {
+        await exportTierListToPng({
+          title: item.title,
+          author: item.author,
+          dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+          style: "quadrant",
+          tiers: [],
+          quadrant: {
+            topLabel: item.quadrant.topLabel,
+            bottomLabel: item.quadrant.bottomLabel,
+            leftLabel: item.quadrant.leftLabel,
+            rightLabel: item.quadrant.rightLabel,
+            heroes: item.quadrant.items
+              .map((it) => {
+                const h = byId.get(it.heroId);
+                if (!h) return null;
+                return {
+                  id: h.id,
+                  name: h.name,
+                  image: h.icon || h.image,
+                  rgb: h.rgb,
+                  x: it.x,
+                  y: it.y,
+                };
+              })
+              .filter((h): h is NonNullable<typeof h> => Boolean(h)),
+          },
+        });
+      } else {
+        await exportTierListToPng({
+          title: item.title,
+          author: item.author,
+          dateLabel: new Date(item.createdAt).toLocaleDateString("pt-BR"),
+          style: "classic",
+          tiers: item.tiers.map((t) => ({
+            label: t.label,
+            color: t.color,
+            heroes: heroesOf(t.heroes).map((h) => ({ id: h.id, name: h.name, image: h.image })),
+          })),
+        });
+      }
     } catch {
       setExportError(true);
     } finally {
@@ -85,7 +118,11 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
     );
   }
 
-  const totalPlaced = item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
+  const isQuadrant = item.style === "quadrant" && Boolean(item.quadrant);
+  const totalPlaced =
+    isQuadrant && item.quadrant
+      ? item.quadrant.items.length
+      : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
   const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
 
   return (
@@ -101,19 +138,13 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
         <div className="min-w-0 space-y-1.5">
           <h1 className="font-deadlock text-3xl font-black text-[#f4efe6] md:text-4xl">{item.title}</h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-            <span>
-              Por{" "}
-              {item.authorHandle ? (
-                <Link
-                  href={`/profile/${item.authorHandle}`}
-                  className="font-bold text-neutral-200 transition-colors hover:text-amber-400"
-                >
-                  {item.author}
-                </Link>
-              ) : (
-                <strong className="text-neutral-200">{item.author}</strong>
-              )}
-            </span>
+            <TierAuthorBadge
+              name={item.author}
+              handle={item.authorHandle}
+              avatarUrl={item.authorAvatarUrl}
+              size="md"
+              prefix="Por"
+            />
             <span>•</span>
             <span>{dateText}</span>
             <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
@@ -155,38 +186,46 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
         </div>
       )}
 
-      <div className="divide-y divide-neutral-800/90 overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 shadow-2xl">
-        {item.tiers.map((t, idx) => {
-          const tierHeroes = heroesOf(t.heroes);
-          return (
-            <div key={idx} className="flex min-h-[72px] flex-row">
-              <div
-                style={{ backgroundColor: t.color }}
-                className="flex w-24 shrink-0 items-center justify-center p-2 text-center select-none sm:w-36"
-              >
-                <span className="font-deadlock break-words px-1 text-sm font-black uppercase leading-tight text-black sm:text-base">
-                  {t.label.replace(/\n+/g, " ")}
-                </span>
+      {isQuadrant && item.quadrant ? (
+        <TierQuadrantBoard
+          mode="detail"
+          quadrant={item.quadrant}
+          byId={byId}
+        />
+      ) : (
+        <div className="divide-y divide-neutral-800/90 overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 shadow-2xl">
+          {item.tiers.map((t, idx) => {
+            const tierHeroes = heroesOf(t.heroes);
+            return (
+              <div key={idx} className="flex min-h-[72px] flex-row">
+                <div
+                  style={{ backgroundColor: t.color }}
+                  className="flex w-24 shrink-0 items-center justify-center p-2 text-center select-none sm:w-36"
+                >
+                  <span className="font-deadlock break-words px-1 text-sm font-black uppercase leading-tight text-black sm:text-base">
+                    {t.label.replace(/\n+/g, " ")}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-wrap content-center items-center gap-2 bg-neutral-950/75 p-3">
+                  {tierHeroes.length === 0 ? (
+                    <span className="px-1 text-xs italic text-neutral-600">—</span>
+                  ) : (
+                    tierHeroes.map((h) => (
+                      <div
+                        key={h.id}
+                        title={h.name}
+                        className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 shadow-sm sm:h-14 sm:w-14"
+                      >
+                        <img src={h.image} alt={h.name} className="h-full w-full object-cover" loading="lazy" />
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-              <div className="flex flex-1 flex-wrap content-center items-center gap-2 bg-neutral-950/75 p-3">
-                {tierHeroes.length === 0 ? (
-                  <span className="px-1 text-xs italic text-neutral-600">—</span>
-                ) : (
-                  tierHeroes.map((h) => (
-                    <div
-                      key={h.id}
-                      title={h.name}
-                      className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 shadow-sm sm:h-14 sm:w-14"
-                    >
-                      <img src={h.image} alt={h.name} className="h-full w-full object-cover" loading="lazy" />
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
