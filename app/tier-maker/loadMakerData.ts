@@ -2,6 +2,7 @@ import {
   calculateTier,
   computeHeroMatchStats,
   extractColor,
+  fetchHeroBlurbs,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
   fetchPatches,
@@ -23,13 +24,15 @@ export async function loadMakerData(): Promise<{
   const defaultRank = getDefaultRank();
   const minMatches = minMatchesForRank(defaultRank.tier);
 
-  const [heroesMap, wikiColors, stats] = await Promise.all([
+  const [heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     fetchHeroesAssets(),
     fetchWikiColors(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil, defaultRank.minBadge),
+    fetchHeroBlurbs(),
   ]);
 
   const statsById = new Map(stats.map((s) => [s.hero_id, s]));
+  const totalMatchesExact = stats.reduce((sum, s) => sum + (s.matches || 0), 0) / 12;
 
   const makerHeroes: MakerHero[] = Object.values(heroesMap)
     .filter((h) => {
@@ -40,14 +43,28 @@ export async function loadMakerData(): Promise<{
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     .map((h) => {
       const media = resolveHeroMedia(h);
+      const st = statsById.get(h.id);
+      const computed = st ? computeHeroMatchStats(st) : null;
+      const matches = computed?.matches ?? 0;
+      const winRate = computed?.winRate ?? 0;
+      const pickRate =
+        totalMatchesExact > 0 && matches > 0 ? (matches / totalMatchesExact) * 100 : 0;
+
       return {
         id: h.id,
         name: h.name,
         image: media.card,
         icon: media.icon ?? media.card,
+        bgImage: media.bg,
+        bannerImage: media.bannerImage,
         gloatImage: media.gloatImage,
         critImage: media.critImage,
         rgb: extractColor(h, wikiColors),
+        tags: blurbs[h.id]?.tags ?? [],
+        matches,
+        winRate,
+        pickRate,
+        metaTier: matches > 0 ? calculateTier(winRate) : "B",
       };
     });
 

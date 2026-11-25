@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { MakerHero } from "@/app/tiers";
+import TierHeroCard from "@/app/tier-list/TierHeroCard";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import TierAuthorBadge from "@/app/tier-maker/TierAuthorBadge";
 import TierCommentsThread from "@/app/tier-maker/TierCommentsThread";
@@ -58,10 +59,7 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
       }
     });
 
-    void recordTierListView(id).then((views) => {
-      if (!active || views === null) return;
-      setItem((prev) => (prev ? { ...prev, viewsCount: views } : prev));
-    });
+    void recordTierListView(id);
 
     return () => {
       active = false;
@@ -77,21 +75,6 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {}
-  };
-
-  const handleNativeShare = async () => {
-    if (!item) return;
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        await navigator.share({
-          title: `${item.title} • LockPro`,
-          text: `Confira esta tier list de Deadlock por ${item.author}`,
-          url: window.location.href,
-        });
-        return;
-      } catch {}
-    }
-    await copyLink();
   };
 
   const handleToggleLike = async () => {
@@ -309,16 +292,23 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
       ? item.quadrant.items.length
       : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
   const createdDate = new Date(item.createdAt);
-  const dateText = createdDate
-    .toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })
-    .replace(/\bde\b/g, "")
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const diffMin = Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60_000));
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+  const dateText =
+    diffMin < 1
+      ? "agora"
+      : diffMin < 60
+        ? `${diffMin} min atrás`
+        : diffHours < 24
+          ? `${diffHours} h atrás`
+          : diffDays < 30
+            ? `${diffDays} ${diffDays === 1 ? "dia" : "dias"} atrás`
+            : diffMonths < 12
+              ? `${diffMonths} ${diffMonths === 1 ? "mês" : "meses"} atrás`
+              : `${diffYears} ${diffYears === 1 ? "ano" : "anos"} atrás`;
   const fullDateTitle = createdDate.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -332,41 +322,44 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
       : "Clássica";
   const likesCount = item.likesCount ?? 0;
   const savesCount = item.savesCount ?? 0;
-  const viewsCount = item.viewsCount ?? 0;
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/tier-maker/comunidade"
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-400 transition-colors hover:text-amber-400"
-      >
-        <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10 3 5 8l5 5" />
-        </svg>
-        <span>Voltar para a Comunidade</span>
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/tier-maker/comunidade"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-400 transition-colors hover:text-amber-400"
+        >
+          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 3 5 8l5 5" />
+          </svg>
+          <span>Voltar para a Comunidade</span>
+        </Link>
 
-      <div className="flex flex-col gap-4 border-b border-neutral-800 pb-4 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded border border-white/10 bg-neutral-900 px-2 py-0.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300">
-              {shapeLabel}
-            </span>
-            <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
-              {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
-            </span>
-            <span className="text-[11px] font-semibold text-neutral-500">
-              {viewsCount} {viewsCount === 1 ? "visualização" : "visualizações"}
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded border border-white/10 bg-neutral-900 px-2 py-0.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300">
+            {shapeLabel}
+          </span>
+          <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
+            {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
+          </span>
+        </div>
+      </div>
 
-          <h1 className="font-deadlock text-3xl font-black text-[#f4efe6] md:text-4xl">{item.title}</h1>
-
+      <header className="space-y-4 border-b border-neutral-800 pb-5">
+        <div className="space-y-2">
+          <h1 className="font-deadlock text-3xl font-black leading-tight text-[#f4efe6] md:text-4xl">
+            {item.title}
+          </h1>
           {item.description && (
-            <p className="max-w-2xl text-sm leading-relaxed text-neutral-300">{item.description}</p>
+            <p className="max-w-4xl whitespace-pre-line text-sm leading-relaxed text-neutral-300">
+              {item.description}
+            </p>
           )}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 text-xs text-neutral-400">
+        <div className="flex flex-col gap-3 border-t border-neutral-800/70 pt-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5 text-xs text-neutral-400">
             <TierAuthorBadge
               name={item.author}
               handle={item.authorHandle}
@@ -374,15 +367,16 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
               size="md"
               prefix="Por"
               showHandle={false}
+              pill={false}
             />
             <span
               title={fullDateTitle}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-800/80 bg-neutral-950/70 px-2.5 py-0.5 text-[11px] font-medium capitalize text-neutral-400"
+              className="inline-flex h-[38px] shrink-0 items-center gap-2 px-1 text-xs sm:text-sm font-semibold text-neutral-400"
             >
               <svg
                 aria-hidden
                 viewBox="0 0 16 16"
-                className="h-3 w-3 text-neutral-500"
+                className="h-4 w-4 text-neutral-500"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1.7"
@@ -395,91 +389,113 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
               <span>{dateText}</span>
             </span>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={likeBusy}
-            onClick={() => void handleToggleLike()}
-            className={`cursor-pointer rounded-[5px] border px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider shadow transition-all ${
-              item.likedByMe
-                ? "border-rose-500/60 bg-rose-500/15 text-rose-300"
-                : "border-neutral-700/80 bg-neutral-900/90 text-neutral-200 hover:border-rose-500/50 hover:text-rose-300"
-            }`}
-          >
-            {item.likedByMe ? "♥" : "♡"} Curtir ({likesCount})
-          </button>
-
-          <button
-            type="button"
-            disabled={saveBusy}
-            onClick={() => void handleToggleSave()}
-            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider shadow transition-all ${
-              item.savedByMe
-                ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
-                : "border-neutral-700/80 bg-neutral-900/90 text-neutral-200 hover:border-amber-500/50 hover:text-amber-300"
-            }`}
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="h-3.5 w-3.5"
-              fill={item.savedByMe ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={likeBusy}
+              title={item.likedByMe ? "Remover curtida" : "Curtir"}
+              aria-label={`Curtir (${likesCount})`}
+              aria-pressed={Boolean(item.likedByMe)}
+              onClick={() => void handleToggleLike()}
+              className={`inline-flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-2.5 font-deadlock text-sm font-black tracking-wider transition-colors ${
+                item.likedByMe
+                  ? "text-rose-400 hover:bg-rose-500/10"
+                  : "text-neutral-300 hover:bg-rose-500/10 hover:text-rose-300"
+              }`}
             >
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>
-              {item.savedByMe ? "Salva" : "Salvar"} ({savesCount})
-            </span>
-          </button>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill={item.likedByMe ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19.5 12.572 12 20l-7.5-7.428A5 5 0 1 1 12 6.006a5 5 0 1 1 7.5 6.572z" />
+              </svg>
+              <span className="tabular-nums">{likesCount}</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={openFeedModal}
-            className="cursor-pointer rounded-[5px] border border-emerald-500/50 bg-emerald-950/30 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-emerald-300 shadow transition-all hover:border-emerald-400 hover:bg-emerald-950/50"
-          >
-            Postar no Feed
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleNativeShare()}
-            className="cursor-pointer rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 shadow transition-all hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6]"
-          >
-            {copied ? "Link copiado!" : "Compartilhar"}
-          </button>
-
-          <button
-            type="button"
-            disabled={exporting}
-            onClick={exportPng}
-            className="cursor-pointer rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 shadow transition-all hover:border-amber-400 hover:bg-neutral-800 disabled:opacity-50"
-          >
-            {exporting ? "Gerando..." : "Exportar PNG"}
-          </button>
-
-          <Link
-            href={`/tier-maker?duplicate=${item.id}`}
-            className="rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-200 shadow transition-all hover:border-neutral-500 hover:text-white"
-          >
-            Duplicar
-          </Link>
-
-          {item.canEdit && (
-            <Link
-              href={`/tier-maker?edit=${item.id}`}
-              className="rounded-[5px] border border-neutral-700/80 bg-neutral-800/80 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] shadow transition-all hover:border-amber-500/80 hover:text-amber-400"
+            <button
+              type="button"
+              disabled={saveBusy}
+              title={item.savedByMe ? "Remover dos salvos" : "Salvar"}
+              aria-label={`Salvar (${savesCount})`}
+              aria-pressed={Boolean(item.savedByMe)}
+              onClick={() => void handleToggleSave()}
+              className={`inline-flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-2.5 font-deadlock text-sm font-black tracking-wider transition-colors ${
+                item.savedByMe
+                  ? "text-amber-400 hover:bg-amber-500/10"
+                  : "text-neutral-300 hover:bg-amber-500/10 hover:text-amber-300"
+              }`}
             >
-              Abrir no Editor
-            </Link>
-          )}
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill={item.savedByMe ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="tabular-nums">{savesCount}</span>
+            </button>
+
+            <span aria-hidden className="mx-0.5 hidden h-5 w-px bg-neutral-800 sm:block" />
+
+            <button
+              type="button"
+              onClick={openFeedModal}
+              className="inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/50 bg-emerald-950/30 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-emerald-300 shadow transition-all hover:border-emerald-400 hover:bg-emerald-950/50"
+            >
+              Postar no Feed
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void copyLink()}
+              className={`inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 font-deadlock text-[11px] font-black uppercase tracking-wider shadow transition-all ${
+                copied
+                  ? "border-amber-500/70 bg-amber-500/15 text-amber-300"
+                  : "border-neutral-700/80 bg-neutral-900/90 text-neutral-300 hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6]"
+              }`}
+            >
+              {copied ? "Link copiado!" : "Copiar link"}
+            </button>
+
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={exportPng}
+              className="inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400 shadow transition-all hover:border-amber-400 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
+              </svg>
+              <span>{exporting ? "Gerando..." : "Exportar PNG"}</span>
+            </button>
+
+            {item.canEdit && (
+              <Link
+                href={`/tier-maker?edit=${item.id}`}
+                title="Abrir no editor"
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700/80 bg-neutral-800/80 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6] shadow transition-all hover:border-amber-500/80 hover:text-amber-400"
+              >
+                <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                </svg>
+                <span>Editar</span>
+              </Link>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       {feedback && (
         <div
@@ -522,31 +538,56 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
           Esta tier list não possui categorias visíveis.
         </div>
       ) : (
-        <div className="divide-y divide-neutral-800/90 overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 shadow-2xl">
+        <div className="divide-y divide-neutral-800/90 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c]/95 shadow-2xl">
           {item.tiers.map((t, idx) => {
             const tierHeroes = heroesOf(t.heroes);
+            const isFirst = idx === 0;
+            const isLast = idx === item.tiers.length - 1;
+            const cleanTierLabel = t.label.replace(/\n+/g, " ");
             return (
-              <div key={idx} className="flex min-h-[72px] flex-row">
+              <div key={idx} className="flex min-h-[105px] flex-row">
                 <div
                   style={{ backgroundColor: t.color }}
-                  className="flex w-24 shrink-0 items-center justify-center p-2 text-center select-none sm:w-36"
+                  className={`flex w-24 shrink-0 items-center justify-center border-r border-black/40 p-2 text-center select-none sm:w-36 ${
+                    isFirst ? "rounded-tl-[15px]" : ""
+                  } ${isLast ? "rounded-bl-[15px]" : ""}`}
                 >
                   <span className="font-deadlock break-words px-1 text-sm font-black uppercase leading-tight text-black sm:text-base">
-                    {t.label.replace(/\n+/g, " ")}
+                    {cleanTierLabel}
                   </span>
                 </div>
-                <div className="flex flex-1 flex-wrap content-center items-center gap-2 bg-neutral-950/75 p-3">
+                <div
+                  className={`flex flex-1 flex-wrap content-center items-center gap-2 bg-[#070908]/90 p-2.5 sm:gap-2.5 sm:p-3 ${
+                    isFirst ? "rounded-tr-[15px]" : ""
+                  } ${isLast ? "rounded-br-[15px]" : ""}`}
+                >
                   {tierHeroes.length === 0 ? (
                     <span className="px-1 text-xs italic text-neutral-600">—</span>
                   ) : (
                     tierHeroes.map((h) => (
-                      <div
+                      <TierHeroCard
                         key={h.id}
-                        title={h.name}
-                        className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 shadow-sm sm:h-14 sm:w-14"
-                      >
-                        <img src={h.image} alt={h.name} className="h-full w-full object-cover" loading="lazy" />
-                      </div>
+                        href={`/heroes/${h.id}`}
+                        metricId="winrate"
+                        metricShortLabel="Win Rate"
+                        showCardMetric={false}
+                        customBadge={{ label: cleanTierLabel, color: t.color }}
+                        hero={{
+                          id: h.id,
+                          name: h.name,
+                          image: h.image,
+                          bgImage: h.bgImage ?? "",
+                          bannerImage: h.bannerImage ?? "",
+                          rgb: h.rgb,
+                          tags: h.tags ?? [],
+                          matches: h.matches ?? 0,
+                          winRate: h.winRate ?? 0,
+                          pickRate: h.pickRate ?? 0,
+                          metricValue: h.winRate ?? 0,
+                          scoreBreakdown: [],
+                          tier: h.metaTier ?? "B",
+                        }}
+                      />
                     ))
                   )}
                 </div>
@@ -556,10 +597,21 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
         </div>
       )}
 
-      <section className="space-y-4 rounded-2xl border border-neutral-800/90 bg-neutral-900/40 p-5 shadow-xl">
-        <h2 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
-          Comentários ({comments.length})
-        </h2>
+      <section
+        aria-label="Comentários"
+        className="space-y-4 rounded-2xl border border-neutral-800/90 bg-[#0a0d0c]/95 p-5 shadow-2xl sm:p-6"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-800/80 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <span aria-hidden className="h-4 w-1 rounded-full bg-amber-500" />
+            <h2 className="font-deadlock text-lg sm:text-xl font-black uppercase tracking-wider text-[#f4efe6]">
+              Comentários
+            </h2>
+            <span className="rounded-[4px] border border-neutral-800 bg-neutral-900/90 px-2 py-0.5 font-deadlock text-xs font-black tabular-nums text-amber-400">
+              {comments.length}
+            </span>
+          </div>
+        </div>
 
         <TierCommentsThread
           tierListId={item.id}

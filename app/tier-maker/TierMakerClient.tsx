@@ -1351,193 +1351,199 @@ export default function TierMakerClient({
           )}
 
           {/* Cabeçalho do Editor */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-neutral-800 pb-4">
-            <div className="space-y-2 flex-1 max-w-xl">
+          <div className="space-y-4 border-b border-neutral-800 pb-5">
+            <div className="space-y-2.5">
               <input
                 value={title}
                 maxLength={80}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Título da sua Tier List"
-                className="font-deadlock w-full border-b border-neutral-700 bg-transparent text-3xl font-black text-[#f4efe6] outline-none focus:border-amber-500"
+                className="font-deadlock w-full border-b border-neutral-800 bg-transparent pb-1.5 text-3xl font-black text-[#f4efe6] outline-none transition-colors placeholder:text-neutral-600 focus:border-amber-500 sm:text-4xl"
               />
-              <input
+              <textarea
                 value={description}
                 maxLength={280}
+                rows={Math.min(5, Math.max(2, description.split("\n").length))}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descrição ou critérios do ranking (opcional)"
-                className="w-full border-b border-neutral-800/90 bg-transparent pb-1 text-xs text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-amber-500/70"
+                className="lp-scroll w-full resize-y rounded-lg border border-neutral-800/70 bg-neutral-950/45 px-3 py-2 text-xs leading-relaxed text-neutral-200 outline-none transition-colors placeholder:text-neutral-500 hover:border-neutral-700 focus:border-amber-500/70 sm:text-sm"
               />
-              {currentUser ? (
-                <div className="pt-0.5">
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-neutral-800/70 pt-3.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                {currentUser ? (
                   <TierAuthorBadge
                     name={authorDisplay}
                     avatarUrl={authorAvatarUrl}
-                    size="sm"
+                    size="md"
                     clickable={false}
                     showHandle={false}
+                    pill={false}
                   />
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-neutral-400">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-700 bg-neutral-900/70 text-neutral-500">
-                    <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
-                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-                    </svg>
-                  </span>
-                  <span className="font-semibold">Entre na conta para publicar com seu perfil</span>
-                  <Link
-                    href={`/login?next=${encodeURIComponent(
-                      boardStyle === "quadrant" ? "/tier-maker?modo=quadrante" : "/tier-maker",
-                    )}`}
-                    className="font-bold text-amber-400 hover:underline"
-                  >
-                    Entrar
-                  </Link>
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Configurações da Prancha (Engrenagem) */}
-              {boardStyle === "classic" && (
-                <div ref={settingsRef} className="relative">
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-neutral-700 bg-neutral-900/70 text-neutral-500">
+                      <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                      </svg>
+                    </span>
+                    <span className="font-semibold">Entre na conta para publicar com seu perfil</span>
+                    <Link
+                      href={`/login?next=${encodeURIComponent(
+                        boardStyle === "quadrant" ? "/tier-maker?modo=quadrante" : "/tier-maker",
+                      )}`}
+                      className="font-bold text-amber-400 hover:underline"
+                    >
+                      Entrar
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Configurações da Prancha (Engrenagem) */}
+                {boardStyle === "classic" && (
+                  <div ref={settingsRef} className="relative">
+                    <button
+                      type="button"
+                      title="Configurações da prancha"
+                      aria-label="Configurações da prancha"
+                      aria-expanded={settingsOpen}
+                      onClick={() => setSettingsOpen((prev) => !prev)}
+                      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
+                        settingsOpen
+                          ? "border-neutral-500 bg-neutral-800 text-[#f4efe6]"
+                          : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-neutral-500 hover:text-white"
+                      }`}
+                    >
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? "rotate-90" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
+
+                    {settingsOpen && (
+                      <div
+                        role="dialog"
+                        aria-label="Configurações da prancha"
+                        className="absolute left-0 top-full z-40 mt-2 w-76 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md space-y-3"
+                      >
+                        <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
+                          Configurações da Prancha
+                        </p>
+
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={dynamicExpressions}
+                            onChange={(e) => toggleDynamicExpressions(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+                              Expressões Dinâmicas
+                            </span>
+                            <span className="block text-[11px] font-medium leading-tight text-neutral-400">
+                              Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {boardStyle === "classic" && (
                   <button
                     type="button"
-                    title="Configurações da prancha"
-                    aria-label="Configurações da prancha"
-                    aria-expanded={settingsOpen}
-                    onClick={() => setSettingsOpen((prev) => !prev)}
-                    className={`flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-[5px] border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
-                      settingsOpen
-                        ? "border-neutral-500 bg-neutral-800 text-[#f4efe6]"
-                        : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-neutral-500 hover:text-white"
-                    }`}
+                    onClick={fillWithMeta}
+                    className="inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-300 shadow transition-all duration-150 hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6] hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <svg
-                      aria-hidden
-                      viewBox="0 0 24 24"
-                      className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? "rotate-90" : ""}`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
+                    Preencher com Meta
                   </button>
+                )}
 
-                  {settingsOpen && (
-                    <div
-                      role="dialog"
-                      aria-label="Configurações da prancha"
-                      className="absolute left-0 top-full z-40 mt-2 w-76 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md space-y-3"
-                    >
-                      <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
-                        Configurações da Prancha
-                      </p>
-
-                      <label className="flex cursor-pointer items-start gap-2.5">
-                        <input
-                          type="checkbox"
-                          checked={dynamicExpressions}
-                          onChange={(e) => toggleDynamicExpressions(e.target.checked)}
-                          className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
-                        />
-                        <div className="space-y-0.5">
-                          <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
-                            Expressões Dinâmicas
-                          </span>
-                          <span className="block text-[11px] font-medium leading-tight text-neutral-400">
-                            Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {boardStyle === "classic" && (
+                {/* Limpar */}
                 <button
                   type="button"
-                  onClick={fillWithMeta}
-                  className="rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 shadow transition-all duration-150 hover:border-amber-500/70 hover:bg-neutral-800 hover:text-[#f4efe6] hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => void clearBoard()}
+                  className="group inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-400 shadow transition-all duration-150 hover:border-rose-500/70 hover:bg-rose-950/30 hover:text-rose-300 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Preencher com Meta
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    className="h-3.5 w-3.5 transition-transform group-hover:rotate-12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
+                  </svg>
+                  <span>Limpar</span>
                 </button>
-              )}
 
-              {/* Limpar */}
-              <button
-                type="button"
-                onClick={() => void clearBoard()}
-                className="group inline-flex items-center gap-1.5 rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-400 shadow transition-all duration-150 hover:border-rose-500/70 hover:bg-rose-950/30 hover:text-rose-300 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5 transition-transform group-hover:rotate-12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Exportar PNG */}
+                <button
+                  type="button"
+                  disabled={exportingId === "builder"}
+                  onClick={handleExportCurrentPng}
+                  className="inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-400 shadow transition-all duration-150 hover:border-amber-400 hover:bg-neutral-800 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                 >
-                  <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
-                </svg>
-                <span>Limpar</span>
-              </button>
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
+                  </svg>
+                  <span>{exportingId === "builder" ? "Gerando..." : "Exportar PNG"}</span>
+                </button>
 
-              {/* Exportar PNG */}
-              <button
-                type="button"
-                disabled={exportingId === "builder"}
-                onClick={handleExportCurrentPng}
-                className="inline-flex items-center gap-1.5 rounded-[5px] border border-neutral-700/80 bg-neutral-900/90 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 shadow transition-all duration-150 hover:border-amber-400 hover:bg-neutral-800 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-              >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Publicar / Salvar Alterações */}
+                <button
+                  type="button"
+                  disabled={publishing}
+                  onClick={publishCurrent}
+                  className="group inline-flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border border-emerald-400/80 bg-gradient-to-r from-emerald-500 to-teal-500 px-3.5 font-deadlock text-[11px] sm:text-xs font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(16,185,129,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_20px_rgba(16,185,129,0.55)] active:scale-[0.98] disabled:opacity-60"
                 >
-                  <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
-                </svg>
-                <span>{exportingId === "builder" ? "Gerando..." : "Exportar PNG"}</span>
-              </button>
-
-              {/* Publicar / Salvar Alterações */}
-              <button
-                type="button"
-                disabled={publishing}
-                onClick={publishCurrent}
-                className="group inline-flex items-center gap-2 rounded-[5px] border border-emerald-400/80 bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 font-deadlock text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(16,185,129,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_4px_20px_rgba(16,185,129,0.55)] active:scale-[0.98] disabled:opacity-60"
-              >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-y-0.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M8 11V2M4 5l4-3 4 3M2 14h12" />
-                </svg>
-                <span>
-                  {publishing
-                    ? "Salvando..."
-                    : editingId
-                      ? "Salvar Alterações"
-                      : "Publicar no Site"}
-                </span>
-              </button>
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-y-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M8 11V2M4 5l4-3 4 3M2 14h12" />
+                  </svg>
+                  <span>
+                    {publishing
+                      ? "Salvando..."
+                      : editingId
+                        ? "Salvar Alterações"
+                        : "Publicar no Site"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1905,8 +1911,13 @@ export default function TierMakerClient({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-              {filteredPublishedLists.map((item) => {
+            <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:items-start">
+              {[0, 1].map((colIdx) => (
+                <div key={colIdx} className="contents lg:flex lg:flex-col lg:gap-6">
+                  {filteredPublishedLists
+                    .map((item, idx) => ({ item, idx }))
+                    .filter(({ idx }) => idx % 2 === colIdx)
+                    .map(({ item, idx }) => {
                 const isQuadrant = item.style === "quadrant" && Boolean(item.quadrant);
                 const totalPlaced =
                   isQuadrant && item.quadrant
@@ -1968,6 +1979,7 @@ export default function TierMakerClient({
                 return (
                   <article
                     key={item.id}
+                    style={{ order: idx }}
                     className={`flex flex-col justify-between rounded-2xl border bg-neutral-900/55 p-5 shadow-xl backdrop-blur-sm transition-all space-y-4 ${
                       isTopHot
                         ? "border-amber-500/45 shadow-[0_12px_40px_rgba(245,158,11,0.1)] hover:border-amber-400/70"
@@ -2089,7 +2101,7 @@ export default function TierMakerClient({
                         </div>
 
                         {item.description && (
-                          <p className="line-clamp-2 pt-0.5 text-xs leading-relaxed text-neutral-300">
+                          <p className="line-clamp-2 whitespace-pre-line pt-0.5 text-xs leading-relaxed text-neutral-300">
                             {item.description}
                           </p>
                         )}
@@ -2351,8 +2363,10 @@ export default function TierMakerClient({
                       )}
                     </div>
                   </article>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
 

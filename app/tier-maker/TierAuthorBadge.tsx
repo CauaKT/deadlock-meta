@@ -12,6 +12,7 @@ interface Props {
   prefix?: string;
   clickable?: boolean;
   showHandle?: boolean;
+  pill?: boolean;
   extra?: ReactNode;
 }
 
@@ -23,6 +24,7 @@ export default function TierAuthorBadge({
   prefix,
   clickable = true,
   showHandle = true,
+  pill = true,
   extra,
 }: Props) {
   const cleanName = name.trim() || "Jogador";
@@ -83,13 +85,23 @@ export default function TierAuthorBadge({
       {isClickable ? (
         <Link
           href={`/profile/${encodeURIComponent(cleanHandle!)}`}
-          className="group/author inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-neutral-900/75 py-0.5 pl-0.5 pr-2.5 transition-colors hover:border-amber-500/50"
+          className={
+            pill
+              ? "group/author inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-neutral-900/75 py-0.5 pl-0.5 pr-2.5 transition-colors hover:border-amber-500/50"
+              : "group/author inline-flex min-w-0 items-center gap-2 rounded-full py-0.5 pl-0.5 pr-2.5 transition-colors"
+          }
         >
           {avatarEl}
           {labelEl}
         </Link>
       ) : clickable ? (
-        <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-neutral-900/60 py-0.5 pl-0.5 pr-2.5">
+        <div
+          className={
+            pill
+              ? "inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-neutral-900/60 py-0.5 pl-0.5 pr-2.5"
+              : "inline-flex min-w-0 items-center gap-2 py-0.5 pl-0.5 pr-2.5"
+          }
+        >
           {avatarEl}
           {labelEl}
         </div>

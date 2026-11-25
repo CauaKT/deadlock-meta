@@ -27,12 +27,25 @@ interface Props {
   href: string;
   metricId: TierMetricId;
   metricShortLabel: string;
+  customBadge?: { label: string; color: string };
+  showCardMetric?: boolean;
 }
 
 function tagColors(rgb?: [number, number, number] | null) {
   const bg = rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#f1d36b";
   const lum = rgb ? 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] : 200;
   return { backgroundColor: bg, color: lum > 150 ? "#1a1608" : "#ffffff" };
+}
+
+function badgeTextColor(hex: string): string {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return "#070908";
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) return "#070908";
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 140 ? "#070908" : "#ffffff";
 }
 
 const TAG_TILTS = ["-rotate-[3deg]", "rotate-[3deg]", "-rotate-[2deg]"];
@@ -45,6 +58,8 @@ export default function TierHeroCard({
   href,
   metricId,
   metricShortLabel,
+  customBadge,
+  showCardMetric = true,
 }: Props) {
   const cardRef = useRef<HTMLAnchorElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -117,27 +132,29 @@ export default function TierHeroCard({
         )}
 
         {/* Tag da Métrica Selecionada */}
-        <div
-          className={`absolute bottom-0 inset-x-0 bg-[radial-gradient(ellipse_75%_95%_at_50%_100%,rgba(0,0,0,0.88)_0%,rgba(0,0,0,0.52)_55%,transparent_100%)] pt-3 pb-0.5 text-center text-[10px] sm:text-[11px] font-black [paint-order:stroke_fill] [-webkit-text-stroke:2px_rgba(0,0,0,0.9)] [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_6px_rgba(0,0,0,0.9)] ${
-            metricId === "winrate"
-              ? hero.winRate >= 50
-                ? "text-emerald-400"
-                : "text-rose-400"
-              : metricId === "metascore" && (hero.tier === "D" || hero.tier === "F")
-                ? "text-rose-400"
-                : hero.tier === "META" || hero.tier === "A" || hero.tier === "B"
-                  ? metricId === "banrate"
-                    ? "text-rose-400"
-                    : metricId === "metascore"
-                      ? "text-cyan-300"
-                      : "text-amber-300"
-                  : "text-[#f4efe6]"
-          }`}
-        >
-          {metricId === "metascore"
-            ? hero.metricValue.toFixed(1)
-            : `${hero.metricValue.toFixed(1)}%`}
-        </div>
+        {showCardMetric && hero.matches > 0 && (
+          <div
+            className={`absolute bottom-0 inset-x-0 bg-[radial-gradient(ellipse_75%_95%_at_50%_100%,rgba(0,0,0,0.88)_0%,rgba(0,0,0,0.52)_55%,transparent_100%)] pt-3 pb-0.5 text-center text-[10px] sm:text-[11px] font-black [paint-order:stroke_fill] [-webkit-text-stroke:2px_rgba(0,0,0,0.9)] [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_6px_rgba(0,0,0,0.9)] ${
+              metricId === "winrate"
+                ? hero.winRate >= 50
+                  ? "text-emerald-400"
+                  : "text-rose-400"
+                : metricId === "metascore" && (hero.tier === "D" || hero.tier === "F")
+                  ? "text-rose-400"
+                  : hero.tier === "META" || hero.tier === "A" || hero.tier === "B"
+                    ? metricId === "banrate"
+                      ? "text-rose-400"
+                      : metricId === "metascore"
+                        ? "text-cyan-300"
+                        : "text-amber-300"
+                    : "text-[#f4efe6]"
+            }`}
+          >
+            {metricId === "metascore"
+              ? hero.metricValue.toFixed(1)
+              : `${hero.metricValue.toFixed(1)}%`}
+          </div>
+        )}
       </div>
 
       {/* Nome do Herói */}
@@ -173,13 +190,25 @@ export default function TierHeroCard({
 
           <div className="relative z-20 flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <span
-                className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${TIER_BY_KEY[hero.tier].badgeBg} ${TIER_BY_KEY[hero.tier].badgeText} ${
-                  hero.tier === "META" ? "tier-meta-glow" : ""
-                }`}
-              >
-                Tier {hero.tier}
-              </span>
+              {customBadge ? (
+                <span
+                  style={{
+                    backgroundColor: customBadge.color,
+                    color: badgeTextColor(customBadge.color),
+                  }}
+                  className="inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                >
+                  {customBadge.label}
+                </span>
+              ) : (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${TIER_BY_KEY[hero.tier].badgeBg} ${TIER_BY_KEY[hero.tier].badgeText} ${
+                    hero.tier === "META" ? "tier-meta-glow" : ""
+                  }`}
+                >
+                  Tier {hero.tier}
+                </span>
+              )}
               <h4 className="font-deadlock text-2xl text-[#f4efe6] tracking-wide leading-none mt-1.5 truncate">
                 {hero.name}
               </h4>
@@ -210,67 +239,71 @@ export default function TierHeroCard({
               )}
             </div>
 
-            <div className="shrink-0 text-right [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_10px_rgba(0,0,0,0.85)]">
-              <span
-                className={`font-deadlock text-xl font-black ${
-                  metricId === "winrate"
-                    ? hero.winRate >= 50
-                      ? "text-emerald-400"
-                      : "text-rose-400"
-                    : metricId === "metascore" && (hero.tier === "D" || hero.tier === "F")
-                      ? "text-rose-400"
-                      : hero.tier === "META" || hero.tier === "A" || hero.tier === "B"
-                        ? metricId === "banrate"
-                          ? "text-rose-400"
-                          : metricId === "metascore"
-                            ? "text-cyan-300"
-                            : "text-amber-300"
-                        : "text-neutral-200"
-                }`}
-              >
-                {metricId === "metascore"
-                  ? hero.metricValue.toFixed(1)
-                  : `${hero.metricValue.toFixed(1)}%`}
-              </span>
-              <p className="text-[9px] text-neutral-200 uppercase tracking-widest font-bold">
-                {metricShortLabel}
-              </p>
-            </div>
-          </div>
-
-          <div className="relative z-20 flex items-center gap-2">
-            <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
-              <span className="font-deadlock text-xs font-black text-[#f4efe6]">
-                {fmt(hero.matches)}
-              </span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
-                Partidas
-              </span>
-            </div>
-            {metricId === "winrate" ? (
-              <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
-                <span className="font-deadlock text-xs font-black text-amber-300">
-                  {hero.pickRate.toFixed(1)}%
-                </span>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
-                  Pick
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
+            {hero.matches > 0 && (
+              <div className="shrink-0 text-right [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_10px_rgba(0,0,0,0.85)]">
                 <span
-                  className={`font-deadlock text-xs font-black ${
-                    hero.winRate >= 50 ? "text-emerald-400" : "text-rose-400"
+                  className={`font-deadlock text-xl font-black ${
+                    metricId === "winrate"
+                      ? hero.winRate >= 50
+                        ? "text-emerald-400"
+                        : "text-rose-400"
+                      : metricId === "metascore" && (hero.tier === "D" || hero.tier === "F")
+                        ? "text-rose-400"
+                        : hero.tier === "META" || hero.tier === "A" || hero.tier === "B"
+                          ? metricId === "banrate"
+                            ? "text-rose-400"
+                            : metricId === "metascore"
+                              ? "text-cyan-300"
+                              : "text-amber-300"
+                          : "text-neutral-200"
                   }`}
                 >
-                  {hero.winRate.toFixed(1)}%
+                  {metricId === "metascore"
+                    ? hero.metricValue.toFixed(1)
+                    : `${hero.metricValue.toFixed(1)}%`}
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
-                  Win
-                </span>
+                <p className="text-[9px] text-neutral-200 uppercase tracking-widest font-bold">
+                  {metricShortLabel}
+                </p>
               </div>
             )}
           </div>
+
+          {hero.matches > 0 && (
+            <div className="relative z-20 flex items-center gap-2">
+              <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
+                <span className="font-deadlock text-xs font-black text-[#f4efe6]">
+                  {fmt(hero.matches)}
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                  Partidas
+                </span>
+              </div>
+              {metricId === "winrate" ? (
+                <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
+                  <span className="font-deadlock text-xs font-black text-amber-300">
+                    {hero.pickRate.toFixed(1)}%
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                    Pick
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-xs">
+                  <span
+                    className={`font-deadlock text-xs font-black ${
+                      hero.winRate >= 50 ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {hero.winRate.toFixed(1)}%
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                    Win
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {metricId === "metascore" && hero.scoreBreakdown.length > 0 && (

@@ -248,19 +248,22 @@ export default function TierCommentsThread({
   const maxVisibleReplies = compact ? 2 : 4;
 
   return (
-    <div className="space-y-3">
+    <div className={compact ? "space-y-3" : "space-y-4"}>
       {currentUser ? (
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className={compact ? "space-y-2" : "space-y-2.5 rounded-xl border border-neutral-800/80 bg-[#070908]/90 p-3 sm:p-3.5"}
+        >
           {replyTarget && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-300">
+            <div className="flex items-center justify-between gap-2 rounded-[5px] border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-200">
               <span className="truncate">
-                Respondendo a <strong className="text-white">{replyTarget.author.username}</strong>
+                Respondendo a <strong className="font-bold text-[#f4efe6]">{replyTarget.author.username}</strong>
               </span>
               <button
                 type="button"
                 onClick={() => setReplyTarget(null)}
                 aria-label="Cancelar resposta"
-                className="cursor-pointer font-bold text-neutral-400 hover:text-white"
+                className="cursor-pointer px-1 font-bold text-neutral-400 transition-colors hover:text-white"
               >
                 ×
               </button>
@@ -278,42 +281,48 @@ export default function TierCommentsThread({
               placeholder={
                 replyTarget
                   ? `Responder a ${replyTarget.author.username}...`
-                  : "Postar sua resposta"
+                  : "Deixe seu comentário sobre esta tier list..."
               }
-              className="min-w-0 flex-1 rounded-full border border-neutral-800 bg-neutral-950/90 px-3.5 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500/60"
+              className={`min-w-0 flex-1 rounded-[5px] border border-neutral-800/90 bg-[#070908]/95 text-[#f4efe6] placeholder:text-neutral-500 outline-none transition-colors focus:border-amber-500/70 ${
+                compact ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-xs sm:text-sm"
+              }`}
             />
             <button
               type="submit"
               disabled={submitting || !draft.trim()}
-              className="shrink-0 cursor-pointer rounded-full bg-amber-500 px-3.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-45"
+              className={`shrink-0 cursor-pointer rounded-[5px] border border-amber-300/70 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-deadlock font-black uppercase tracking-wider text-black shadow-[0_2px_12px_rgba(245,158,11,0.28),inset_0_1px_0_rgba(255,255,255,0.45)] transition-all duration-150 hover:scale-[1.02] hover:shadow-[0_4px_16px_rgba(245,158,11,0.45)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:shadow-none ${
+                compact ? "px-3 py-1.5 text-[10px]" : "px-4 py-2 text-[11px]"
+              }`}
             >
               {submitting ? "..." : "Responder"}
             </button>
           </div>
         </form>
       ) : (
-        <p className="text-xs text-neutral-400">
+        <div className="rounded-xl border border-neutral-800/80 bg-[#070908]/90 px-3.5 py-2.5 text-xs text-neutral-300">
           <Link
             href={`/login?next=${encodeURIComponent(loginRedirectPath)}`}
-            className="font-bold text-amber-400 hover:underline"
+            className="font-deadlock font-black uppercase tracking-wider text-amber-400 hover:text-amber-300 hover:underline"
           >
             Entre na sua conta
           </Link>{" "}
           para responder e curtir comentários.
-        </p>
+        </div>
       )}
 
       {loading ? (
-        <p className="py-2 text-xs text-neutral-500">Carregando comentários...</p>
+        <p className="py-3 text-xs text-neutral-400">Carregando comentários...</p>
       ) : threads.length === 0 ? (
-        <p className="py-2 text-xs italic text-neutral-500">
-          Nenhum comentário ainda. Seja o primeiro a responder!
-        </p>
+        <div className="rounded-xl border border-neutral-800/80 bg-[#070908]/90 px-4 py-5 text-center text-xs italic text-neutral-400">
+          Nenhum comentário ainda. Seja o primeiro a opinar!
+        </div>
       ) : (
         <div
-          className={`divide-y divide-neutral-800/70 ${
-            compact ? "max-h-80 overflow-y-auto pr-1 lp-scroll" : ""
-          }`}
+          className={
+            compact
+              ? "max-h-80 space-y-2.5 overflow-y-auto pr-1 lp-scroll"
+              : "space-y-3"
+          }
         >
           {threads.map((thread) => {
             const root = thread[0];
@@ -326,7 +335,14 @@ export default function TierCommentsThread({
             const visibleList = [root, ...visibleReplies];
 
             return (
-              <div key={root.id} className="py-3 first:pt-1 last:pb-0">
+              <div
+                key={root.id}
+                className={
+                  compact
+                    ? "rounded-lg border border-neutral-800/80 bg-[#070908]/80 p-2.5"
+                    : "rounded-xl border border-neutral-800/80 bg-[#070908]/90 p-3.5 sm:p-4"
+                }
+              >
                 {visibleList.map((c, idx) => {
                   const hasNextInThread = idx < visibleList.length - 1;
                   const time = formatCommentTime(c.createdAt);
@@ -336,20 +352,20 @@ export default function TierCommentsThread({
                   const repliesCount = c.repliesCount ?? 0;
 
                   return (
-                    <div key={c.id} className="flex items-stretch gap-2.5">
+                    <div key={c.id} className="flex items-stretch gap-3">
                       <div className="flex flex-col items-center shrink-0">
                         {renderAvatar(c.id, c.author.avatarUrl, c.author.username, cleanHandle)}
                         {hasNextInThread && (
                           <div
                             aria-hidden
-                            className="my-1 w-[2px] flex-1 rounded-full bg-neutral-800"
+                            className="my-1.5 w-[2px] flex-1 rounded-full bg-gradient-to-b from-amber-500/30 via-neutral-700/60 to-neutral-800/30"
                           />
                         )}
                       </div>
 
                       <div className={`min-w-0 flex-1 ${hasNextInThread ? "pb-3.5" : ""}`}>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs leading-tight">
+                          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs leading-tight">
                             {cleanHandle ? (
                               <Link
                                 href={`/profile/${encodeURIComponent(cleanHandle)}`}
@@ -362,12 +378,9 @@ export default function TierCommentsThread({
                                 {c.author.username}
                               </span>
                             )}
-                            <span aria-hidden className="text-neutral-600">
-                              ·
-                            </span>
                             <span
                               title={time.full}
-                              className="shrink-0 text-[11px] text-neutral-500"
+                              className="shrink-0 text-[11px] font-medium text-neutral-500"
                             >
                               {time.short}
                             </span>
@@ -379,7 +392,7 @@ export default function TierCommentsThread({
                               title="Excluir comentário"
                               aria-label="Excluir comentário"
                               onClick={() => void handleDelete(c)}
-                              className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-rose-500/12 hover:text-rose-400"
+                              className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] text-neutral-500 transition-colors hover:bg-rose-500/15 hover:text-rose-400"
                             >
                               <svg
                                 aria-hidden
@@ -400,15 +413,15 @@ export default function TierCommentsThread({
                         {idx > 0 && parent && parent.id !== root.id && (
                           <p className="mt-0.5 text-[11px] text-neutral-500">
                             Em resposta a{" "}
-                            <span className="text-sky-400">{parent.author.username}</span>
+                            <span className="font-semibold text-amber-400/90">{parent.author.username}</span>
                           </p>
                         )}
 
-                        <p className="mt-0.5 whitespace-pre-wrap break-words text-xs sm:text-[13px] leading-relaxed text-neutral-200">
+                        <p className="mt-1 whitespace-pre-wrap break-words text-xs sm:text-[13px] leading-relaxed text-neutral-200">
                           {c.content}
                         </p>
 
-                        <div className="mt-1.5 flex items-center gap-4 text-neutral-500">
+                        <div className="mt-2 flex items-center gap-3 text-neutral-400">
                           <button
                             type="button"
                             title="Responder"
@@ -421,23 +434,24 @@ export default function TierCommentsThread({
                               setReplyTarget(c);
                               setTimeout(() => inputRef.current?.focus(), 0);
                             }}
-                            className="group/cact -ml-1.5 inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums transition-colors hover:text-sky-400"
+                            className="group/cact -ml-1.5 inline-flex cursor-pointer items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-amber-500/10 hover:text-amber-300"
                           >
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full transition-colors group-hover/cact:bg-sky-500/12">
-                              <svg
-                                aria-hidden
-                                viewBox="0 0 24 24"
-                                className="h-3.5 w-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                              </svg>
-                            </span>
-                            {repliesCount > 0 && <span>{repliesCount}</span>}
+                            <svg
+                              aria-hidden
+                              viewBox="0 0 24 24"
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                            </svg>
+                            {!compact && <span className="font-deadlock text-[10px] uppercase tracking-wider">Responder</span>}
+                            {repliesCount > 0 && (
+                              <span className="text-neutral-300">{repliesCount}</span>
+                            )}
                           </button>
 
                           <button
@@ -446,24 +460,24 @@ export default function TierCommentsThread({
                             aria-label={`Curtir comentário (${likesCount})`}
                             disabled={likeBusyIds[c.id]}
                             onClick={() => void handleToggleLike(c)}
-                            className={`group/cact inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums transition-colors ${
-                              c.likedByMe ? "text-rose-500" : "hover:text-rose-400"
+                            className={`group/cact inline-flex cursor-pointer items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
+                              c.likedByMe
+                                ? "bg-rose-500/10 text-rose-400"
+                                : "hover:bg-rose-500/10 hover:text-rose-300"
                             }`}
                           >
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full transition-colors group-hover/cact:bg-rose-500/12">
-                              <svg
-                                aria-hidden
-                                viewBox="0 0 24 24"
-                                className="h-3.5 w-3.5"
-                                fill={c.likedByMe ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M19.5 12.572 12 20l-7.5-7.428A5 5 0 1 1 12 6.006a5 5 0 1 1 7.5 6.572z" />
-                              </svg>
-                            </span>
+                            <svg
+                              aria-hidden
+                              viewBox="0 0 24 24"
+                              className="h-3.5 w-3.5"
+                              fill={c.likedByMe ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M19.5 12.572 12 20l-7.5-7.428A5 5 0 1 1 12 6.006a5 5 0 1 1 7.5 6.572z" />
+                            </svg>
                             {likesCount > 0 && <span>{likesCount}</span>}
                           </button>
                         </div>
@@ -478,7 +492,7 @@ export default function TierCommentsThread({
                     onClick={() =>
                       setExpandedThreads((prev) => ({ ...prev, [root.id]: true }))
                     }
-                    className="mt-1 pl-10 cursor-pointer text-[11px] font-semibold text-sky-400 hover:underline"
+                    className="mt-2 ml-11 cursor-pointer font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400 transition-colors hover:text-amber-300 hover:underline"
                   >
                     Mostrar mais {hiddenRepliesCount}{" "}
                     {hiddenRepliesCount === 1 ? "resposta" : "respostas"}

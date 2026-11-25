@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { HeroAbilityFull } from "@/lib/deadlock";
 import AbilityBar from "./[id]/AbilityBar";
 
@@ -107,6 +107,12 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
   const [sort, setSort] = useState<SortKey>("name");
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const heroImgRef = useRef<HTMLImageElement>(null);
+  const [heroShift, setHeroShift] = useState(0);
+  const [isSideBySide, setIsSideBySide] = useState(false);
 
   useEffect(() => {
     if (!pop) return;
@@ -147,6 +153,51 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
     };
   }, [filterOpen]);
 
+  const updateHeroShift = useCallback(() => {
+    const sec = sectionRef.current;
+    const panel = panelRef.current;
+    const grid = gridRef.current;
+    const img = heroImgRef.current;
+    if (!sec || !panel || !grid || !img) return;
+
+    const secRect = sec.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const gridRect = grid.getBoundingClientRect();
+    const sideBySide = secRect.width > 0 && panelRect.width < secRect.width * 0.72;
+    setIsSideBySide((prev) => (prev === sideBySide ? prev : sideBySide));
+
+    if (!sideBySide) {
+      setHeroShift((prev) => (prev === 0 ? prev : 0));
+      return;
+    }
+
+    const natW = img.naturalWidth || 1;
+    const natH = img.naturalHeight || 1;
+    const renderedW = secRect.height * (natW / natH);
+    const baseLeft = secRect.right - renderedW;
+    // Ignora os primeiros ~14% da arte (efeitos/fumaça) para só empurrar se o corpo/rosto invadir os cards
+    const overlap = Math.max(0, gridRect.right + 12 - (baseLeft + renderedW * 0.14));
+    const baseTranslate = secRect.width * 0.02;
+    const extraPush = Math.min(renderedW * 0.24, secRect.width * 0.16, overlap * 0.85);
+    const nextShift = Math.round(baseTranslate + extraPush);
+
+    setHeroShift((prev) => (prev === nextShift ? prev : nextShift));
+  }, []);
+
+  useEffect(() => {
+    updateHeroShift();
+    const sec = sectionRef.current;
+    const panel = panelRef.current;
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateHeroShift) : null;
+    if (ro && sec) ro.observe(sec);
+    if (ro && panel) ro.observe(panel);
+    window.addEventListener("resize", updateHeroShift);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", updateHeroShift);
+    };
+  }, [activeId, showUnreleased, sort, updateHeroShift]);
+
   // Posiciona o popover acima do ícone clicado, limitado à viewport (o rect já inclui o scale do bloco)
   const openAbility = (slot: number, el: HTMLElement) => {
     if (pop?.slot === slot) return setPop(null);
@@ -178,15 +229,21 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
   const nameFail = nameFails[active.id] ?? 0;
 
   return (
-    <section className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-svh">
+    <section
+      ref={sectionRef}
+      className="relative flex flex-col overflow-hidden border-y-2 border-neutral-800/80 bg-[#0a0d0c] wide:h-svh"
+    >
       <GameTexture />
-      <div className="relative z-10 flex min-h-0 flex-col p-4 md:p-8 lg:px-10 lg:py-8 wide:h-full wide:w-[51%] wide:max-w-[880px]">
+      <div
+        ref={panelRef}
+        className="relative z-10 flex min-h-0 flex-col p-4 md:p-6 lg:px-8 lg:py-6 wide:h-full wide:w-[45%] wide:max-w-[760px]"
+      >
         <div className="flex shrink-0 items-end justify-between gap-4">
           <div>
             <p className="font-deadlock text-sm font-black uppercase tracking-wider text-[#5f7a76]">Deadlock</p>
-            <h1 className="mb-4 font-deadlock text-6xl font-black uppercase tracking-tight text-[#5f7a76] md:text-7xl">Heróis</h1>
+            <h1 className="mb-3 font-deadlock text-5xl font-black uppercase tracking-tight text-[#5f7a76] md:text-6xl xl:text-7xl">Heróis</h1>
           </div>
-          <div ref={filterRef} className="relative mb-4 shrink-0">
+          <div ref={filterRef} className="relative mb-3 shrink-0">
             <button
               type="button"
               title="Filtros"
@@ -244,7 +301,10 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
         </div>
 
         <div className="min-h-0 flex-1 wide:overflow-y-auto lp-scroll pr-1.5">
-          <div className="grid grid-cols-5 gap-1.5 p-2 sm:grid-cols-7 sm:gap-2 lg:grid-cols-9 lg:gap-2 lg:p-3">
+          <div
+            ref={gridRef}
+            className="grid grid-cols-5 gap-1.5 p-2 sm:grid-cols-7 sm:gap-2 md:grid-cols-9 lg:grid-cols-11 wide:grid-cols-8 lg:gap-2 lg:p-2.5"
+          >
             {visible.map((hero) => {
               const isActive = hero.id === active.id;
               const heroColor = `rgb(${hero.rgb.join(", ")})`;
@@ -284,7 +344,7 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
 
         <Link
           href={`/heroes/${active.id}`}
-          className="relative mt-4 inline-flex shrink-0 self-center border-2 border-[#465353] bg-[#070707] px-24 py-4 font-deadlock text-3xl font-black uppercase tracking-wider text-[#f0e1cb] transition-[filter] hover:brightness-125"
+          className="relative mt-3 inline-flex shrink-0 self-center border-2 border-[#465353] bg-[#070707] px-16 py-3 font-deadlock text-2xl font-black uppercase tracking-wider text-[#f0e1cb] transition-[filter] hover:brightness-125 sm:px-20 sm:text-3xl"
         >
           <FrameEdge side="left" />
           <FrameEdge side="right" />
@@ -292,15 +352,32 @@ export default function HeroSelect({ heroes, statsLabel }: { heroes: SelectHero[
         </Link>
       </div>
 
-      <div className="relative aspect-square w-full wide:absolute wide:inset-0 wide:aspect-auto">
-        <img
-          key={active.id}
-          src={active.art}
-          alt={active.name}
-          className="absolute inset-0 h-full w-full object-contain object-right-top wide:translate-x-[4%]"
-        />
+      <div className="relative h-[460px] w-full overflow-hidden sm:h-[540px] wide:absolute wide:inset-0 wide:h-auto wide:overflow-visible">
+        <div
+          className="pointer-events-none absolute inset-0 transition-transform duration-200"
+          style={heroShift ? { transform: `translateX(${heroShift}px)` } : undefined}
+        >
+          <img
+            ref={heroImgRef}
+            key={active.id}
+            src={active.art}
+            alt={active.name}
+            onLoad={updateHeroShift}
+            style={
+              isSideBySide
+                ? {
+                    WebkitMaskImage:
+                      "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.45) 7%, black 15%)",
+                    maskImage:
+                      "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.45) 7%, black 15%)",
+                  }
+                : undefined
+            }
+            className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-auto max-w-none wide:left-auto wide:right-0 wide:translate-x-0"
+          />
+        </div>
 
-        <div className="pointer-events-none absolute bottom-4 right-4 flex origin-bottom-right scale-[1.4] flex-col items-center md:bottom-7 md:right-8 lg:bottom-9 lg:right-12">
+        <div className="pointer-events-none absolute bottom-4 right-4 flex origin-bottom-right scale-100 flex-col items-center sm:scale-105 md:bottom-7 md:right-8 lg:bottom-8 lg:right-10 lg:scale-110 2xl:scale-125">
           {nameFail >= active.nameSvgs.length ? (
             <span className="font-deadlock mb-2 text-center text-3xl font-black uppercase text-[#f4efe6] md:text-4xl lg:mb-2 lg:text-[42px]">
               {active.name}

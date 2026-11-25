@@ -826,7 +826,7 @@ export default function TierQuadrantBoard({
             <span
               key={idx}
               style={posStyle}
-              className="pointer-events-none absolute z-20 max-w-[115px] sm:max-w-[135px] truncate rounded border border-white/12 bg-[#070a09]/92 px-2 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-[#f4efe6]/95 shadow"
+              className="pointer-events-none absolute z-20 max-w-[115px] sm:max-w-[135px] line-clamp-2 whitespace-pre-line text-center leading-tight rounded border border-white/12 bg-[#070a09]/92 px-2 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-[#f4efe6]/95 shadow"
             >
               {value}
             </span>
@@ -840,12 +840,15 @@ export default function TierQuadrantBoard({
               style={posStyle}
               className="pointer-events-none absolute z-20 max-w-[160px] sm:max-w-[215px] rounded-[5px] border border-white/15 bg-[#090d0c]/92 px-2.5 py-1 text-center shadow-[0_6px_18px_rgba(0,0,0,0.85)] backdrop-blur-sm"
             >
-              <span className="font-deadlock block truncate text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+              <span className="font-deadlock block whitespace-pre-line leading-tight text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#f4efe6]">
                 {value}
               </span>
             </div>
           );
         }
+
+        const axisLines = value.split("\n");
+        const maxLineLen = Math.max(...axisLines.map((l) => l.length), 0);
 
        return (
           <div
@@ -856,16 +859,29 @@ export default function TierQuadrantBoard({
             className="absolute z-20"
           >
             <div className="group/axis relative flex items-center rounded-[5px] border border-white/15 bg-[#090d0c]/92 px-2 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.85)] backdrop-blur-sm hover:border-amber-500/50 focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500/40">
-              <input
-                type="text"
+              <textarea
                 maxLength={35}
+                rows={axisLines.length > 1 ? 2 : 1}
                 value={value}
                 aria-label={`Editar rótulo da ponta ${idx + 1}`}
-                onChange={(e) => onChangeAxisLabel?.(idx, e.target.value)}
-                style={{
-                  width: `${Math.min(24, Math.max(8, value.length + 1))}ch`,
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && value.includes("\n")) {
+                    e.preventDefault();
+                  }
                 }}
-                className="font-deadlock max-w-[140px] sm:max-w-[205px] bg-transparent text-center text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#f4efe6] outline-none placeholder:text-neutral-600"
+                onChange={(e) => {
+                  const unified = e.target.value.replace(/\r\n?/g, "\n");
+                  const parts = unified.split("\n");
+                  const clamped =
+                    parts.length <= 2
+                      ? unified
+                      : `${parts[0]}\n${parts.slice(1).join(" ")}`.slice(0, 35);
+                  onChangeAxisLabel?.(idx, clamped);
+                }}
+                style={{
+                  width: `${Math.min(24, Math.max(8, maxLineLen + 1))}ch`,
+                }}
+                className="font-deadlock max-w-[140px] sm:max-w-[205px] resize-none overflow-hidden bg-transparent text-center text-[10px] sm:text-xs font-black uppercase leading-tight tracking-wider text-[#f4efe6] outline-none placeholder:text-neutral-600"
               />
               {(onAddAxis || onRemoveAxis) && (
                 <div className="absolute left-1/2 top-full mt-1.5 -translate-x-1/2 z-30 flex items-center gap-0.5 rounded-[5px] border border-neutral-800/90 bg-neutral-950/95 p-0.5 shadow-md">

@@ -360,8 +360,17 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
   ctx.stroke();
 
   // Rótulos das pontas (fora do clip para nunca cortar quinas)
+  const splitAxisLines = (raw: string): string[] => {
+    const parts = raw
+      .split(/\r?\n/)
+      .map((p) => p.trim().toUpperCase())
+      .filter(Boolean)
+      .slice(0, 2);
+    return parts.length > 0 ? parts : [raw.trim().toUpperCase()];
+  };
+
   const drawPill = (text: string, pillX: number, pillY: number, pillW: number, pillH: number) => {
-    const label = text.trim().toUpperCase();
+    const lines = splitAxisLines(text);
     drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
     ctx.fillStyle = "rgba(9, 13, 12, 0.92)";
     ctx.fill();
@@ -372,7 +381,12 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
     ctx.fillStyle = "#f4efe6";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, pillX + pillW / 2, pillY + pillH / 2, pillW - 14);
+    if (lines.length === 1) {
+      ctx.fillText(lines[0], pillX + pillW / 2, pillY + pillH / 2, pillW - 14);
+    } else {
+      ctx.fillText(lines[0], pillX + pillW / 2, pillY + pillH / 2 - 8, pillW - 14);
+      ctx.fillText(lines[1], pillX + pillW / 2, pillY + pillH / 2 + 8, pillW - 14);
+    }
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
   };
@@ -380,11 +394,11 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
   const PNG_LABEL_GAP = 14;
   if (isSquare) {
     const drawSquarePill = (text: string, x: number, y: number, align: "center" | "left" | "right") => {
-      const label = text.trim().toUpperCase();
+      const lines = splitAxisLines(text);
       ctx.font = "900 13px system-ui, -apple-system, Segoe UI, sans-serif";
-      const textW = Math.min(210, ctx.measureText(label).width);
+      const textW = Math.min(210, Math.max(...lines.map((l) => ctx.measureText(l).width), 0));
       const pillW = textW + 24;
-      const pillH = 28;
+      const pillH = lines.length > 1 ? 42 : 28;
       const pillX = align === "center" ? x - pillW / 2 : align === "left" ? x : x - pillW;
       drawPill(text, pillX, y - pillH / 2, pillW, pillH);
     };
@@ -397,11 +411,11 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
       const v = vertices[i];
       const dx = Math.max(-1, Math.min(1, (v.x - polyCenter.x) / (BOARD_SIZE * 0.485)));
       const dy = Math.max(-1, Math.min(1, (v.y - polyCenter.y) / (BOARD_SIZE * 0.485)));
-      const label = rawLabel.trim().toUpperCase();
+      const lines = splitAxisLines(rawLabel);
       ctx.font = `900 ${axisCount >= 9 ? 11 : 13}px system-ui, -apple-system, Segoe UI, sans-serif`;
-      const textW = Math.min(200, ctx.measureText(label).width);
+      const textW = Math.min(200, Math.max(...lines.map((l) => ctx.measureText(l).width), 0));
       const pillW = textW + 22;
-      const pillH = 28;
+      const pillH = lines.length > 1 ? 42 : 28;
       const pillX = v.x + dx * PNG_LABEL_GAP - ((1 - dx) / 2) * pillW;
       const pillY = v.y + dy * PNG_LABEL_GAP - ((1 - dy) / 2) * pillH;
       drawPill(rawLabel, pillX, pillY, pillW, pillH);

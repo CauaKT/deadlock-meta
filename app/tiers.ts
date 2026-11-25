@@ -7,9 +7,16 @@ export interface MakerHero {
   name: string;
   image: string;
   icon?: string;
+  bgImage?: string;
+  bannerImage?: string;
   gloatImage?: string;
   critImage?: string;
   rgb: [number, number, number] | null;
+  tags?: string[];
+  matches?: number;
+  winRate?: number;
+  pickRate?: number;
+  metaTier?: TierKey;
 }
 
 export type TierKey = "META" | "A" | "B" | "C" | "D" | "F";
