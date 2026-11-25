@@ -9,15 +9,14 @@ import type { MakerHero } from "@/app/tiers";
 import {
   createFeedPost,
   createTierList,
-  createTierListComment,
   deleteTierList,
-  deleteTierListComment,
   getCommunityTierLists,
   getCurrentClientUser,
   getTierListById,
   getTierListComments,
   subscribeToAuthChanges,
   toggleTierListLike,
+  toggleTierListSave,
   updateTierList,
 } from "@/lib/backend/client";
 import type {
@@ -28,7 +27,13 @@ import type {
   TierQuadrantData,
 } from "@/lib/backend/types";
 import { exportTierListToPng } from "./exportTierListPng";
+import CommunityFilterBar, {
+  type CommunityScopeFilter,
+  type CommunitySort,
+  type CommunityStyleFilter,
+} from "./CommunityFilterBar";
 import TierAuthorBadge from "./TierAuthorBadge";
+import TierCommentsThread from "./TierCommentsThread";
 import TierQuadrantBoard, {
   DEFAULT_QUADRANT_DATA,
   MAX_QUADRANT_AXES,
@@ -756,46 +761,23 @@ export default function TierMakerClient({
     }
   };
 
-  type CommunitySort = "relevance" | "likes" | "comments" | "recent" | "views";
-  type CommunityStyleFilter = "all" | "classic" | "quadrant";
-  type CommunityScopeFilter = "all" | "mine" | "liked";
-
   const [communityQuery, setCommunityQuery] = useState("");
   const [communitySort, setCommunitySort] = useState<CommunitySort>("relevance");
   const [communityStyleFilter, setCommunityStyleFilter] = useState<CommunityStyleFilter>("all");
   const [communityScopeFilter, setCommunityScopeFilter] = useState<CommunityScopeFilter>("all");
-  const [communityHeroId, setCommunityHeroId] = useState<number | null>(null);
+  const [communityHeroIds, setCommunityHeroIds] = useState<number[]>([]);
   const [communityTopTierOnly, setCommunityTopTierOnly] = useState(false);
 
   const [likeBusyIds, setLikeBusyIds] = useState<Record<string, boolean>>({});
+  const [saveBusyIds, setSaveBusyIds] = useState<Record<string, boolean>>({});
+  const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
   const [openCommentsIds, setOpenCommentsIds] = useState<Record<string, boolean>>({});
   const [fullCommentsMap, setFullCommentsMap] = useState<Record<string, TierListComment[]>>({});
   const [loadingCommentsMap, setLoadingCommentsMap] = useState<Record<string, boolean>>({});
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const [commentBusyIds, setCommentBusyIds] = useState<Record<string, boolean>>({});
-  const [openShareId, setOpenShareId] = useState<string | null>(null);
-  const [copiedShareState, setCopiedShareState] = useState<string | null>(null);
   const [feedModalItem, setFeedModalItem] = useState<TierListItem | null>(null);
   const [feedPostContent, setFeedPostContent] = useState("");
   const [postingToFeed, setPostingToFeed] = useState(false);
   const [feedModalError, setFeedModalError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!openShareId) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target?.closest("[data-share-menu]")) setOpenShareId(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenShareId(null);
-    };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [openShareId]);
 
   useEffect(() => {
     if (!feedModalItem) return;
@@ -836,15 +818,28 @@ export default function TierMakerClient({
       if (communityScopeFilter === "liked" && !l.likedByMe) {
         return false;
       }
+      if (communityScopeFilter === "saved" && !l.savedByMe) {
+        return false;
+      }
 
-      if (communityHeroId !== null) {
+      if (communityHeroIds.length > 0) {
         if (communityTopTierOnly) {
           if (l.style === "quadrant") return false;
           const topHeroes = l.tiers[0]?.heroes || [];
-          if (!topHeroes.includes(communityHeroId)) return false;
+          if (!communityHeroIds.every((hid) => topHeroes.includes(hid))) return false;
         } else if (l.style === "quadrant" && l.quadrant) {
-          if (!l.quadrant.items.some((it) => it.heroId === communityHeroId)) return false;
-        } else if (!l.tiers.some((t) => (t.heroes || []).includes(communityHeroId))) {
+          if (
+            !communityHeroIds.every((hid) =>
+              l.quadrant!.items.some((it) => it.heroId === hid),
+            )
+          ) {
+            return false;
+          }
+        } else if (
+          !communityHeroIds.every((hid) =>
+            l.tiers.some((t) => (t.heroes || []).includes(hid)),
+          )
+        ) {
           return false;
         }
       }
@@ -900,7 +895,7 @@ export default function TierMakerClient({
     communityQuery,
     communityStyleFilter,
     communityScopeFilter,
-    communityHeroId,
+    communityHeroIds,
     communityTopTierOnly,
     communitySort,
     currentUser,
@@ -910,13 +905,13 @@ export default function TierMakerClient({
     Boolean(communityQuery.trim()) ||
     communityStyleFilter !== "all" ||
     communityScopeFilter !== "all" ||
-    communityHeroId !== null;
+    communityHeroIds.length > 0;
 
   const resetCommunityFilters = () => {
     setCommunityQuery("");
     setCommunityStyleFilter("all");
     setCommunityScopeFilter("all");
-    setCommunityHeroId(null);
+    setCommunityHeroIds([]);
     setCommunityTopTierOnly(false);
   };
 
@@ -973,6 +968,59 @@ export default function TierMakerClient({
     );
   };
 
+  const handleToggleSave = async (item: TierListItem) => {
+    if (!currentUser) {
+      setFeedback({
+        type: "error",
+        text: "Entre na sua conta para salvar tier lists da comunidade.",
+        needsLogin: true,
+      });
+      return;
+    }
+    if (saveBusyIds[item.id]) return;
+
+    const prevSaved = Boolean(item.savedByMe);
+    const prevCount = item.savesCount ?? 0;
+
+    setSaveBusyIds((m) => ({ ...m, [item.id]: true }));
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === item.id
+          ? {
+              ...l,
+              savedByMe: !prevSaved,
+              savesCount: Math.max(0, prevCount + (prevSaved ? -1 : 1)),
+            }
+          : l,
+      ),
+    );
+
+    const res = await toggleTierListSave(item.id);
+    setSaveBusyIds((m) => ({ ...m, [item.id]: false }));
+
+    if (!res.ok) {
+      setPublishedLists((prev) =>
+        prev.map((l) =>
+          l.id === item.id ? { ...l, savedByMe: prevSaved, savesCount: prevCount } : l,
+        ),
+      );
+      setFeedback({
+        type: "error",
+        text: res.message ?? "Não foi possível salvar.",
+        needsLogin: res.status === 401,
+      });
+      return;
+    }
+
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === item.id
+          ? { ...l, savedByMe: res.saved, savesCount: res.savesCount }
+          : l,
+      ),
+    );
+  };
+
   const handleToggleComments = async (item: TierListItem) => {
     const nextOpen = !openCommentsIds[item.id];
     setOpenCommentsIds((m) => ({ ...m, [item.id]: nextOpen }));
@@ -982,119 +1030,6 @@ export default function TierMakerClient({
       setFullCommentsMap((m) => ({ ...m, [item.id]: comments }));
       setLoadingCommentsMap((m) => ({ ...m, [item.id]: false }));
     }
-  };
-
-  const handleAddTierComment = async (item: TierListItem, e: React.FormEvent) => {
-    e.preventDefault();
-    const draft = (commentDrafts[item.id] ?? "").trim();
-    if (!draft || commentBusyIds[item.id]) return;
-
-    if (!currentUser) {
-      setFeedback({
-        type: "error",
-        text: "Entre na sua conta para comentar nas tier lists.",
-        needsLogin: true,
-      });
-      return;
-    }
-
-    setCommentBusyIds((m) => ({ ...m, [item.id]: true }));
-    const { comment, status, error } = await createTierListComment(item.id, draft);
-    setCommentBusyIds((m) => ({ ...m, [item.id]: false }));
-
-    if (error || !comment) {
-      setFeedback({
-        type: "error",
-        text: error ?? "Não foi possível comentar.",
-        needsLogin: status === 401,
-      });
-      return;
-    }
-
-    setCommentDrafts((m) => ({ ...m, [item.id]: "" }));
-    setFullCommentsMap((m) => ({
-      ...m,
-      [item.id]: [...(m[item.id] ?? item.recentComments ?? []), comment],
-    }));
-    setPublishedLists((prev) =>
-      prev.map((l) =>
-        l.id === item.id
-          ? {
-              ...l,
-              commentsCount: (l.commentsCount ?? 0) + 1,
-              recentComments: [...(l.recentComments ?? []), comment].slice(-3),
-            }
-          : l,
-      ),
-    );
-  };
-
-  const handleDeleteTierComment = async (tierListId: string, commentId: string) => {
-    const ok = await confirm({
-      title: "Excluir comentário?",
-      description: "Este comentário será removido permanentemente.",
-      confirmLabel: "Excluir",
-      tone: "danger",
-    });
-    if (!ok) return;
-
-    const { ok: deleted, error } = await deleteTierListComment(commentId);
-    if (!deleted) {
-      setFeedback({ type: "error", text: error ?? "Não foi possível excluir o comentário." });
-      return;
-    }
-
-    setFullCommentsMap((m) => ({
-      ...m,
-      [tierListId]: (m[tierListId] ?? []).filter((c) => c.id !== commentId),
-    }));
-    setPublishedLists((prev) =>
-      prev.map((l) =>
-        l.id === tierListId
-          ? {
-              ...l,
-              commentsCount: Math.max(0, (l.commentsCount ?? 0) - 1),
-              recentComments: (l.recentComments ?? []).filter((c) => c.id !== commentId),
-            }
-          : l,
-      ),
-    );
-  };
-
-  const getPublicShareUrl = (id: string) =>
-    typeof window !== "undefined"
-      ? `${window.location.origin}/tier-maker/comunidade/${id}`
-      : `/tier-maker/comunidade/${id}`;
-
-  const handleCopyShareLink = async (item: TierListItem, withSummary = false) => {
-    const url = getPublicShareUrl(item.id);
-    const payload = withSummary
-      ? `Tier List de Deadlock: "${item.title}" por ${item.author}\n${url}`
-      : url;
-    try {
-      await navigator.clipboard.writeText(payload);
-      const token = `${item.id}:${withSummary ? "summary" : "link"}`;
-      setCopiedShareState(token);
-      setTimeout(() => setCopiedShareState((curr) => (curr === token ? null : curr)), 2000);
-    } catch {
-      setFeedback({ type: "error", text: "Não foi possível copiar para a área de transferência." });
-    }
-  };
-
-  const handleNativeShare = async (item: TierListItem) => {
-    const url = getPublicShareUrl(item.id);
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        await navigator.share({
-          title: `${item.title} • LockPro`,
-          text: `Confira esta tier list de Deadlock por ${item.author}`,
-          url,
-        });
-        setOpenShareId(null);
-        return;
-      } catch {}
-    }
-    await handleCopyShareLink(item, false);
   };
 
   const openFeedShareModal = (item: TierListItem) => {
@@ -1908,169 +1843,27 @@ export default function TierMakerClient({
 
       {tab === "community" && (
         <div className="space-y-6">
-          <div className="flex flex-col gap-4 rounded-2xl border border-neutral-800/90 bg-neutral-950/60 p-4 sm:p-5 shadow-xl backdrop-blur-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="font-deadlock text-xl font-black uppercase tracking-wider text-[#f4efe6]">
-                  Galeria da Comunidade
-                </h3>
-                <p className="mt-0.5 text-xs text-neutral-400">
-                  Explore, curta, comente, duplique ou poste no Feed as tier lists dos jogadores do LockPro.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setTab("builder")}
-                className="inline-flex w-fit shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-amber-500 bg-amber-500 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black shadow transition-transform hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                  <path d="M8 3v10M3 8h10" />
-                </svg>
-                <span>Criar Tier List</span>
-              </button>
-            </div>
-
-            {publishedLists.length > 0 && (
-              <>
-
-                <div className="space-y-3 border-t border-neutral-800/80 pt-3">
-                  <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
-                    <div className="relative md:col-span-5">
-                      <input
-                        type="search"
-                        value={communityQuery}
-                        onChange={(e) => setCommunityQuery(e.target.value)}
-                        placeholder="Buscar por título, descrição, autor ou @handle..."
-                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 py-2 pl-8 pr-3 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500 transition-colors"
-                      />
-                      <svg
-                        aria-hidden
-                        viewBox="0 0 16 16"
-                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      >
-                        <circle cx="7" cy="7" r="4.5" />
-                        <path d="M10.5 10.5 14 14" />
-                      </svg>
-                    </div>
-
-                    <div className="md:col-span-4 flex items-center gap-2">
-                      <select
-                        aria-label="Filtrar por herói"
-                        value={communityHeroId ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setCommunityHeroId(v ? Number(v) : null);
-                        }}
-                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 py-2 text-xs font-semibold text-[#f4efe6] outline-none focus:border-amber-500"
-                      >
-                        <option value="">Filtrar por herói (todos)</option>
-                        {heroes.map((h) => (
-                          <option key={h.id} value={h.id}>
-                            {h.name}
-                          </option>
-                        ))}
-                      </select>
-                      {communityHeroId !== null && communityStyleFilter !== "quadrant" && (
-                        <button
-                          type="button"
-                          onClick={() => setCommunityTopTierOnly((v) => !v)}
-                          title="Mostrar apenas listas clássicas com este herói no 1º tier"
-                          className={`shrink-0 cursor-pointer rounded-lg border px-2.5 py-2 text-[11px] font-black uppercase tracking-wider transition-colors ${
-                            communityTopTierOnly
-                              ? "border-amber-500 bg-amber-500/20 text-amber-300"
-                              : "border-neutral-700/80 bg-neutral-900 text-neutral-400 hover:text-white"
-                          }`}
-                        >
-                          No Topo
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="md:col-span-3 flex items-center gap-2">
-                      <select
-                        aria-label="Ordenar por"
-                        value={communitySort}
-                        onChange={(e) => setCommunitySort(e.target.value as CommunitySort)}
-                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 py-2 text-xs font-semibold text-[#f4efe6] outline-none focus:border-amber-500"
-                      >
-                        <option value="relevance">Ordenar: Relevância</option>
-                        <option value="likes">Ordenar: Mais Curtidas</option>
-                        <option value="comments">Ordenar: Mais Comentadas</option>
-                        <option value="recent">Ordenar: Mais Recentes</option>
-                        <option value="views">Ordenar: Mais Vistas</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {(
-                        [
-                          ["all", "Todos os formatos"],
-                          ["classic", "Clássicas"],
-                          ["quadrant", "Quadrante 2D"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setCommunityStyleFilter(key)}
-                          className={`cursor-pointer rounded-md border px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors ${
-                            communityStyleFilter === key
-                              ? "border-amber-500 bg-amber-500 text-black"
-                              : "border-neutral-800 bg-neutral-900/80 text-neutral-300 hover:border-neutral-700 hover:text-white"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-
-                      {currentUser && (
-                        <>
-                          <span className="mx-1 h-4 w-px bg-neutral-800" />
-                          {(
-                            [
-                              ["all", "Todas"],
-                              ["mine", "Minhas Listas"],
-                              ["liked", "Curtidas por Mim"],
-                            ] as const
-                          ).map(([key, label]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => setCommunityScopeFilter(key)}
-                              className={`cursor-pointer rounded-md border px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors ${
-                                communityScopeFilter === key
-                                  ? "border-emerald-500/80 bg-emerald-500/20 text-emerald-300"
-                                  : "border-neutral-800 bg-neutral-900/80 text-neutral-400 hover:border-neutral-700 hover:text-white"
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </>
-                      )}
-                    </div>
-
-                    {hasActiveCommunityFilters && (
-                      <button
-                        type="button"
-                        onClick={resetCommunityFilters}
-                        className="cursor-pointer text-[11px] font-bold text-amber-400 hover:underline"
-                      >
-                        Limpar filtros ({filteredPublishedLists.length} de {publishedLists.length})
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          <CommunityFilterBar
+            heroes={heroes}
+            currentUser={currentUser}
+            publishedCount={publishedLists.length}
+            filteredCount={filteredPublishedLists.length}
+            query={communityQuery}
+            onQueryChange={setCommunityQuery}
+            sort={communitySort}
+            onSortChange={setCommunitySort}
+            styleFilter={communityStyleFilter}
+            onStyleFilterChange={setCommunityStyleFilter}
+            scopeFilter={communityScopeFilter}
+            onScopeFilterChange={setCommunityScopeFilter}
+            heroIds={communityHeroIds}
+            onHeroIdsChange={setCommunityHeroIds}
+            topTierOnly={communityTopTierOnly}
+            onTopTierOnlyChange={setCommunityTopTierOnly}
+            hasActiveFilters={hasActiveCommunityFilters}
+            onResetFilters={resetCommunityFilters}
+            onCreateClick={() => setTab("builder")}
+          />
 
           {loadingCommunity ? (
             <div className="rounded-2xl border border-neutral-800/80 bg-neutral-900/30 py-16 text-center text-xs text-neutral-400">
@@ -2112,24 +1905,65 @@ export default function TierMakerClient({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
               {filteredPublishedLists.map((item) => {
                 const isQuadrant = item.style === "quadrant" && Boolean(item.quadrant);
                 const totalPlaced =
                   isQuadrant && item.quadrant
                     ? item.quadrant.items.length
                     : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
-                const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
+                const createdDate = new Date(item.createdAt);
+                const dateText = createdDate
+                  .toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                  .replace(/\bde\b/g, "")
+                  .replace(/\./g, "")
+                  .replace(/\s+/g, " ")
+                  .trim();
+                const fullDateTitle = createdDate.toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
                 const shapeLabel =
                   isQuadrant && item.quadrant
                     ? getPolygonShapeName(getQuadrantAxes(item.quadrant).length)
                     : "Clássica";
                 const isTopHot = topRelevanceId === item.id;
                 const likesCount = item.likesCount ?? 0;
+                const savesCount = item.savesCount ?? 0;
                 const commentsCount = item.commentsCount ?? 0;
-                const viewsCount = item.viewsCount ?? 0;
                 const commentsExpanded = Boolean(openCommentsIds[item.id]);
                 const commentsList = fullCommentsMap[item.id] ?? item.recentComments ?? [];
+                const authorName = item.author.trim() || "Jogador";
+                const authorHandle = item.authorHandle?.trim().replace(/^@+/, "") || null;
+                const showAuthorAvatar = Boolean(item.authorAvatarUrl) && !failedAvatars[item.id];
+                const authorAvatarEl = showAuthorAvatar ? (
+                  <img
+                    src={item.authorAvatarUrl!}
+                    alt={authorName}
+                    draggable={false}
+                    referrerPolicy="no-referrer"
+                    onError={() =>
+                      setFailedAvatars((prev) => ({ ...prev, [item.id]: true }))
+                    }
+                    className="h-10 w-10 shrink-0 rounded-full border border-amber-500/35 bg-neutral-900 object-cover"
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-400"
+                  >
+                    <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                    </svg>
+                  </div>
+                );
 
                 return (
                   <article
@@ -2140,103 +1974,126 @@ export default function TierMakerClient({
                         : "border-neutral-800/90 hover:border-neutral-700"
                     }`}
                   >
-                    <div className="space-y-2.5">
-                      <div className="flex items-start justify-between gap-2.5">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {isTopHot && (
-                              <span className="rounded border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-amber-300">
-                                Em Alta
+                    <div className="flex items-start gap-3">
+                      {authorHandle ? (
+                        <Link
+                          href={`/profile/${encodeURIComponent(authorHandle)}`}
+                          className="shrink-0 transition-opacity hover:opacity-85"
+                        >
+                          {authorAvatarEl}
+                        </Link>
+                      ) : (
+                        <div className="shrink-0">{authorAvatarEl}</div>
+                      )}
+
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+                            {authorHandle ? (
+                              <Link
+                                href={`/profile/${encodeURIComponent(authorHandle)}`}
+                                className="truncate text-sm font-bold text-[#f4efe6] transition-colors hover:text-amber-400"
+                              >
+                                {authorName}
+                              </Link>
+                            ) : (
+                              <span className="truncate text-sm font-bold text-[#f4efe6]">
+                                {authorName}
                               </span>
                             )}
-                            <span className="rounded border border-white/10 bg-neutral-950/90 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-300">
-                              {shapeLabel}
+                            <span aria-hidden className="text-xs text-neutral-600">
+                              ·
                             </span>
-                            <span className="rounded bg-neutral-800/90 px-1.5 py-0.5 text-[10px] font-bold text-neutral-300">
-                              {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
+                            <span
+                              title={fullDateTitle}
+                              className="shrink-0 text-xs font-medium capitalize text-neutral-500"
+                            >
+                              {dateText}
                             </span>
                           </div>
 
-                          <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
-                            <Link
-                              href={`/tier-maker/comunidade/${item.id}`}
-                              className="transition-colors hover:text-amber-400"
-                            >
-                              {item.title}
-                            </Link>
-                          </h4>
-                        </div>
-
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            disabled={exportingId === item.id}
-                            title="Exportar PNG"
-                            onClick={() => handleExportItemPng(item)}
-                            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400 transition-colors hover:border-amber-400/70 hover:bg-neutral-900 disabled:opacity-50"
-                          >
-                            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
-                            </svg>
-                            <span>{exportingId === item.id ? "..." : "PNG"}</span>
-                          </button>
-
-                          {item.canEdit && (
+                          <div className="-my-1.5 -mr-1.5 flex shrink-0 items-center justify-end gap-0.5">
                             <button
                               type="button"
-                              title="Abrir no editor"
-                              onClick={() => loadPublished(item)}
-                              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-200 transition-colors hover:border-amber-500/70 hover:bg-neutral-900 hover:text-amber-400"
+                              disabled={exportingId === item.id}
+                              title="Exportar PNG"
+                              aria-label="Exportar PNG"
+                              onClick={() => handleExportItemPng(item)}
+                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-amber-500/12 hover:text-amber-400 disabled:opacity-50"
                             >
-                              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                              <svg
+                                aria-hidden
+                                viewBox="0 0 16 16"
+                                className={`h-4 w-4 ${exportingId === item.id ? "animate-pulse" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
                               </svg>
-                              <span>Editar</span>
                             </button>
-                          )}
 
+                            {item.canEdit && (
+                              <button
+                                type="button"
+                                title="Abrir no editor"
+                                aria-label="Abrir no editor"
+                                onClick={() => loadPublished(item)}
+                                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-amber-500/12 hover:text-amber-400"
+                              >
+                                <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                                </svg>
+                              </button>
+                            )}
+
+                            {item.canDelete && (
+                              <button
+                                type="button"
+                                title="Excluir da galeria"
+                                aria-label="Excluir da galeria"
+                                onClick={(e) => deletePublished(item.id, e)}
+                                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-rose-500/12 hover:text-rose-400"
+                              >
+                                <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <h4 className="font-deadlock truncate text-lg sm:text-xl font-black leading-snug text-[#f4efe6]">
                           <Link
                             href={`/tier-maker/comunidade/${item.id}`}
-                            title="Abrir página completa"
-                            aria-label={`Abrir ${item.title}`}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950/70 text-neutral-400 transition-colors hover:border-amber-500/60 hover:text-amber-400"
+                            className="transition-colors hover:text-amber-400"
                           >
-                            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V10M9 2h5v5M14 2 7 9" />
-                            </svg>
+                            {item.title}
                           </Link>
+                        </h4>
 
-                          {item.canDelete && (
-                            <button
-                              type="button"
-                              title="Excluir da galeria"
-                              onClick={(e) => deletePublished(item.id, e)}
-                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent text-neutral-500 hover:border-rose-500/40 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
-                            >
-                              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
-                              </svg>
-                            </button>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          {isTopHot && (
+                            <span className="rounded border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-amber-300">
+                              Em Alta
+                            </span>
                           )}
+                          <span className="rounded border border-white/10 bg-neutral-950/90 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-300">
+                            {shapeLabel}
+                          </span>
+                          <span className="rounded bg-neutral-800/90 px-1.5 py-0.5 text-[10px] font-bold text-neutral-300">
+                            {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
+                          </span>
                         </div>
-                      </div>
 
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-                        <TierAuthorBadge
-                          name={item.author}
-                          handle={item.authorHandle}
-                          avatarUrl={item.authorAvatarUrl}
-                          size="sm"
-                        />
-                        <span>•</span>
-                        <span>{dateText}</span>
+                        {item.description && (
+                          <p className="line-clamp-2 pt-0.5 text-xs leading-relaxed text-neutral-300">
+                            {item.description}
+                          </p>
+                        )}
                       </div>
-
-                      {item.description && (
-                        <p className="line-clamp-2 text-xs leading-relaxed text-neutral-300">
-                          {item.description}
-                        </p>
-                      )}
                     </div>
 
                     <Link
@@ -2337,7 +2194,7 @@ export default function TierMakerClient({
                           <span>{commentsCount}</span>
                         </button>
 
-                        {/* Postar no Feed (Repost) */}
+                        {/* Postar no Feed */}
                         <button
                           type="button"
                           title="Postar no Feed"
@@ -2347,10 +2204,8 @@ export default function TierMakerClient({
                         >
                           <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-emerald-500/12">
                             <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="m17 2 4 4-4 4" />
-                              <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-                              <path d="m7 22-4-4 4-4" />
-                              <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+                              <path d="M12 4v15" />
+                              <path d="m19 12-7 7-7-7" />
                             </svg>
                           </span>
                         </button>
@@ -2383,201 +2238,115 @@ export default function TierMakerClient({
                           <span>{likesCount}</span>
                         </button>
 
-                        {/* Visualizações */}
-                        <Link
-                          href={`/tier-maker/comunidade/${item.id}`}
-                          title={`${viewsCount} ${viewsCount === 1 ? "visualização" : "visualizações"}`}
-                          aria-label={`${viewsCount} visualizações`}
-                          className="group/act inline-flex items-center gap-1 text-xs font-medium tabular-nums transition-colors hover:text-sky-400"
-                        >
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-sky-500/12">
-                            <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 20V14M10 20V4M16 20v-9M22 20v-6" />
-                            </svg>
-                          </span>
-                          <span>{viewsCount}</span>
-                        </Link>
-
-                        {/* Compartilhar */}
-                        <div className="relative" data-share-menu>
-                          <button
-                            type="button"
-                            title="Compartilhar"
-                            aria-label="Compartilhar"
-                            onClick={() =>
-                              setOpenShareId((curr) => (curr === item.id ? null : item.id))
-                            }
-                            className="group/act inline-flex cursor-pointer items-center text-neutral-400 transition-colors hover:text-amber-400"
-                          >
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-amber-500/12">
-                              <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                                <path d="m16 6-4-4-4 4" />
-                                <path d="M12 2v13" />
-                              </svg>
-                            </span>
-                          </button>
-
-                          {openShareId === item.id && (
-                            <div className="absolute right-0 bottom-full z-30 mb-2 w-52 rounded-xl border border-neutral-800 bg-neutral-950/98 p-1.5 shadow-2xl backdrop-blur-md space-y-1">
-                              <button
-                                type="button"
-                                onClick={() => void handleCopyShareLink(item, false)}
-                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
-                              >
-                                <span>
-                                  {copiedShareState === `${item.id}:link`
-                                    ? "Link copiado!"
-                                    : "Copiar link"}
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleCopyShareLink(item, true)}
-                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
-                              >
-                                <span>
-                                  {copiedShareState === `${item.id}:summary`
-                                    ? "Resumo copiado!"
-                                    : "Copiar p/ Discord"}
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleNativeShare(item)}
-                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
-                              >
-                                <span>Compartilhar...</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={exportingId === item.id}
-                                onClick={() => {
-                                  setOpenShareId(null);
-                                  void handleExportItemPng(item);
-                                }}
-                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-amber-400 hover:bg-neutral-900 disabled:opacity-50"
-                              >
-                                <span>
-                                  {exportingId === item.id ? "Gerando PNG..." : "Baixar imagem PNG"}
-                                </span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {!commentsExpanded && (item.recentComments?.length ?? 0) > 0 && (
+                        {/* Salvar */}
                         <button
                           type="button"
-                          onClick={() => void handleToggleComments(item)}
-                          className="w-full cursor-pointer rounded-lg border border-neutral-800/70 bg-black/30 px-3 py-2 text-left text-xs text-neutral-300 hover:border-neutral-700 transition-colors"
+                          title={item.savedByMe ? "Remover dos salvos" : "Salvar"}
+                          aria-label={`Salvar (${savesCount})`}
+                          aria-pressed={Boolean(item.savedByMe)}
+                          disabled={saveBusyIds[item.id]}
+                          onClick={() => void handleToggleSave(item)}
+                          className={`group/act inline-flex cursor-pointer items-center gap-1 text-xs font-medium tabular-nums transition-colors ${
+                            item.savedByMe ? "text-amber-400" : "hover:text-amber-400"
+                          }`}
                         >
-                          {(() => {
-                            const last = item.recentComments![item.recentComments!.length - 1];
-                            return (
-                              <span className="line-clamp-1">
-                                <strong className="text-[#f4efe6]">{last.author.username}:</strong>{" "}
-                                {last.content}
-                              </span>
-                            );
-                          })()}
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-amber-500/12">
+                            <svg
+                              aria-hidden
+                              viewBox="0 0 24 24"
+                              className="h-[18px] w-[18px]"
+                              fill={item.savedByMe ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </span>
+                          <span>{savesCount}</span>
                         </button>
-                      )}
+                      </div>
 
                       {commentsExpanded && (
-                        <div className="space-y-2.5 rounded-xl border border-neutral-800/80 bg-black/35 p-3">
-                          {loadingCommentsMap[item.id] ? (
-                            <p className="text-[11px] text-neutral-500">Carregando comentários...</p>
-                          ) : commentsList.length === 0 ? (
-                            <p className="text-[11px] italic text-neutral-500">
-                              Nenhum comentário ainda. Seja o primeiro a opinar!
-                            </p>
-                          ) : (
-                            <div className="max-h-52 space-y-2 overflow-y-auto pr-1 lp-scroll">
-                              {commentsList.map((c) => (
-                                <div
-                                  key={c.id}
-                                  className="flex items-start justify-between gap-2 rounded-lg bg-neutral-900/70 px-2.5 py-2"
-                                >
-                                  <div className="min-w-0 space-y-0.5">
-                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                                      {c.author.handle ? (
-                                        <Link
-                                          href={`/profile/${encodeURIComponent(c.author.handle)}`}
-                                          className="font-bold text-[#f4efe6] hover:text-amber-400"
-                                        >
-                                          {c.author.username}
-                                        </Link>
-                                      ) : (
-                                        <span className="font-bold text-[#f4efe6]">
-                                          {c.author.username}
-                                        </span>
-                                      )}
-                                      <span className="text-[10px] text-neutral-500">
-                                        {new Date(c.createdAt).toLocaleString("pt-BR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </span>
-                                    </div>
-                                    <p className="whitespace-pre-wrap break-words text-xs text-neutral-300">
-                                      {c.content}
-                                    </p>
-                                  </div>
-                                  {c.canDelete && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleDeleteTierComment(item.id, c.id)}
-                                      className="shrink-0 cursor-pointer text-[10px] font-bold uppercase text-rose-400 hover:underline"
-                                    >
-                                      Excluir
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {currentUser ? (
-                            <form
-                              onSubmit={(e) => void handleAddTierComment(item, e)}
-                              className="flex gap-2 pt-1"
-                            >
-                              <input
-                                type="text"
-                                maxLength={300}
-                                value={commentDrafts[item.id] ?? ""}
-                                onChange={(e) =>
-                                  setCommentDrafts((m) => ({
-                                    ...m,
-                                    [item.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder="Comentar nessa tier list..."
-                                className="min-w-0 flex-1 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500/60"
-                              />
-                              <button
-                                type="submit"
-                                disabled={
-                                  commentBusyIds[item.id] ||
-                                  !(commentDrafts[item.id] ?? "").trim()
-                                }
-                                className="cursor-pointer rounded-lg border border-amber-500/60 bg-amber-500/15 px-3 py-1.5 text-xs font-black uppercase text-amber-300 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Enviar
-                              </button>
-                            </form>
-                          ) : (
-                            <p className="text-[11px] text-neutral-400">
-                              <Link href="/login?next=/tier-maker/comunidade" className="font-bold text-amber-400 hover:underline">
-                                Entre na sua conta
-                              </Link>{" "}
-                              para comentar.
-                            </p>
-                          )}
+                        <div className="rounded-xl border border-neutral-800/80 bg-black/35 p-3">
+                          <TierCommentsThread
+                            tierListId={item.id}
+                            comments={commentsList}
+                            loading={Boolean(loadingCommentsMap[item.id])}
+                            currentUser={currentUser}
+                            loginRedirectPath="/tier-maker/comunidade"
+                            compact
+                            onCommentAdded={(newComment) => {
+                              setFullCommentsMap((m) => {
+                                const base = m[item.id] ?? item.recentComments ?? [];
+                                const updated = newComment.parentId
+                                  ? base.map((c) =>
+                                      c.id === newComment.parentId
+                                        ? { ...c, repliesCount: (c.repliesCount ?? 0) + 1 }
+                                        : c,
+                                    )
+                                  : base;
+                                return { ...m, [item.id]: [...updated, newComment] };
+                              });
+                              setPublishedLists((prev) =>
+                                prev.map((l) =>
+                                  l.id === item.id
+                                    ? {
+                                        ...l,
+                                        commentsCount: (l.commentsCount ?? 0) + 1,
+                                        recentComments: [...(l.recentComments ?? []), newComment].slice(-3),
+                                      }
+                                    : l,
+                                ),
+                              );
+                            }}
+                            onCommentUpdated={(commentId, patch) => {
+                              setFullCommentsMap((m) => ({
+                                ...m,
+                                [item.id]: (m[item.id] ?? []).map((c) =>
+                                  c.id === commentId ? { ...c, ...patch } : c,
+                                ),
+                              }));
+                            }}
+                            onCommentDeleted={(deletedIds) => {
+                              const deletedSet = new Set(deletedIds);
+                              setFullCommentsMap((m) => {
+                                const prevList = m[item.id] ?? [];
+                                const deletedParents = prevList
+                                  .filter((c) => deletedSet.has(c.id) && c.parentId && !deletedSet.has(c.parentId))
+                                  .map((c) => c.parentId!);
+                                return {
+                                  ...m,
+                                  [item.id]: prevList
+                                    .filter((c) => !deletedSet.has(c.id))
+                                    .map((c) => {
+                                      const dec = deletedParents.filter((pid) => pid === c.id).length;
+                                      return dec > 0
+                                        ? { ...c, repliesCount: Math.max(0, (c.repliesCount ?? 0) - dec) }
+                                        : c;
+                                    }),
+                                };
+                              });
+                              setPublishedLists((prev) =>
+                                prev.map((l) =>
+                                  l.id === item.id
+                                    ? {
+                                        ...l,
+                                        commentsCount: Math.max(0, (l.commentsCount ?? 0) - deletedIds.length),
+                                        recentComments: (l.recentComments ?? []).filter(
+                                          (c) => !deletedSet.has(c.id),
+                                        ),
+                                      }
+                                    : l,
+                                ),
+                              );
+                            }}
+                            onRequireLogin={(msg) =>
+                              setFeedback({ type: "error", text: msg, needsLogin: true })
+                            }
+                            onError={(msg) => setFeedback({ type: "error", text: msg })}
+                          />
                         </div>
                       )}
                     </div>

@@ -668,6 +668,34 @@ export async function toggleTierListLike(
   }
 }
 
+export async function toggleTierListSave(
+  id: string,
+): Promise<{ ok: boolean; saved: boolean; savesCount: number; status?: number; message?: string }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/save`), {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return {
+        ok: false,
+        saved: false,
+        savesCount: 0,
+        status: res.status,
+        message: extractError(data, "Não foi possível salvar esta tier list."),
+      };
+    }
+    return {
+      ok: true,
+      saved: Boolean(data?.saved),
+      savesCount: Number(data?.savesCount ?? 0),
+    };
+  } catch {
+    return { ok: false, saved: false, savesCount: 0, message: "Erro de conexão com a API." };
+  }
+}
+
 export async function recordTierListView(id: string): Promise<number | null> {
   try {
     const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/view`), {
@@ -699,13 +727,17 @@ export async function getTierListComments(id: string): Promise<TierListComment[]
 export async function createTierListComment(
   id: string,
   content: string,
+  parentId?: string | null,
 ): Promise<{ comment: TierListComment | null; status?: number; error: string | null }> {
   try {
     const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/comments`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        ...(parentId ? { parentId } : {}),
+      }),
     });
     const data = await parseJsonSafe(res);
     if (!res.ok) {
@@ -718,6 +750,37 @@ export async function createTierListComment(
     return { comment: data as unknown as TierListComment, error: null };
   } catch {
     return { comment: null, error: "Erro de conexão com a API." };
+  }
+}
+
+export async function toggleTierListCommentLike(
+  commentId: string,
+): Promise<{ ok: boolean; liked: boolean; likesCount: number; status?: number; message?: string }> {
+  try {
+    const res = await fetch(
+      apiUrl(`/tier-lists/comments/${encodeURIComponent(commentId)}/like`),
+      {
+        method: "POST",
+        credentials: "include",
+      },
+    );
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return {
+        ok: false,
+        liked: false,
+        likesCount: 0,
+        status: res.status,
+        message: extractError(data, "Não foi possível curtir o comentário."),
+      };
+    }
+    return {
+      ok: true,
+      liked: Boolean(data?.liked),
+      likesCount: Number(data?.likesCount ?? 0),
+    };
+  } catch {
+    return { ok: false, liked: false, likesCount: 0, message: "Erro de conexão com a API." };
   }
 }
 

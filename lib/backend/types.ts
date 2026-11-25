@@ -121,9 +121,13 @@ export interface TierListCommentAuthor {
 export interface TierListComment {
   id: string;
   tierListId: string;
+  parentId?: string | null;
   content: string;
   createdAt: string;
   author: TierListCommentAuthor;
+  likesCount?: number;
+  likedByMe?: boolean;
+  repliesCount?: number;
   canDelete: boolean;
 }
 
@@ -142,8 +146,10 @@ export interface TierListItem {
   quadrant?: TierQuadrantData | null;
   viewsCount?: number;
   likesCount?: number;
+  savesCount?: number;
   commentsCount?: number;
   likedByMe?: boolean;
+  savedByMe?: boolean;
   relevanceScore?: number;
   recentComments?: TierListComment[];
   comments?: TierListComment[];

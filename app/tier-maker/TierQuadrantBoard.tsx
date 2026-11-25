@@ -606,11 +606,11 @@ export default function TierQuadrantBoard({
   const svgRoundedPath = buildRoundedPolygonPath(polyVertices, cornerRadius, 1);
   const clipRoundedPath = buildRoundedPolygonPath(polyVertices, cornerRadius, 0.01);
 
-  const labelGapPx = isPreview ? 8 : 12;
+  const labelGapPx = isPreview ? 10 : 12;
 
  const labelStyleForAxis = (idx: number): CSSProperties => {
     if (idx === 0) {
-      const topGap = isPreview ? 8 : isEditor ? 44 : 12;
+      const topGap = isPreview ? 10 : isEditor ? 44 : 12;
       return {
         left: "50%",
         top: `calc(0% - ${topGap}px)`,
@@ -619,7 +619,7 @@ export default function TierQuadrantBoard({
     }
 
     if (isSquare) {
-      const sideGap = isPreview ? 8 : 12;
+      const sideGap = isPreview ? 10 : 12;
       if (idx === 1) {
         return {
           left: `calc(100% + ${sideGap}px)`,
@@ -694,7 +694,7 @@ export default function TierQuadrantBoard({
       onDrop={handleDrop}
       className={`relative select-none ${
         isPreview
-          ? "aspect-square h-44 sm:h-48"
+          ? "aspect-square h-48 sm:h-64 lg:h-56 xl:h-64"
           : "mx-auto aspect-square w-full max-w-[680px]"
       } ${isEditor && selectedHeroId !== null ? "cursor-crosshair" : ""}`}
     >
@@ -753,12 +753,12 @@ export default function TierQuadrantBoard({
               key={`pg-${i}`}
               d={d}
               fill="none"
-              stroke="rgba(255, 255, 255, 0.035)"
+              stroke={isPreview ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.035)"}
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          <g opacity={0.15}>
+          <g opacity={isPreview ? 0.24 : 0.15}>
             {polyVertices.map((v, i) => {
               const x2 = polyCenter.x + (v.x - polyCenter.x) * 0.93;
               const y2 = polyCenter.y + (v.y - polyCenter.y) * 0.93;
@@ -779,7 +779,7 @@ export default function TierQuadrantBoard({
           <path
             d={svgRoundedPath}
             fill="none"
-            stroke="rgba(38, 38, 38, 0.9)"
+            stroke={isPreview ? "rgba(82, 82, 91, 0.75)" : "rgba(38, 38, 38, 0.9)"}
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
@@ -826,7 +826,7 @@ export default function TierQuadrantBoard({
             <span
               key={idx}
               style={posStyle}
-              className="pointer-events-none absolute z-20 max-w-[105px] truncate rounded border border-white/10 bg-[#070a09]/92 px-1.5 py-0.5 font-deadlock text-[8px] font-black uppercase tracking-wider text-[#f4efe6]/90 shadow"
+              className="pointer-events-none absolute z-20 max-w-[115px] sm:max-w-[135px] truncate rounded border border-white/12 bg-[#070a09]/92 px-2 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-[#f4efe6]/95 shadow"
             >
               {value}
             </span>
@@ -978,7 +978,7 @@ export default function TierQuadrantBoard({
               alt={hero.name}
               draggable={false}
               className={`relative z-10 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.95)] ${
-                isPreview ? "h-7 w-7 sm:h-8 sm:w-8" : "h-11 w-11 sm:h-14 sm:w-14"
+                isPreview ? "h-8 w-8 sm:h-9 sm:w-9" : "h-11 w-11 sm:h-14 sm:w-14"
               }`}
             />
 
@@ -1032,7 +1032,7 @@ export default function TierQuadrantBoard({
 
   if (isPreview) {
     return (
-      <div className="flex w-full items-center justify-center overflow-hidden rounded-xl border border-neutral-800/40 bg-neutral-950/40 px-20 py-9 sm:px-28">
+      <div className="flex w-full items-center justify-center overflow-hidden rounded-xl border border-neutral-800/40 bg-neutral-950/40 px-12 py-10 sm:px-20 lg:px-14 xl:px-20 sm:py-11">
         {boardContent}
       </div>
     );

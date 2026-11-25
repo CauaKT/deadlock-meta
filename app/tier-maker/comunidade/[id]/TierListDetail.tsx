@@ -3,33 +3,30 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useConfirm } from "@/components/ui/ConfirmModal";
 import type { MakerHero } from "@/app/tiers";
 import { exportTierListToPng } from "@/app/tier-maker/exportTierListPng";
 import TierAuthorBadge from "@/app/tier-maker/TierAuthorBadge";
+import TierCommentsThread from "@/app/tier-maker/TierCommentsThread";
 import TierQuadrantBoard, {
   getPolygonShapeName,
   getQuadrantAxes,
 } from "@/app/tier-maker/TierQuadrantBoard";
 import {
   createFeedPost,
-  createTierListComment,
-  deleteTierListComment,
   getCurrentClientUser,
   getTierListById,
   recordTierListView,
   toggleTierListLike,
+  toggleTierListSave,
 } from "@/lib/backend/client";
 import type { AuthUser, TierListComment, TierListItem } from "@/lib/backend/types";
 
 export default function TierListDetail({ id, heroes }: { id: string; heroes: MakerHero[] }) {
-  const { confirm, modal } = useConfirm();
   const [item, setItem] = useState<TierListItem | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [comments, setComments] = useState<TierListComment[]>([]);
-  const [commentText, setCommentText] = useState("");
-  const [commentBusy, setCommentBusy] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const [notFound, setNotFound] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -143,59 +140,49 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
     );
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!item || !commentText.trim() || commentBusy) return;
+  const handleToggleSave = async () => {
+    if (!item) return;
     if (!currentUser) {
       setFeedback({
         type: "error",
-        text: "Entre na sua conta para comentar.",
+        text: "Entre na sua conta para salvar esta tier list.",
         needsLogin: true,
       });
       return;
     }
+    if (saveBusy) return;
 
-    setCommentBusy(true);
-    setFeedback(null);
-    const { comment, status, error } = await createTierListComment(item.id, commentText.trim());
-    setCommentBusy(false);
+    const prevSaved = Boolean(item.savedByMe);
+    const prevCount = item.savesCount ?? 0;
 
-    if (error || !comment) {
+    setSaveBusy(true);
+    setItem((prev) =>
+      prev
+        ? {
+            ...prev,
+            savedByMe: !prevSaved,
+            savesCount: Math.max(0, prevCount + (prevSaved ? -1 : 1)),
+          }
+        : prev,
+    );
+
+    const res = await toggleTierListSave(item.id);
+    setSaveBusy(false);
+
+    if (!res.ok) {
+      setItem((prev) =>
+        prev ? { ...prev, savedByMe: prevSaved, savesCount: prevCount } : prev,
+      );
       setFeedback({
         type: "error",
-        text: error ?? "Não foi possível comentar.",
-        needsLogin: status === 401,
+        text: res.message ?? "Não foi possível salvar.",
+        needsLogin: res.status === 401,
       });
       return;
     }
 
-    setComments((prev) => [...prev, comment]);
-    setCommentText("");
     setItem((prev) =>
-      prev ? { ...prev, commentsCount: (prev.commentsCount ?? 0) + 1 } : prev,
-    );
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    const ok = await confirm({
-      title: "Excluir comentário?",
-      description: "Este comentário será removido permanentemente.",
-      confirmLabel: "Excluir",
-      tone: "danger",
-    });
-    if (!ok) return;
-
-    const res = await deleteTierListComment(commentId);
-    if (!res.ok) {
-      setFeedback({ type: "error", text: res.error ?? "Não foi possível excluir." });
-      return;
-    }
-
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-    setItem((prev) =>
-      prev
-        ? { ...prev, commentsCount: Math.max(0, (prev.commentsCount ?? 0) - 1) }
-        : prev,
+      prev ? { ...prev, savedByMe: res.saved, savesCount: res.savesCount } : prev,
     );
   };
 
@@ -321,12 +308,30 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
     isQuadrant && item.quadrant
       ? item.quadrant.items.length
       : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
-  const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
+  const createdDate = new Date(item.createdAt);
+  const dateText = createdDate
+    .toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+    .replace(/\bde\b/g, "")
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const fullDateTitle = createdDate.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const shapeLabel =
     isQuadrant && item.quadrant
       ? getPolygonShapeName(getQuadrantAxes(item.quadrant).length)
       : "Clássica";
   const likesCount = item.likesCount ?? 0;
+  const savesCount = item.savesCount ?? 0;
   const viewsCount = item.viewsCount ?? 0;
 
   return (
@@ -361,16 +366,34 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
             <p className="max-w-2xl text-sm leading-relaxed text-neutral-300">{item.description}</p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs text-neutral-400">
             <TierAuthorBadge
               name={item.author}
               handle={item.authorHandle}
               avatarUrl={item.authorAvatarUrl}
               size="md"
               prefix="Por"
+              showHandle={false}
             />
-            <span>•</span>
-            <span>{dateText}</span>
+            <span
+              title={fullDateTitle}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-800/80 bg-neutral-950/70 px-2.5 py-0.5 text-[11px] font-medium capitalize text-neutral-400"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                className="h-3 w-3 text-neutral-500"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="3" width="12" height="11" rx="2" />
+                <path d="M5 1.5V4M11 1.5V4M2 6.5h12" />
+              </svg>
+              <span>{dateText}</span>
+            </span>
           </div>
         </div>
 
@@ -386,6 +409,33 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
             }`}
           >
             {item.likedByMe ? "♥" : "♡"} Curtir ({likesCount})
+          </button>
+
+          <button
+            type="button"
+            disabled={saveBusy}
+            onClick={() => void handleToggleSave()}
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider shadow transition-all ${
+              item.savedByMe
+                ? "border-amber-500/60 bg-amber-500/15 text-amber-300"
+                : "border-neutral-700/80 bg-neutral-900/90 text-neutral-200 hover:border-amber-500/50 hover:text-amber-300"
+            }`}
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill={item.savedByMe ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>
+              {item.savedByMe ? "Salva" : "Salvar"} ({savesCount})
+            </span>
           </button>
 
           <button
@@ -511,101 +561,61 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
           Comentários ({comments.length})
         </h2>
 
-        {currentUser ? (
-          <form onSubmit={(e) => void handleAddComment(e)} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              maxLength={300}
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Escreva o que achou desta tier list..."
-              className="min-w-0 flex-1 rounded-lg border border-neutral-800 bg-black/50 px-3.5 py-2 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500/60"
-            />
-            <button
-              type="submit"
-              disabled={commentBusy || !commentText.trim()}
-              className="cursor-pointer rounded-lg border border-amber-500/60 bg-amber-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {commentBusy ? "Enviando..." : "Comentar"}
-            </button>
-          </form>
-        ) : (
-          <p className="text-xs text-neutral-400">
-            <Link
-              href={`/login?next=${encodeURIComponent(`/tier-maker/comunidade/${item.id}`)}`}
-              className="font-bold text-amber-400 hover:underline"
-            >
-              Entre na sua conta
-            </Link>{" "}
-            para curtir e comentar.
-          </p>
-        )}
-
-        {comments.length === 0 ? (
-          <p className="py-4 text-center text-xs italic text-neutral-500">
-            Nenhum comentário ainda. Seja o primeiro!
-          </p>
-        ) : (
-          <div className="space-y-2.5">
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-neutral-800/70 bg-black/35 px-3.5 py-3"
-              >
-                <div className="flex min-w-0 items-start gap-2.5">
-                  {c.author.avatarUrl ? (
-                    <img
-                      src={c.author.avatarUrl}
-                      alt={c.author.username}
-                      className="h-8 w-8 shrink-0 rounded-full border border-neutral-700 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800 text-xs font-black uppercase text-amber-400">
-                      {c.author.username.slice(0, 1)}
-                    </div>
-                  )}
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      {c.author.handle ? (
-                        <Link
-                          href={`/profile/${encodeURIComponent(c.author.handle)}`}
-                          className="font-bold text-[#f4efe6] hover:text-amber-400"
-                        >
-                          {c.author.username}{" "}
-                          <span className="font-mono text-[11px] font-normal text-neutral-400">
-                            @{c.author.handle}
-                          </span>
-                        </Link>
-                      ) : (
-                        <span className="font-bold text-[#f4efe6]">{c.author.username}</span>
-                      )}
-                      <span className="text-[10px] text-neutral-500">
-                        {new Date(c.createdAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-neutral-300">
-                      {c.content}
-                    </p>
-                  </div>
-                </div>
-                {c.canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteComment(c.id)}
-                    className="shrink-0 cursor-pointer text-[10px] font-bold uppercase text-rose-400 hover:underline"
-                  >
-                    Excluir
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <TierCommentsThread
+          tierListId={item.id}
+          comments={comments}
+          currentUser={currentUser}
+          loginRedirectPath={`/tier-maker/comunidade/${item.id}`}
+          onCommentAdded={(newComment) => {
+            setFeedback(null);
+            setComments((prev) => {
+              const updated = newComment.parentId
+                ? prev.map((c) =>
+                    c.id === newComment.parentId
+                      ? { ...c, repliesCount: (c.repliesCount ?? 0) + 1 }
+                      : c,
+                  )
+                : prev;
+              return [...updated, newComment];
+            });
+            setItem((prev) =>
+              prev ? { ...prev, commentsCount: (prev.commentsCount ?? 0) + 1 } : prev,
+            );
+          }}
+          onCommentUpdated={(commentId, patch) => {
+            setComments((prev) =>
+              prev.map((c) => (c.id === commentId ? { ...c, ...patch } : c)),
+            );
+          }}
+          onCommentDeleted={(deletedIds) => {
+            const deletedSet = new Set(deletedIds);
+            setComments((prev) => {
+              const deletedParents = prev
+                .filter((c) => deletedSet.has(c.id) && c.parentId && !deletedSet.has(c.parentId))
+                .map((c) => c.parentId!);
+              return prev
+                .filter((c) => !deletedSet.has(c.id))
+                .map((c) => {
+                  const dec = deletedParents.filter((pid) => pid === c.id).length;
+                  return dec > 0
+                    ? { ...c, repliesCount: Math.max(0, (c.repliesCount ?? 0) - dec) }
+                    : c;
+                });
+            });
+            setItem((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    commentsCount: Math.max(0, (prev.commentsCount ?? 0) - deletedIds.length),
+                  }
+                : prev,
+            );
+          }}
+          onRequireLogin={(msg) =>
+            setFeedback({ type: "error", text: msg, needsLogin: true })
+          }
+          onError={(msg) => setFeedback({ type: "error", text: msg })}
+        />
       </section>
 
       {feedModalOpen && (
@@ -669,7 +679,6 @@ export default function TierListDetail({ id, heroes }: { id: string; heroes: Mak
           </div>
         </div>
       )}
-      {modal}
-    </div>
+      </div>
   );
 }
