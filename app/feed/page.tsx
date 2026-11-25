@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
+import type { MakerHero } from "@/app/tiers";
 import { getServerAuthUser, getServerFeedPosts } from "@/lib/backend/server";
+import {
+  extractColor,
+  fetchHeroesAssets,
+  fetchWikiColors,
+  getPlayableHeroes,
+  resolveHeroMedia,
+} from "@/lib/deadlock";
 import FeedClient from "./FeedClient";
 
 export const instant = false;
@@ -12,10 +20,23 @@ export const metadata: Metadata = {
 
 export default async function FeedPage() {
   await connection();
-  const [user, initialFeed] = await Promise.all([
+  const [user, initialFeed, heroesMap, wikiColors] = await Promise.all([
     getServerAuthUser(),
     getServerFeedPosts(1, 20),
+    fetchHeroesAssets(),
+    fetchWikiColors(),
   ]);
+
+  const heroes: MakerHero[] = getPlayableHeroes(heroesMap).map((h) => {
+    const media = resolveHeroMedia(h);
+    return {
+      id: h.id,
+      name: h.name,
+      image: media.card,
+      icon: media.icon ?? media.card,
+      rgb: extractColor(h, wikiColors),
+    };
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-10">
@@ -28,7 +49,7 @@ export default async function FeedPage() {
         </p>
       </header>
 
-      <FeedClient initialFeed={initialFeed} initialUser={user} />
+      <FeedClient initialFeed={initialFeed} initialUser={user} heroes={heroes} />
     </div>
   );
 }

@@ -106,12 +106,31 @@ export interface TierQuadrantData {
   bottomLabel: string;
   leftLabel: string;
   rightLabel: string;
+  axes?: string[];
   items: TierQuadrantItem[];
+}
+
+export interface TierListCommentAuthor {
+  id: string;
+  username: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  favoriteHeroId: number | null;
+}
+
+export interface TierListComment {
+  id: string;
+  tierListId: string;
+  content: string;
+  createdAt: string;
+  author: TierListCommentAuthor;
+  canDelete: boolean;
 }
 
 export interface TierListItem {
   id: string;
   title: string;
+  description?: string | null;
   author: string;
   authorHandle: string | null;
   authorAvatarUrl?: string | null;
@@ -121,12 +140,20 @@ export interface TierListItem {
   style?: TierListStyle;
   tiers: TierRowData[];
   quadrant?: TierQuadrantData | null;
+  viewsCount?: number;
+  likesCount?: number;
+  commentsCount?: number;
+  likedByMe?: boolean;
+  relevanceScore?: number;
+  recentComments?: TierListComment[];
+  comments?: TierListComment[];
   canEdit: boolean;
   canDelete: boolean;
 }
 
 export interface SaveTierListInput {
   title: string;
+  description?: string | null;
   authorName?: string;
   style?: TierListStyle;
   tiers: TierRowData[];
@@ -180,10 +207,24 @@ export interface FeedComment {
   canDelete: boolean;
 }
 
+export interface FeedTierListEmbed {
+  id: string;
+  title: string;
+  author: string;
+  authorHandle: string | null;
+  authorAvatarUrl: string | null;
+  style: TierListStyle;
+  tiers: TierRowData[];
+  quadrant: TierQuadrantData | null;
+  likesCount: number;
+  commentsCount: number;
+}
+
 export interface FeedPost {
   id: string;
   content: string;
   mediaUrl: string | null;
+  tierList?: FeedTierListEmbed | null;
   createdAt: string;
   author: FeedAuthor;
   likesCount: number;

@@ -1,7 +1,9 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { MakerHero } from "@/app/tiers";
+import TierQuadrantBoard from "@/app/tier-maker/TierQuadrantBoard";
 import { useConfirm } from "@/components/ui/ConfirmModal";
 import SlantFrame from "@/components/ui/SlantFrame";
 import {
@@ -54,11 +56,14 @@ function Avatar({
 export default function FeedClient({
   initialFeed,
   initialUser,
+  heroes = [],
 }: {
   initialFeed: FeedResponse;
   initialUser: AuthUser | null;
+  heroes?: MakerHero[];
 }) {
   const { confirm, modal } = useConfirm();
+  const heroById = useMemo(() => new Map(heroes.map((h) => [h.id, h])), [heroes]);
   const [posts, setPosts] = useState<FeedPost[]>(initialFeed.items);
   const [page, setPage] = useState(initialFeed.page);
   const [hasMore, setHasMore] = useState(initialFeed.hasMore);
@@ -306,6 +311,69 @@ export default function FeedClient({
                   loading="lazy"
                   className="max-h-96 w-full rounded-lg border border-neutral-800 bg-black/40 object-contain"
                 />
+              )}
+
+              {post.tierList && (
+                <Link
+                  href={`/tier-maker/comunidade/${post.tierList.id}`}
+                  className="block space-y-3 rounded-xl border border-amber-500/30 bg-neutral-950/75 p-3.5 transition-colors hover:border-amber-400/70"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400">
+                        Tier List Anexada
+                      </p>
+                      <h4 className="font-deadlock truncate text-base font-black text-[#f4efe6]">
+                        {post.tierList.title}
+                      </h4>
+                      <p className="text-[11px] text-neutral-400">
+                        por {post.tierList.author} • ♥ {post.tierList.likesCount} •{" "}
+                        {post.tierList.commentsCount} comentários
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 font-deadlock text-[10px] font-black uppercase text-amber-300">
+                      Abrir
+                    </span>
+                  </div>
+
+                  {post.tierList.style === "quadrant" && post.tierList.quadrant ? (
+                    <TierQuadrantBoard
+                      mode="preview"
+                      quadrant={post.tierList.quadrant}
+                      byId={heroById}
+                    />
+                  ) : (
+                    <div className="divide-y divide-neutral-900 overflow-hidden rounded-lg border border-neutral-800/80 bg-black/50">
+                      {post.tierList.tiers.slice(0, 4).map((t, idx) => (
+                        <div key={idx} className="flex min-h-[30px] items-stretch">
+                          <div
+                            style={{ backgroundColor: t.color }}
+                            className="flex w-14 shrink-0 items-center justify-center px-1 text-center"
+                          >
+                            <span className="font-deadlock truncate text-[10px] font-black uppercase text-black">
+                              {t.label.replace(/\n+/g, " ")}
+                            </span>
+                          </div>
+                          <div className="flex flex-1 flex-wrap items-center gap-1 px-2 py-1">
+                            {t.heroes.slice(0, 8).map((hId) => {
+                              const h = heroById.get(hId);
+                              if (!h) return null;
+                              return (
+                                <img
+                                  key={hId}
+                                  src={h.image}
+                                  alt={h.name}
+                                  className="h-5 w-5 rounded-[3px] border border-neutral-800 object-cover"
+                                  loading="lazy"
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Link>
               )}
 
               <div className="flex items-center gap-4 border-t border-neutral-800/70 pt-3 text-xs font-bold">

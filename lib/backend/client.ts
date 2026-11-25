@@ -14,6 +14,7 @@ import type {
   SavedAccount,
   SaveTierListInput,
   SocialLinks,
+  TierListComment,
   TierListItem,
 } from "./types";
 
@@ -639,6 +640,105 @@ export async function deleteTierList(
   }
 }
 
+export async function toggleTierListLike(
+  id: string,
+): Promise<{ ok: boolean; liked: boolean; likesCount: number; status?: number; message?: string }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/like`), {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return {
+        ok: false,
+        liked: false,
+        likesCount: 0,
+        status: res.status,
+        message: extractError(data, "Não foi possível curtir esta tier list."),
+      };
+    }
+    return {
+      ok: true,
+      liked: Boolean(data?.liked),
+      likesCount: Number(data?.likesCount ?? 0),
+    };
+  } catch {
+    return { ok: false, liked: false, likesCount: 0, message: "Erro de conexão com a API." };
+  }
+}
+
+export async function recordTierListView(id: string): Promise<number | null> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/view`), {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const data = await parseJsonSafe(res);
+    return typeof data?.viewsCount === "number" ? data.viewsCount : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getTierListComments(id: string): Promise<TierListComment[]> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/comments`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as TierListComment[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createTierListComment(
+  id: string,
+  content: string,
+): Promise<{ comment: TierListComment | null; status?: number; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/${encodeURIComponent(id)}/comments`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ content }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok) {
+      return {
+        comment: null,
+        status: res.status,
+        error: extractError(data, "Não foi possível comentar."),
+      };
+    }
+    return { comment: data as unknown as TierListComment, error: null };
+  } catch {
+    return { comment: null, error: "Erro de conexão com a API." };
+  }
+}
+
+export async function deleteTierListComment(
+  commentId: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const res = await fetch(apiUrl(`/tier-lists/comments/${encodeURIComponent(commentId)}`), {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await parseJsonSafe(res);
+      return { ok: false, error: extractError(data, "Não foi possível excluir o comentário.") };
+    }
+    return { ok: true, error: null };
+  } catch {
+    return { ok: false, error: "Erro de conexão com a API." };
+  }
+}
+
 export async function getSavedAccounts(): Promise<SavedAccount[]> {
   try {
     const res = await fetch(apiUrl("/auth/accounts"), {
@@ -898,6 +998,7 @@ export async function getFeedPosts(page = 1, limit = 20): Promise<FeedResponse> 
 export async function createFeedPost(input: {
   content: string;
   mediaUrl?: string | null;
+  tierListId?: string | null;
 }): Promise<{ post: FeedPost | null; error: string | null }> {
   try {
     const res = await fetch(apiUrl("/feed"), {

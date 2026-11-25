@@ -21,6 +21,7 @@ export interface ExportQuadrantBoard {
   bottomLabel: string;
   leftLabel: string;
   rightLabel: string;
+  axes?: string[];
   heroes: ExportQuadrantHero[];
 }
 
@@ -92,11 +93,13 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
   const quadrant = options.quadrant;
   if (!quadrant) return;
 
-  const WIDTH = 1080;
+  const WIDTH = 1200;
   const PADDING = 36;
   const HEADER_H = 88;
-  const BOARD_SIZE = WIDTH - PADDING * 2;
-  const totalHeight = PADDING + HEADER_H + BOARD_SIZE + PADDING;
+  const TOP_OUTER = 52;
+  const BOTTOM_OUTER = 52;
+  const BOARD_SIZE = 740;
+  const totalHeight = PADDING + HEADER_H + TOP_OUTER + BOARD_SIZE + BOTTOM_OUTER + PADDING;
 
   const uniqueUrls = Array.from(
     new Set(quadrant.heroes.map((h) => h.image).filter(Boolean)),
@@ -144,70 +147,181 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
   ctx.fillText("lockpro.vercel.app", WIDTH - PADDING, PADDING + 32);
   ctx.textAlign = "left";
 
-  const bx = PADDING;
-  const by = PADDING + HEADER_H;
+  const bx = (WIDTH - BOARD_SIZE) / 2;
+  const by = PADDING + HEADER_H + TOP_OUTER;
   const cx = bx + BOARD_SIZE / 2;
   const cy = by + BOARD_SIZE / 2;
 
+  const axes =
+    Array.isArray(quadrant.axes) && quadrant.axes.length >= 3
+      ? quadrant.axes.slice(0, 10)
+      : [
+          quadrant.topLabel,
+          quadrant.rightLabel,
+          quadrant.bottomLabel,
+          quadrant.leftLabel,
+        ];
+  const axisCount = axes.length;
+  const isSquare = axisCount === 4;
+
+  const vertices =
+    axisCount === 3
+      ? [
+          { x: bx + 0.5 * BOARD_SIZE, y: by + 0.015 * BOARD_SIZE },
+          { x: bx + 0.985 * BOARD_SIZE, y: by + 0.985 * BOARD_SIZE },
+          { x: bx + 0.015 * BOARD_SIZE, y: by + 0.985 * BOARD_SIZE },
+        ]
+      : (() => {
+          const raw = Array.from({ length: axisCount }, (_, i) => {
+            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / axisCount;
+            return { x: Math.cos(angle), y: Math.sin(angle) };
+          });
+          const minX = Math.min(...raw.map((p) => p.x));
+          const maxX = Math.max(...raw.map((p) => p.x));
+          const minY = Math.min(...raw.map((p) => p.y));
+          const maxY = Math.max(...raw.map((p) => p.y));
+          const scale = (BOARD_SIZE * 0.97) / (Math.max(maxX - minX, maxY - minY) || 1);
+          const rx = (minX + maxX) / 2;
+          const ry = (minY + maxY) / 2;
+          return raw.map((p) => ({ x: cx + (p.x - rx) * scale, y: cy + (p.y - ry) * scale }));
+        })();
+
+  const polyCenter =
+    axisCount === 3
+      ? { x: bx + 0.5 * BOARD_SIZE, y: by + 0.6617 * BOARD_SIZE }
+      : { x: cx, y: cy };
+
+  const traceScaledPolygon = (scaleFactor: number) => {
+    const scaled = vertices.map((v) => ({
+      x: polyCenter.x + (v.x - polyCenter.x) * scaleFactor,
+      y: polyCenter.y + (v.y - polyCenter.y) * scaleFactor,
+    }));
+    const n = scaled.length;
+    const corners = scaled.map((curr, i) => {
+      const prev = scaled[(i - 1 + n) % n];
+      const next = scaled[(i + 1) % n];
+      const d1x = prev.x - curr.x;
+      const d1y = prev.y - curr.y;
+      const d2x = next.x - curr.x;
+      const d2y = next.y - curr.y;
+      const len1 = Math.hypot(d1x, d1y) || 1;
+      const len2 = Math.hypot(d2x, d2y) || 1;
+      const r = Math.min(20 * scaleFactor, len1 * 0.35, len2 * 0.35);
+      return {
+        cx: curr.x,
+        cy: curr.y,
+        p1x: curr.x + (d1x / len1) * r,
+        p1y: curr.y + (d1y / len1) * r,
+        p2x: curr.x + (d2x / len2) * r,
+        p2y: curr.y + (d2y / len2) * r,
+      };
+    });
+    ctx.beginPath();
+    ctx.moveTo(corners[0].p2x, corners[0].p2y);
+    for (let i = 1; i < n; i++) {
+      ctx.lineTo(corners[i].p1x, corners[i].p1y);
+      ctx.quadraticCurveTo(corners[i].cx, corners[i].cy, corners[i].p2x, corners[i].p2y);
+    }
+    ctx.lineTo(corners[0].p1x, corners[0].p1y);
+    ctx.quadraticCurveTo(corners[0].cx, corners[0].cy, corners[0].p2x, corners[0].p2y);
+    ctx.closePath();
+  };
+
+  const traceBoardShape = () => {
+    if (isSquare) {
+      drawRoundedRect(ctx, bx, by, BOARD_SIZE, BOARD_SIZE, 18);
+      return;
+    }
+    traceScaledPolygon(1);
+  };
+
   ctx.save();
-  drawRoundedRect(ctx, bx, by, BOARD_SIZE, BOARD_SIZE, 18);
+  traceBoardShape();
   ctx.fillStyle = "#070a09";
   ctx.fill();
   ctx.clip();
 
-  const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, BOARD_SIZE * 0.55);
+  const glow = ctx.createRadialGradient(
+    polyCenter.x,
+    polyCenter.y,
+    10,
+    polyCenter.x,
+    polyCenter.y,
+    BOARD_SIZE * 0.55,
+  );
   glow.addColorStop(0, "rgba(245, 158, 11, 0.08)");
   glow.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(bx, by, BOARD_SIZE, BOARD_SIZE);
 
-  // Grade sutil
+  // Grade sutil coerente com a forma
   ctx.strokeStyle = "rgba(255, 255, 255, 0.035)";
   ctx.lineWidth = 1;
-  const step = BOARD_SIZE / 8;
-  for (let i = 1; i < 8; i++) {
-    const px = bx + i * step;
-    const py = by + i * step;
-    ctx.beginPath();
-    ctx.moveTo(px, by);
-    ctx.lineTo(px, by + BOARD_SIZE);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(bx, py);
-    ctx.lineTo(bx + BOARD_SIZE, py);
-    ctx.stroke();
+  if (isSquare) {
+    const step = BOARD_SIZE / 8;
+    for (let i = 1; i < 8; i++) {
+      const px = bx + i * step;
+      const py = by + i * step;
+      ctx.beginPath();
+      ctx.moveTo(px, by);
+      ctx.lineTo(px, by + BOARD_SIZE);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(bx, py);
+      ctx.lineTo(bx + BOARD_SIZE, py);
+      ctx.stroke();
+    }
+  } else {
+    const ringScales = axisCount === 3 ? [0.34, 0.67] : [0.25, 0.5, 0.75];
+    for (const s of ringScales) {
+      traceScaledPolygon(s);
+      ctx.stroke();
+    }
   }
 
-  // Eixos centrais
-  const hGrad = ctx.createLinearGradient(bx + 24, cy, bx + BOARD_SIZE - 24, cy);
-  hGrad.addColorStop(0, "rgba(244, 239, 230, 0.12)");
-  hGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.45)");
-  hGrad.addColorStop(1, "rgba(244, 239, 230, 0.12)");
-  ctx.strokeStyle = hGrad;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(bx + 24, cy);
-  ctx.lineTo(bx + BOARD_SIZE - 24, cy);
-  ctx.stroke();
+  if (isSquare) {
+    const hGrad = ctx.createLinearGradient(bx + 24, cy, bx + BOARD_SIZE - 24, cy);
+    hGrad.addColorStop(0, "rgba(255, 255, 255, 0.03)");
+    hGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.14)");
+    hGrad.addColorStop(1, "rgba(255, 255, 255, 0.03)");
+    ctx.strokeStyle = hGrad;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bx + 24, cy);
+    ctx.lineTo(bx + BOARD_SIZE - 24, cy);
+    ctx.stroke();
 
-  const vGrad = ctx.createLinearGradient(cx, by + 24, cx, by + BOARD_SIZE - 24);
-  vGrad.addColorStop(0, "rgba(244, 239, 230, 0.12)");
-  vGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.45)");
-  vGrad.addColorStop(1, "rgba(244, 239, 230, 0.12)");
-  ctx.strokeStyle = vGrad;
-  ctx.beginPath();
-  ctx.moveTo(cx, by + 24);
-  ctx.lineTo(cx, by + BOARD_SIZE - 24);
-  ctx.stroke();
-
-  // Ponto central
-  ctx.beginPath();
-  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "#090d0c";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(245, 158, 11, 0.65)";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+    const vGrad = ctx.createLinearGradient(cx, by + 24, cx, by + BOARD_SIZE - 24);
+    vGrad.addColorStop(0, "rgba(255, 255, 255, 0.03)");
+    vGrad.addColorStop(0.5, "rgba(244, 239, 230, 0.14)");
+    vGrad.addColorStop(1, "rgba(255, 255, 255, 0.03)");
+    ctx.strokeStyle = vGrad;
+    ctx.beginPath();
+    ctx.moveTo(cx, by + 24);
+    ctx.lineTo(cx, by + BOARD_SIZE - 24);
+    ctx.stroke();
+  } else {
+    const rGrad = ctx.createRadialGradient(
+      polyCenter.x,
+      polyCenter.y,
+      0,
+      polyCenter.x,
+      polyCenter.y,
+      BOARD_SIZE * 0.45,
+    );
+    rGrad.addColorStop(0, "rgba(244, 239, 230, 0.14)");
+    rGrad.addColorStop(1, "rgba(255, 255, 255, 0.03)");
+    ctx.strokeStyle = rGrad;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const v of vertices) {
+      const x2 = polyCenter.x + (v.x - polyCenter.x) * 0.93;
+      const y2 = polyCenter.y + (v.y - polyCenter.y) * 0.93;
+      ctx.moveTo(polyCenter.x, polyCenter.y);
+      ctx.lineTo(x2, y2);
+    }
+    ctx.stroke();
+  }
 
   // Heróis posicionados
   const HERO_SIZE = 74;
@@ -238,17 +352,16 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
     }
   }
 
-  // Rótulos dos 4 eixos
-  const drawPill = (text: string, x: number, y: number, align: "center" | "left" | "right") => {
-    const label = text.trim().toUpperCase();
-    ctx.font = "900 13px system-ui, -apple-system, Segoe UI, sans-serif";
-    const textW = Math.min(260, ctx.measureText(label).width);
-    const pillW = textW + 24;
-    const pillH = 28;
-    const pillX =
-      align === "center" ? x - pillW / 2 : align === "left" ? x : x - pillW;
-    const pillY = y - pillH / 2;
+  ctx.restore();
 
+  traceBoardShape();
+  ctx.strokeStyle = "#262626";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Rótulos das pontas (fora do clip para nunca cortar quinas)
+  const drawPill = (text: string, pillX: number, pillY: number, pillW: number, pillH: number) => {
+    const label = text.trim().toUpperCase();
     drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
     ctx.fillStyle = "rgba(9, 13, 12, 0.92)";
     ctx.fill();
@@ -259,22 +372,41 @@ async function exportQuadrantBoardToPng(options: ExportTierListOptions): Promise
     ctx.fillStyle = "#f4efe6";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, pillX + pillW / 2, y, pillW - 16);
+    ctx.fillText(label, pillX + pillW / 2, pillY + pillH / 2, pillW - 14);
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
   };
 
-  drawPill(quadrant.topLabel, cx, by + 30, "center");
-  drawPill(quadrant.bottomLabel, cx, by + BOARD_SIZE - 30, "center");
-  drawPill(quadrant.leftLabel, bx + 18, cy, "left");
-  drawPill(quadrant.rightLabel, bx + BOARD_SIZE - 18, cy, "right");
-
-  ctx.restore();
-
-  drawRoundedRect(ctx, bx, by, BOARD_SIZE, BOARD_SIZE, 18);
-  ctx.strokeStyle = "#262626";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  const PNG_LABEL_GAP = 14;
+  if (isSquare) {
+    const drawSquarePill = (text: string, x: number, y: number, align: "center" | "left" | "right") => {
+      const label = text.trim().toUpperCase();
+      ctx.font = "900 13px system-ui, -apple-system, Segoe UI, sans-serif";
+      const textW = Math.min(210, ctx.measureText(label).width);
+      const pillW = textW + 24;
+      const pillH = 28;
+      const pillX = align === "center" ? x - pillW / 2 : align === "left" ? x : x - pillW;
+      drawPill(text, pillX, y - pillH / 2, pillW, pillH);
+    };
+    drawSquarePill(axes[0], cx, by - PNG_LABEL_GAP - 14, "center");
+    drawSquarePill(axes[1], bx + BOARD_SIZE + PNG_LABEL_GAP, cy, "left");
+    drawSquarePill(axes[2], cx, by + BOARD_SIZE + PNG_LABEL_GAP + 14, "center");
+    drawSquarePill(axes[3], bx - PNG_LABEL_GAP, cy, "right");
+  } else {
+    axes.forEach((rawLabel, i) => {
+      const v = vertices[i];
+      const dx = Math.max(-1, Math.min(1, (v.x - polyCenter.x) / (BOARD_SIZE * 0.485)));
+      const dy = Math.max(-1, Math.min(1, (v.y - polyCenter.y) / (BOARD_SIZE * 0.485)));
+      const label = rawLabel.trim().toUpperCase();
+      ctx.font = `900 ${axisCount >= 9 ? 11 : 13}px system-ui, -apple-system, Segoe UI, sans-serif`;
+      const textW = Math.min(200, ctx.measureText(label).width);
+      const pillW = textW + 22;
+      const pillH = 28;
+      const pillX = v.x + dx * PNG_LABEL_GAP - ((1 - dx) / 2) * pillW;
+      const pillY = v.y + dy * PNG_LABEL_GAP - ((1 - dy) / 2) * pillH;
+      drawPill(rawLabel, pillX, pillY, pillW, pillH);
+    });
+  }
 
   bitmaps.forEach((bmp) => bmp?.close());
 

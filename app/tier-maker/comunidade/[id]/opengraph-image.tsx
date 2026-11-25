@@ -9,6 +9,33 @@ export const contentType = "image/png";
 
 const MAX_TIERS = 7;
 
+function polygonVertices(count: number): Array<{ x: number; y: number }> {
+  if (count === 3) {
+    return [
+      { x: 50, y: 1.5 },
+      { x: 98.5, y: 98.5 },
+      { x: 1.5, y: 98.5 },
+    ];
+  }
+  const raw: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+    raw.push({ x: Math.cos(a), y: Math.sin(a) });
+  }
+  const minX = Math.min(...raw.map((p) => p.x));
+  const maxX = Math.max(...raw.map((p) => p.x));
+  const minY = Math.min(...raw.map((p) => p.y));
+  const maxY = Math.max(...raw.map((p) => p.y));
+  const span = Math.max(maxX - minX, maxY - minY) || 1;
+  const scale = 97 / span;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  return raw.map((p) => ({
+    x: 50 + (p.x - cx) * scale,
+    y: 50 + (p.y - cy) * scale,
+  }));
+}
+
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await getPublicTierListById(id);
@@ -42,7 +69,19 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     const iconById = new Map(makerHeroes.map((h) => [h.id, h.icon || h.image]));
     const BOX_W = 540;
     const BOX_H = 540;
-    const ICON = 44;
+    const ICON = 42;
+    const axes =
+      Array.isArray(item.quadrant.axes) && item.quadrant.axes.length >= 3
+        ? item.quadrant.axes
+        : [
+            item.quadrant.topLabel,
+            item.quadrant.rightLabel,
+            item.quadrant.bottomLabel,
+            item.quadrant.leftLabel,
+          ];
+    const isSquare = axes.length === 4;
+    const verts = polygonVertices(axes.length);
+    const polyPoints = verts.map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(" ");
 
     return new ImageResponse(
       (
@@ -96,26 +135,44 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                left: 16,
-                right: 16,
-                top: BOX_H / 2 - 1,
-                height: 2,
-                background: "rgba(244,239,230,0.35)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 16,
-                bottom: 16,
-                left: BOX_W / 2 - 1,
-                width: 2,
-                background: "rgba(244,239,230,0.35)",
-              }}
-            />
+            {isSquare ? (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 16,
+                    right: 16,
+                    top: BOX_H / 2 - 1,
+                    height: 2,
+                    background: "rgba(244,239,230,0.35)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 16,
+                    bottom: 16,
+                    left: BOX_W / 2 - 1,
+                    width: 2,
+                    background: "rgba(244,239,230,0.35)",
+                  }}
+                />
+              </>
+            ) : (
+              <svg
+                viewBox="0 0 100 100"
+                width={BOX_W}
+                height={BOX_H}
+                style={{ position: "absolute", left: 0, top: 0 }}
+              >
+                <polygon
+                  points={polyPoints}
+                  fill="rgba(245,158,11,0.06)"
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeWidth={0.8}
+                />
+              </svg>
+            )}
 
             {item.quadrant.items.map((it) => {
               const src = iconById.get(it.heroId);
@@ -126,6 +183,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
                 <img
                   key={it.heroId}
                   src={src}
+                  alt=""
                   width={ICON}
                   height={ICON}
                   style={{
@@ -140,78 +198,82 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               );
             })}
 
-            <div
-              style={{
-                position: "absolute",
-                top: 12,
-                left: BOX_W / 2 - 90,
-                width: 180,
-                display: "flex",
-                justifyContent: "center",
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#f4efe6",
-                background: "rgba(9,13,12,0.92)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 6,
-                padding: "4px 8px",
-              }}
-            >
-              {item.quadrant.topLabel.slice(0, 22)}
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                bottom: 12,
-                left: BOX_W / 2 - 90,
-                width: 180,
-                display: "flex",
-                justifyContent: "center",
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#f4efe6",
-                background: "rgba(9,13,12,0.92)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 6,
-                padding: "4px 8px",
-              }}
-            >
-              {item.quadrant.bottomLabel.slice(0, 22)}
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                left: 12,
-                top: BOX_H / 2 - 14,
-                display: "flex",
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#f4efe6",
-                background: "rgba(9,13,12,0.92)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 6,
-                padding: "4px 8px",
-              }}
-            >
-              {item.quadrant.leftLabel.slice(0, 20)}
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                right: 12,
-                top: BOX_H / 2 - 14,
-                display: "flex",
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#f4efe6",
-                background: "rgba(9,13,12,0.92)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 6,
-                padding: "4px 8px",
-              }}
-            >
-              {item.quadrant.rightLabel.slice(0, 20)}
-            </div>
+            {isSquare && (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: BOX_W / 2 - 90,
+                    width: 180,
+                    display: "flex",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: "#f4efe6",
+                    background: "rgba(9,13,12,0.92)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                  }}
+                >
+                  {item.quadrant.topLabel.slice(0, 22)}
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 12,
+                    left: BOX_W / 2 - 90,
+                    width: 180,
+                    display: "flex",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: "#f4efe6",
+                    background: "rgba(9,13,12,0.92)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                  }}
+                >
+                  {item.quadrant.bottomLabel.slice(0, 22)}
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: BOX_H / 2 - 14,
+                    display: "flex",
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: "#f4efe6",
+                    background: "rgba(9,13,12,0.92)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                  }}
+                >
+                  {item.quadrant.leftLabel.slice(0, 20)}
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: BOX_H / 2 - 14,
+                    display: "flex",
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: "#f4efe6",
+                    background: "rgba(9,13,12,0.92)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                  }}
+                >
+                  {item.quadrant.rightLabel.slice(0, 20)}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ),
@@ -271,6 +333,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
                     <img
                       key={k}
                       src={src}
+                      alt=""
                       width={icon}
                       height={icon}
                       style={{ width: icon, height: icon, marginRight: 6, borderRadius: 8, objectFit: "cover" }}

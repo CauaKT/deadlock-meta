@@ -7,18 +7,37 @@ import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties, 
 import { useConfirm } from "@/components/ui/ConfirmModal";
 import type { MakerHero } from "@/app/tiers";
 import {
+  createFeedPost,
   createTierList,
+  createTierListComment,
   deleteTierList,
+  deleteTierListComment,
   getCommunityTierLists,
   getCurrentClientUser,
   getTierListById,
+  getTierListComments,
   subscribeToAuthChanges,
+  toggleTierListLike,
   updateTierList,
 } from "@/lib/backend/client";
-import type { AuthUser, TierListItem, TierListStyle, TierQuadrantData } from "@/lib/backend/types";
+import type {
+  AuthUser,
+  TierListComment,
+  TierListItem,
+  TierListStyle,
+  TierQuadrantData,
+} from "@/lib/backend/types";
 import { exportTierListToPng } from "./exportTierListPng";
 import TierAuthorBadge from "./TierAuthorBadge";
-import TierQuadrantBoard, { DEFAULT_QUADRANT_DATA } from "./TierQuadrantBoard";
+import TierQuadrantBoard, {
+  DEFAULT_QUADRANT_DATA,
+  MAX_QUADRANT_AXES,
+  MIN_QUADRANT_AXES,
+  buildLegacyLabelsFromAxes,
+  getPolygonShapeName,
+  getQuadrantAxes,
+  remapHeroCoordOnAxisChange,
+} from "./TierQuadrantBoard";
 
 export interface CustomTier {
   id: string;
@@ -89,12 +108,34 @@ export default function TierMakerClient({
   const { confirm, modal } = useConfirm();
   const pathname = usePathname();
   const tab: "builder" | "community" = pathname.startsWith("/tier-maker/comunidade") ? "community" : "builder";
-  // Troca só a URL, sem remontar o editor: o quadro em montagem não se perde ao ver a Comunidade
-  const setTab = useCallback((next: "builder" | "community") => {
-    window.history.pushState(null, "", next === "community" ? "/tier-maker/comunidade" : "/tier-maker");
-  }, []);
   const [title, setTitle] = useState("Minha Tier List");
+  const [description, setDescription] = useState("");
   const [boardStyle, setBoardStyle] = useState<TierListStyle>("classic");
+  // Troca só a URL, sem remontar o editor: o quadro em montagem não se perde ao ver a Comunidade
+  const setTab = useCallback(
+    (next: "builder" | "community", styleOverride?: TierListStyle) => {
+      const activeStyle = styleOverride ?? boardStyle;
+      const builderUrl =
+        activeStyle === "quadrant" ? "/tier-maker?modo=quadrante" : "/tier-maker";
+      window.history.pushState(
+        null,
+        "",
+        next === "community" ? "/tier-maker/comunidade" : builderUrl,
+      );
+    },
+    [boardStyle],
+  );
+  const syncStyleUrl = useCallback((nextStyle: TierListStyle) => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.pathname.startsWith("/tier-maker") || url.pathname.startsWith("/tier-maker/comunidade")) {
+      return;
+    }
+    if (nextStyle === "quadrant") url.searchParams.set("modo", "quadrante");
+    else url.searchParams.delete("modo");
+    const search = url.searchParams.toString();
+    window.history.replaceState(null, "", `${url.pathname}${search ? `?${search}` : ""}`);
+  }, []);
   const [tiers, setTiers] = useState<CustomTier[]>(DEFAULT_TIERS);
   const [board, setBoard] = useState<Record<string, number[]>>(() =>
     createEmptyBoard(heroes, DEFAULT_TIERS),
@@ -122,6 +163,8 @@ export default function TierMakerClient({
     type: "success" | "error";
     text: string;
     needsLogin?: boolean;
+    actionHref?: string;
+    actionLabel?: string;
   } | null>(null);
 
   const [selected, setSelected] = useState<number | null>(null);
@@ -162,30 +205,31 @@ export default function TierMakerClient({
   const resetBuilder = useCallback(() => {
     setEditingId(null);
     setTitle("Minha Tier List");
+    setDescription("");
     setBoardStyle("classic");
     setTiers(DEFAULT_TIERS);
     setBoard(createEmptyBoard(heroes, DEFAULT_TIERS));
     setQuadrant(DEFAULT_QUADRANT_DATA);
     setQuadrantPool(heroes.map((h) => h.id));
     setSelected(null);
-    if (typeof window !== "undefined" && window.location.search.includes("edit=")) {
+    if (typeof window !== "undefined" && window.location.search) {
       window.history.replaceState(null, "", "/tier-maker");
     }
   }, [heroes]);
 
   const applyListToBuilder = useCallback(
-    (pub: TierListItem) => {
-      setEditingId(pub.id);
-      setTitle(pub.title);
+    (pub: TierListItem, asCopy = false) => {
+      setEditingId(asCopy ? null : pub.id);
+      setTitle(asCopy ? `Cópia de ${pub.title}`.slice(0, 80) : pub.title);
+      setDescription(pub.description ?? "");
       if (pub.style === "quadrant" && pub.quadrant) {
         setBoardStyle("quadrant");
         const validItems = pub.quadrant.items.filter((it) => byId.has(it.heroId));
         const placed = new Set(validItems.map((it) => it.heroId));
+        const axes = getQuadrantAxes(pub.quadrant);
         setQuadrant({
-          topLabel: pub.quadrant.topLabel,
-          bottomLabel: pub.quadrant.bottomLabel,
-          leftLabel: pub.quadrant.leftLabel,
-          rightLabel: pub.quadrant.rightLabel,
+          ...buildLegacyLabelsFromAxes(axes),
+          axes,
           items: validItems,
         });
         setQuadrantPool(heroes.map((h) => h.id).filter((id) => !placed.has(id)));
@@ -211,7 +255,7 @@ export default function TierMakerClient({
       }
       setSelected(null);
       setFeedback(null);
-      setTab("builder");
+      setTab("builder", pub.style === "quadrant" && pub.quadrant ? "quadrant" : "classic");
     },
     [byId, heroes, setTab],
   );
@@ -237,10 +281,17 @@ export default function TierMakerClient({
       setPublishedLists(lists);
       setLoadingCommunity(false);
 
-      const editId =
+      const searchParams =
         typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("edit")
+          ? new URLSearchParams(window.location.search)
           : null;
+      const editId = searchParams?.get("edit") ?? null;
+      const duplicateId = searchParams?.get("duplicate") ?? null;
+      const modoParam = searchParams?.get("modo") ?? null;
+
+      if (!editId && !duplicateId && modoParam === "quadrante") {
+        setBoardStyle("quadrant");
+      }
 
       if (editId) {
         const res = await getTierListById(editId);
@@ -256,7 +307,16 @@ export default function TierMakerClient({
           });
           window.history.replaceState(null, "", "/tier-maker");
         } else {
-          applyListToBuilder(res.data);
+          applyListToBuilder(res.data, false);
+        }
+      } else if (duplicateId) {
+        const res = await getTierListById(duplicateId);
+        if (!active) return;
+        if (!res.ok) {
+          setFeedback({ type: "error", text: res.message });
+          window.history.replaceState(null, "", "/tier-maker");
+        } else {
+          applyListToBuilder(res.data, true);
         }
       }
     };
@@ -494,14 +554,12 @@ export default function TierMakerClient({
       return;
     }
 
+    const cleanQuadrantAxes = getQuadrantAxes(quadrant).map((a) => a.trim());
     if (
       boardStyle === "quadrant" &&
-      (!quadrant.topLabel.trim() ||
-        !quadrant.bottomLabel.trim() ||
-        !quadrant.leftLabel.trim() ||
-        !quadrant.rightLabel.trim())
+      (cleanQuadrantAxes.length < MIN_QUADRANT_AXES || cleanQuadrantAxes.some((a) => !a))
     ) {
-      setFeedback({ type: "error", text: "Preencha os 4 rótulos dos eixos do gráfico." });
+      setFeedback({ type: "error", text: "Preencha todos os rótulos das pontas do gráfico." });
       return;
     }
 
@@ -517,22 +575,24 @@ export default function TierMakerClient({
     setPublishing(true);
     setFeedback(null);
 
+    const cleanDesc = description.trim() || null;
+
     const payload =
       boardStyle === "quadrant"
         ? {
             title: cleanTitle,
+            description: cleanDesc,
             style: "quadrant" as const,
             tiers: [],
             quadrant: {
-              topLabel: quadrant.topLabel.trim(),
-              bottomLabel: quadrant.bottomLabel.trim(),
-              leftLabel: quadrant.leftLabel.trim(),
-              rightLabel: quadrant.rightLabel.trim(),
+              ...buildLegacyLabelsFromAxes(cleanQuadrantAxes),
+              axes: cleanQuadrantAxes,
               items: quadrant.items,
             },
           }
         : {
             title: cleanTitle,
+            description: cleanDesc,
             style: "classic" as const,
             tiers: tiers.map((t) => ({
               label: t.label.trim(),
@@ -588,6 +648,7 @@ export default function TierMakerClient({
             bottomLabel: quadrant.bottomLabel,
             leftLabel: quadrant.leftLabel,
             rightLabel: quadrant.rightLabel,
+            axes: getQuadrantAxes(quadrant),
             heroes: quadrant.items
               .map((it) => {
                 const h = byId.get(it.heroId);
@@ -655,6 +716,7 @@ export default function TierMakerClient({
             bottomLabel: item.quadrant.bottomLabel,
             leftLabel: item.quadrant.leftLabel,
             rightLabel: item.quadrant.rightLabel,
+            axes: getQuadrantAxes(item.quadrant),
             heroes: item.quadrant.items
               .map((it) => {
                 const h = byId.get(it.heroId);
@@ -694,18 +756,389 @@ export default function TierMakerClient({
     }
   };
 
+  type CommunitySort = "relevance" | "likes" | "comments" | "recent" | "views";
+  type CommunityStyleFilter = "all" | "classic" | "quadrant";
+  type CommunityScopeFilter = "all" | "mine" | "liked";
+
   const [communityQuery, setCommunityQuery] = useState("");
+  const [communitySort, setCommunitySort] = useState<CommunitySort>("relevance");
+  const [communityStyleFilter, setCommunityStyleFilter] = useState<CommunityStyleFilter>("all");
+  const [communityScopeFilter, setCommunityScopeFilter] = useState<CommunityScopeFilter>("all");
+  const [communityHeroId, setCommunityHeroId] = useState<number | null>(null);
+  const [communityTopTierOnly, setCommunityTopTierOnly] = useState(false);
+
+  const [likeBusyIds, setLikeBusyIds] = useState<Record<string, boolean>>({});
+  const [openCommentsIds, setOpenCommentsIds] = useState<Record<string, boolean>>({});
+  const [fullCommentsMap, setFullCommentsMap] = useState<Record<string, TierListComment[]>>({});
+  const [loadingCommentsMap, setLoadingCommentsMap] = useState<Record<string, boolean>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [commentBusyIds, setCommentBusyIds] = useState<Record<string, boolean>>({});
+  const [openShareId, setOpenShareId] = useState<string | null>(null);
+  const [copiedShareState, setCopiedShareState] = useState<string | null>(null);
+  const [feedModalItem, setFeedModalItem] = useState<TierListItem | null>(null);
+  const [feedPostContent, setFeedPostContent] = useState("");
+  const [postingToFeed, setPostingToFeed] = useState(false);
+  const [feedModalError, setFeedModalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openShareId) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest("[data-share-menu]")) setOpenShareId(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenShareId(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openShareId]);
+
+  useEffect(() => {
+    if (!feedModalItem) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !postingToFeed) setFeedModalItem(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [feedModalItem, postingToFeed]);
+
+  const topRelevanceId = useMemo(() => {
+    let bestId: string | null = null;
+    let bestScore = -1;
+
+    for (const item of publishedLists) {
+      const likes = item.likesCount ?? 0;
+      const comments = item.commentsCount ?? 0;
+      const score = item.relevanceScore ?? likes * 4 + comments * 6;
+      if (likes + comments > 0 && score > bestScore) {
+        bestScore = score;
+        bestId = item.id;
+      }
+    }
+
+    return bestId;
+  }, [publishedLists]);
 
   const filteredPublishedLists = useMemo(() => {
     const q = communityQuery.trim().toLowerCase();
-    if (!q) return publishedLists;
-    return publishedLists.filter(
-      (l) =>
-        l.title.toLowerCase().includes(q) ||
-        l.author.toLowerCase().includes(q) ||
-        (l.authorHandle?.toLowerCase().includes(q) ?? false),
+
+    const list = publishedLists.filter((l) => {
+      if (communityStyleFilter === "classic" && l.style === "quadrant") return false;
+      if (communityStyleFilter === "quadrant" && l.style !== "quadrant") return false;
+
+      if (communityScopeFilter === "mine" && (!currentUser || l.userId !== currentUser.id)) {
+        return false;
+      }
+      if (communityScopeFilter === "liked" && !l.likedByMe) {
+        return false;
+      }
+
+      if (communityHeroId !== null) {
+        if (communityTopTierOnly) {
+          if (l.style === "quadrant") return false;
+          const topHeroes = l.tiers[0]?.heroes || [];
+          if (!topHeroes.includes(communityHeroId)) return false;
+        } else if (l.style === "quadrant" && l.quadrant) {
+          if (!l.quadrant.items.some((it) => it.heroId === communityHeroId)) return false;
+        } else if (!l.tiers.some((t) => (t.heroes || []).includes(communityHeroId))) {
+          return false;
+        }
+      }
+
+      if (q) {
+        const matchesText =
+          l.title.toLowerCase().includes(q) ||
+          (l.description?.toLowerCase().includes(q) ?? false) ||
+          l.author.toLowerCase().includes(q) ||
+          (l.authorHandle?.toLowerCase().includes(q) ?? false);
+        if (!matchesText) return false;
+      }
+
+      return true;
+    });
+
+    const sorted = [...list];
+    if (communitySort === "likes") {
+      sorted.sort(
+        (a, b) =>
+          (b.likesCount ?? 0) - (a.likesCount ?? 0) ||
+          (b.commentsCount ?? 0) - (a.commentsCount ?? 0) ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+    } else if (communitySort === "comments") {
+      sorted.sort(
+        (a, b) =>
+          (b.commentsCount ?? 0) - (a.commentsCount ?? 0) ||
+          (b.likesCount ?? 0) - (a.likesCount ?? 0) ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+    } else if (communitySort === "views") {
+      sorted.sort(
+        (a, b) =>
+          (b.viewsCount ?? 0) - (a.viewsCount ?? 0) ||
+          (b.likesCount ?? 0) - (a.likesCount ?? 0) ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+    } else if (communitySort === "recent") {
+      sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } else {
+      sorted.sort(
+        (a, b) =>
+          (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) ||
+          (b.likesCount ?? 0) - (a.likesCount ?? 0) ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+    }
+
+    return sorted;
+  }, [
+    publishedLists,
+    communityQuery,
+    communityStyleFilter,
+    communityScopeFilter,
+    communityHeroId,
+    communityTopTierOnly,
+    communitySort,
+    currentUser,
+  ]);
+
+  const hasActiveCommunityFilters =
+    Boolean(communityQuery.trim()) ||
+    communityStyleFilter !== "all" ||
+    communityScopeFilter !== "all" ||
+    communityHeroId !== null;
+
+  const resetCommunityFilters = () => {
+    setCommunityQuery("");
+    setCommunityStyleFilter("all");
+    setCommunityScopeFilter("all");
+    setCommunityHeroId(null);
+    setCommunityTopTierOnly(false);
+  };
+
+  const handleToggleLike = async (item: TierListItem) => {
+    if (!currentUser) {
+      setFeedback({
+        type: "error",
+        text: "Entre na sua conta para curtir tier lists da comunidade.",
+        needsLogin: true,
+      });
+      return;
+    }
+    if (likeBusyIds[item.id]) return;
+
+    const prevLiked = Boolean(item.likedByMe);
+    const prevCount = item.likesCount ?? 0;
+
+    setLikeBusyIds((m) => ({ ...m, [item.id]: true }));
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === item.id
+          ? {
+              ...l,
+              likedByMe: !prevLiked,
+              likesCount: Math.max(0, prevCount + (prevLiked ? -1 : 1)),
+            }
+          : l,
+      ),
     );
-  }, [publishedLists, communityQuery]);
+
+    const res = await toggleTierListLike(item.id);
+    setLikeBusyIds((m) => ({ ...m, [item.id]: false }));
+
+    if (!res.ok) {
+      setPublishedLists((prev) =>
+        prev.map((l) =>
+          l.id === item.id ? { ...l, likedByMe: prevLiked, likesCount: prevCount } : l,
+        ),
+      );
+      setFeedback({
+        type: "error",
+        text: res.message ?? "Não foi possível curtir.",
+        needsLogin: res.status === 401,
+      });
+      return;
+    }
+
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === item.id
+          ? { ...l, likedByMe: res.liked, likesCount: res.likesCount }
+          : l,
+      ),
+    );
+  };
+
+  const handleToggleComments = async (item: TierListItem) => {
+    const nextOpen = !openCommentsIds[item.id];
+    setOpenCommentsIds((m) => ({ ...m, [item.id]: nextOpen }));
+    if (nextOpen && !fullCommentsMap[item.id] && !loadingCommentsMap[item.id]) {
+      setLoadingCommentsMap((m) => ({ ...m, [item.id]: true }));
+      const comments = await getTierListComments(item.id);
+      setFullCommentsMap((m) => ({ ...m, [item.id]: comments }));
+      setLoadingCommentsMap((m) => ({ ...m, [item.id]: false }));
+    }
+  };
+
+  const handleAddTierComment = async (item: TierListItem, e: React.FormEvent) => {
+    e.preventDefault();
+    const draft = (commentDrafts[item.id] ?? "").trim();
+    if (!draft || commentBusyIds[item.id]) return;
+
+    if (!currentUser) {
+      setFeedback({
+        type: "error",
+        text: "Entre na sua conta para comentar nas tier lists.",
+        needsLogin: true,
+      });
+      return;
+    }
+
+    setCommentBusyIds((m) => ({ ...m, [item.id]: true }));
+    const { comment, status, error } = await createTierListComment(item.id, draft);
+    setCommentBusyIds((m) => ({ ...m, [item.id]: false }));
+
+    if (error || !comment) {
+      setFeedback({
+        type: "error",
+        text: error ?? "Não foi possível comentar.",
+        needsLogin: status === 401,
+      });
+      return;
+    }
+
+    setCommentDrafts((m) => ({ ...m, [item.id]: "" }));
+    setFullCommentsMap((m) => ({
+      ...m,
+      [item.id]: [...(m[item.id] ?? item.recentComments ?? []), comment],
+    }));
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === item.id
+          ? {
+              ...l,
+              commentsCount: (l.commentsCount ?? 0) + 1,
+              recentComments: [...(l.recentComments ?? []), comment].slice(-3),
+            }
+          : l,
+      ),
+    );
+  };
+
+  const handleDeleteTierComment = async (tierListId: string, commentId: string) => {
+    const ok = await confirm({
+      title: "Excluir comentário?",
+      description: "Este comentário será removido permanentemente.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
+
+    const { ok: deleted, error } = await deleteTierListComment(commentId);
+    if (!deleted) {
+      setFeedback({ type: "error", text: error ?? "Não foi possível excluir o comentário." });
+      return;
+    }
+
+    setFullCommentsMap((m) => ({
+      ...m,
+      [tierListId]: (m[tierListId] ?? []).filter((c) => c.id !== commentId),
+    }));
+    setPublishedLists((prev) =>
+      prev.map((l) =>
+        l.id === tierListId
+          ? {
+              ...l,
+              commentsCount: Math.max(0, (l.commentsCount ?? 0) - 1),
+              recentComments: (l.recentComments ?? []).filter((c) => c.id !== commentId),
+            }
+          : l,
+      ),
+    );
+  };
+
+  const getPublicShareUrl = (id: string) =>
+    typeof window !== "undefined"
+      ? `${window.location.origin}/tier-maker/comunidade/${id}`
+      : `/tier-maker/comunidade/${id}`;
+
+  const handleCopyShareLink = async (item: TierListItem, withSummary = false) => {
+    const url = getPublicShareUrl(item.id);
+    const payload = withSummary
+      ? `Tier List de Deadlock: "${item.title}" por ${item.author}\n${url}`
+      : url;
+    try {
+      await navigator.clipboard.writeText(payload);
+      const token = `${item.id}:${withSummary ? "summary" : "link"}`;
+      setCopiedShareState(token);
+      setTimeout(() => setCopiedShareState((curr) => (curr === token ? null : curr)), 2000);
+    } catch {
+      setFeedback({ type: "error", text: "Não foi possível copiar para a área de transferência." });
+    }
+  };
+
+  const handleNativeShare = async (item: TierListItem) => {
+    const url = getPublicShareUrl(item.id);
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: `${item.title} • LockPro`,
+          text: `Confira esta tier list de Deadlock por ${item.author}`,
+          url,
+        });
+        setOpenShareId(null);
+        return;
+      } catch {}
+    }
+    await handleCopyShareLink(item, false);
+  };
+
+  const openFeedShareModal = (item: TierListItem) => {
+    if (!currentUser) {
+      setFeedback({
+        type: "error",
+        text: "Entre na sua conta para postar tier lists no Feed.",
+        needsLogin: true,
+      });
+      return;
+    }
+    setFeedModalError(null);
+    setFeedPostContent(
+      item.userId === currentUser.id
+        ? `Acabei de publicar minha tier list "${item.title}"! O que acharam?`
+        : `Olhem essa tier list "${item.title}" de ${item.author}:`,
+    );
+    setFeedModalItem(item);
+  };
+
+  const submitFeedShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedModalItem || !feedPostContent.trim() || postingToFeed) return;
+    setPostingToFeed(true);
+    setFeedModalError(null);
+    const { post, error } = await createFeedPost({
+      content: feedPostContent.trim(),
+      tierListId: feedModalItem.id,
+    });
+    setPostingToFeed(false);
+    if (error || !post) {
+      setFeedModalError(error ?? "Não foi possível publicar no Feed.");
+      return;
+    }
+    const sharedTitle = feedModalItem.title;
+    setFeedModalItem(null);
+    setFeedPostContent("");
+    setFeedback({
+      type: "success",
+      text: `Tier list "${sharedTitle}" publicada no Feed da Comunidade!`,
+      actionHref: "/feed",
+      actionLabel: "Ver no Feed",
+    });
+  };
 
   const deletePublished = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -738,7 +1171,7 @@ export default function TierMakerClient({
       setFeedback({ type: "error", text: "Apenas o criador pode abrir esta tier list no editor." });
       return;
     }
-    applyListToBuilder(pub);
+    applyListToBuilder(pub, false);
   };
 
   const poolHeroIds = boardStyle === "quadrant" ? quadrantPool : board.POOL || [];
@@ -866,6 +1299,72 @@ export default function TierMakerClient({
 
   return (
     <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#f4efe6]">
+            Deadlock <span className="text-amber-500">TierMaker</span>
+          </h1>
+          <p className="text-neutral-400 text-xs md:text-sm max-w-xl font-medium tracking-wide mt-2">
+            Personalize nomes, cores e ordens. Publique sua tier list na comunidade ou compartilhe o link.
+          </p>
+        </div>
+
+        {tab === "builder" && (
+          <div
+            role="radiogroup"
+            aria-label="Estilo da Tier List"
+            className="relative inline-grid w-fit shrink-0 grid-cols-2 gap-1 self-start sm:self-auto rounded-lg border border-neutral-800 bg-neutral-950/85 p-1 shadow-lg backdrop-blur-sm"
+          >
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-6px)] rounded-md bg-amber-500 shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                boardStyle === "quadrant" ? "translate-x-[calc(100%+4px)]" : "translate-x-0"
+              }`}
+            />
+            <button
+              type="button"
+              role="radio"
+              aria-checked={boardStyle === "classic"}
+              onClick={() => {
+                setBoardStyle("classic");
+                setSelected(null);
+                syncStyleUrl("classic");
+              }}
+              className={`relative z-10 flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-2 font-deadlock text-xs font-black uppercase tracking-wider transition-colors duration-200 ${
+                boardStyle === "classic"
+                  ? "text-black"
+                  : "text-neutral-300 hover:text-white"
+              }`}
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M2 4h12M2 8h12M2 12h12" />
+              </svg>
+              <span>Clássica</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={boardStyle === "quadrant"}
+              onClick={() => {
+                setBoardStyle("quadrant");
+                setSelected(null);
+                setSettingsOpen(false);
+                syncStyleUrl("quadrant");
+              }}
+              className={`relative z-10 flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-2 font-deadlock text-xs font-black uppercase tracking-wider transition-colors duration-200 ${
+                boardStyle === "quadrant"
+                  ? "text-black"
+                  : "text-neutral-300 hover:text-white"
+              }`}
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M8 2v12M2 8h12" />
+              </svg>
+              <span>Quadrante 2D</span>
+            </button>
+          </div>
+        )}
+      </header>
 
       {feedback && (
         <div
@@ -876,14 +1375,26 @@ export default function TierMakerClient({
           }`}
         >
           <span>{feedback.text}</span>
-          {feedback.needsLogin && (
-            <Link
-              href="/login?next=/tier-maker"
-              className="rounded-lg border border-amber-500 bg-amber-500 px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
-            >
-              Fazer Login
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {feedback.actionHref && feedback.actionLabel && (
+              <Link
+                href={feedback.actionHref}
+                className="rounded-lg border border-emerald-400/60 bg-emerald-500 px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
+              >
+                {feedback.actionLabel}
+              </Link>
+            )}
+            {feedback.needsLogin && (
+              <Link
+                href={`/login?next=${encodeURIComponent(
+                  boardStyle === "quadrant" ? "/tier-maker?modo=quadrante" : "/tier-maker",
+                )}`}
+                className="rounded-lg border border-amber-500 bg-amber-500 px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-black transition-transform hover:scale-105"
+              >
+                Fazer Login
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
@@ -914,6 +1425,13 @@ export default function TierMakerClient({
                 placeholder="Título da sua Tier List"
                 className="font-deadlock w-full border-b border-neutral-700 bg-transparent text-3xl font-black text-[#f4efe6] outline-none focus:border-amber-500"
               />
+              <input
+                value={description}
+                maxLength={280}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descrição ou critérios do ranking (opcional)"
+                className="w-full border-b border-neutral-800/90 bg-transparent pb-1 text-xs text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-amber-500/70"
+              />
               {currentUser ? (
                 <div className="pt-0.5">
                   <TierAuthorBadge
@@ -933,7 +1451,9 @@ export default function TierMakerClient({
                   </span>
                   <span className="font-semibold">Entre na conta para publicar com seu perfil</span>
                   <Link
-                    href="/login?next=/tier-maker"
+                    href={`/login?next=${encodeURIComponent(
+                      boardStyle === "quadrant" ? "/tier-maker?modo=quadrante" : "/tier-maker",
+                    )}`}
                     className="font-bold text-amber-400 hover:underline"
                   >
                     Entrar
@@ -943,121 +1463,65 @@ export default function TierMakerClient({
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Configurações da Prancha (Engrenagem) */}
-              <div ref={settingsRef} className="relative">
-                <button
-                  type="button"
-                  title="Configurações da prancha"
-                  aria-label="Configurações da prancha"
-                  aria-expanded={settingsOpen}
-                  onClick={() => setSettingsOpen((prev) => !prev)}
-                  className={`flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-[5px] border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
-                    settingsOpen || !dynamicExpressions || boardStyle === "quadrant"
-                      ? "border-amber-500/80 bg-neutral-800 text-amber-400"
-                      : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-amber-500/70 hover:text-white"
-                  }`}
-                >
-                  <svg
-                    aria-hidden
-                    viewBox="0 0 24 24"
-                    className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? "rotate-90 text-amber-400" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-
-                {settingsOpen && (
-                  <div
-                    role="dialog"
+              {boardStyle === "classic" && (
+                <div ref={settingsRef} className="relative">
+                  <button
+                    type="button"
+                    title="Configurações da prancha"
                     aria-label="Configurações da prancha"
-                    className="absolute left-0 top-full z-40 mt-2 w-76 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md space-y-3"
+                    aria-expanded={settingsOpen}
+                    onClick={() => setSettingsOpen((prev) => !prev)}
+                    className={`flex h-[34px] w-[34px] cursor-pointer items-center justify-center rounded-[5px] border shadow transition-all duration-150 hover:scale-105 active:scale-95 ${
+                      settingsOpen
+                        ? "border-neutral-500 bg-neutral-800 text-[#f4efe6]"
+                        : "border-neutral-700/80 bg-neutral-900/90 text-neutral-400 hover:border-neutral-500 hover:text-white"
+                    }`}
                   >
-                    <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
-                      Configurações da Prancha
-                    </p>
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? "rotate-90" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
 
-                    <div className="space-y-1.5">
-                      <span className="font-deadlock block text-[11px] font-black uppercase tracking-wider text-[#f4efe6]">
-                        Estilo da Tier List
-                      </span>
-                      <div
-                        role="radiogroup"
-                        aria-label="Estilo da Tier List"
-                        className="grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/80 p-1"
-                      >
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={boardStyle === "classic"}
-                          onClick={() => {
-                            setBoardStyle("classic");
-                            setSelected(null);
-                          }}
-                          className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider transition-all ${
-                            boardStyle === "classic"
-                              ? "bg-amber-500 text-black shadow-sm"
-                              : "text-neutral-300 hover:bg-neutral-800/80 hover:text-white"
-                          }`}
-                        >
-                          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                            <path d="M2 4h12M2 8h12M2 12h12" />
-                          </svg>
-                          <span>Clássica</span>
-                        </button>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={boardStyle === "quadrant"}
-                          onClick={() => {
-                            setBoardStyle("quadrant");
-                            setSelected(null);
-                          }}
-                          className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider transition-all ${
-                            boardStyle === "quadrant"
-                              ? "bg-amber-500 text-black shadow-sm"
-                              : "text-neutral-300 hover:bg-neutral-800/80 hover:text-white"
-                          }`}
-                        >
-                          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                            <path d="M8 2v12M2 8h12" />
-                          </svg>
-                          <span>Quadrante 2D</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {boardStyle === "classic" ? (
-                      <div className="border-t border-neutral-800/80 pt-2.5">
-                        <label className="flex cursor-pointer items-start gap-2.5">
-                          <input
-                            type="checkbox"
-                            checked={dynamicExpressions}
-                            onChange={(e) => toggleDynamicExpressions(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
-                          />
-                          <div className="space-y-0.5">
-                            <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
-                              Expressões Dinâmicas
-                            </span>
-                            <span className="block text-[11px] font-medium leading-tight text-neutral-400">
-                              Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
-                            </span>
-                          </div>
-                        </label>
-                      </div>
-                    ) : (
-                      <p className="border-t border-neutral-800/80 pt-2.5 text-[11px] font-medium leading-tight text-neutral-400">
-                        Clique nos 4 rótulos do gráfico para editar os eixos e arraste os heróis livremente pelo plano 2D.
+                  {settingsOpen && (
+                    <div
+                      role="dialog"
+                      aria-label="Configurações da prancha"
+                      className="absolute left-0 top-full z-40 mt-2 w-76 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-md space-y-3"
+                    >
+                      <p className="font-deadlock border-b border-neutral-800 pb-2 text-xs font-black uppercase tracking-wider text-neutral-400">
+                        Configurações da Prancha
                       </p>
-                    )}
-                  </div>
-                )}
-              </div>
+
+                      <label className="flex cursor-pointer items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={dynamicExpressions}
+                          onChange={(e) => toggleDynamicExpressions(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 cursor-pointer rounded accent-amber-500"
+                        />
+                        <div className="space-y-0.5">
+                          <span className="font-deadlock block text-xs font-black uppercase tracking-wider text-[#f4efe6]">
+                            Expressões Dinâmicas
+                          </span>
+                          <span className="block text-[11px] font-medium leading-tight text-neutral-400">
+                            Exibir ícones alternativos de gloat (vitória) no primeiro tier e de dano/crítico no último tier.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {boardStyle === "classic" && (
                 <button
@@ -1154,8 +1618,57 @@ export default function TierMakerClient({
               onSelectHero={setSelected}
               onPlaceHero={placeQuadrantHero}
               onRemoveHero={removeQuadrantHero}
-              onChangeLabel={(axis, value) =>
-                setQuadrant((prev) => ({ ...prev, [axis]: value }))
+              onChangeAxisLabel={(index, value) =>
+                setQuadrant((prev) => {
+                  const nextAxes = [...getQuadrantAxes(prev)];
+                  nextAxes[index] = value;
+                  return {
+                    ...prev,
+                    ...buildLegacyLabelsFromAxes(nextAxes),
+                    axes: nextAxes,
+                  };
+                })
+              }
+              onAddAxis={(afterIndex) =>
+                setQuadrant((prev) => {
+                  const axes = getQuadrantAxes(prev);
+                  if (axes.length >= MAX_QUADRANT_AXES) return prev;
+                  const resolvedAfter =
+                    typeof afterIndex === "number" ? afterIndex : axes.length - 1;
+                  const nextAxes = [...axes];
+                  nextAxes.splice(resolvedAfter + 1, 0, `Eixo ${axes.length + 1}`);
+                  return {
+                    ...prev,
+                    ...buildLegacyLabelsFromAxes(nextAxes),
+                    axes: nextAxes,
+                    items: prev.items.map((it) => ({
+                      ...it,
+                      ...remapHeroCoordOnAxisChange(it.x, it.y, axes.length, nextAxes.length, {
+                        type: "add",
+                        afterIndex: resolvedAfter,
+                      }),
+                    })),
+                  };
+                })
+              }
+              onRemoveAxis={(index) =>
+                setQuadrant((prev) => {
+                  const axes = getQuadrantAxes(prev);
+                  if (axes.length <= MIN_QUADRANT_AXES) return prev;
+                  const nextAxes = axes.filter((_, i) => i !== index);
+                  return {
+                    ...prev,
+                    ...buildLegacyLabelsFromAxes(nextAxes),
+                    axes: nextAxes,
+                    items: prev.items.map((it) => ({
+                      ...it,
+                      ...remapHeroCoordOnAxisChange(it.x, it.y, axes.length, nextAxes.length, {
+                        type: "remove",
+                        index,
+                      }),
+                    })),
+                  };
+                })
               }
               onDragOverPoolChange={(over) => setDragOverZone(over ? "POOL" : null)}
               onPoolDropHover={setDropTarget}
@@ -1395,38 +1908,167 @@ export default function TierMakerClient({
 
       {tab === "community" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800/80 pb-4">
-            <div>
-              <h3 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
-                Galeria da Comunidade
-              </h3>
-              <p className="text-xs text-neutral-400">
-                Tier lists publicadas pelos jogadores do LockPro.
-              </p>
+          <div className="flex flex-col gap-4 rounded-2xl border border-neutral-800/90 bg-neutral-950/60 p-4 sm:p-5 shadow-xl backdrop-blur-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-deadlock text-xl font-black uppercase tracking-wider text-[#f4efe6]">
+                  Galeria da Comunidade
+                </h3>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  Explore, curta, comente, duplique ou poste no Feed as tier lists dos jogadores do LockPro.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setTab("builder")}
+                className="inline-flex w-fit shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-amber-500 bg-amber-500 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black shadow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M8 3v10M3 8h10" />
+                </svg>
+                <span>Criar Tier List</span>
+              </button>
             </div>
 
             {publishedLists.length > 0 && (
-              <div className="relative w-full sm:w-64">
-                <input
-                  type="search"
-                  value={communityQuery}
-                  onChange={(e) => setCommunityQuery(e.target.value)}
-                  placeholder="Buscar por título ou autor..."
-                  className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 py-1.5 pl-8 pr-3 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500 transition-colors"
-                />
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  <circle cx="7" cy="7" r="4.5" />
-                  <path d="M10.5 10.5 14 14" />
-                </svg>
-              </div>
+              <>
+
+                <div className="space-y-3 border-t border-neutral-800/80 pt-3">
+                  <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
+                    <div className="relative md:col-span-5">
+                      <input
+                        type="search"
+                        value={communityQuery}
+                        onChange={(e) => setCommunityQuery(e.target.value)}
+                        placeholder="Buscar por título, descrição, autor ou @handle..."
+                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 py-2 pl-8 pr-3 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500 transition-colors"
+                      />
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 16 16"
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      >
+                        <circle cx="7" cy="7" r="4.5" />
+                        <path d="M10.5 10.5 14 14" />
+                      </svg>
+                    </div>
+
+                    <div className="md:col-span-4 flex items-center gap-2">
+                      <select
+                        aria-label="Filtrar por herói"
+                        value={communityHeroId ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCommunityHeroId(v ? Number(v) : null);
+                        }}
+                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 py-2 text-xs font-semibold text-[#f4efe6] outline-none focus:border-amber-500"
+                      >
+                        <option value="">Filtrar por herói (todos)</option>
+                        {heroes.map((h) => (
+                          <option key={h.id} value={h.id}>
+                            {h.name}
+                          </option>
+                        ))}
+                      </select>
+                      {communityHeroId !== null && communityStyleFilter !== "quadrant" && (
+                        <button
+                          type="button"
+                          onClick={() => setCommunityTopTierOnly((v) => !v)}
+                          title="Mostrar apenas listas clássicas com este herói no 1º tier"
+                          className={`shrink-0 cursor-pointer rounded-lg border px-2.5 py-2 text-[11px] font-black uppercase tracking-wider transition-colors ${
+                            communityTopTierOnly
+                              ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                              : "border-neutral-700/80 bg-neutral-900 text-neutral-400 hover:text-white"
+                          }`}
+                        >
+                          No Topo
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="md:col-span-3 flex items-center gap-2">
+                      <select
+                        aria-label="Ordenar por"
+                        value={communitySort}
+                        onChange={(e) => setCommunitySort(e.target.value as CommunitySort)}
+                        className="w-full rounded-lg border border-neutral-700/80 bg-neutral-900/90 px-3 py-2 text-xs font-semibold text-[#f4efe6] outline-none focus:border-amber-500"
+                      >
+                        <option value="relevance">Ordenar: Relevância</option>
+                        <option value="likes">Ordenar: Mais Curtidas</option>
+                        <option value="comments">Ordenar: Mais Comentadas</option>
+                        <option value="recent">Ordenar: Mais Recentes</option>
+                        <option value="views">Ordenar: Mais Vistas</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {(
+                        [
+                          ["all", "Todos os formatos"],
+                          ["classic", "Clássicas"],
+                          ["quadrant", "Quadrante 2D"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setCommunityStyleFilter(key)}
+                          className={`cursor-pointer rounded-md border px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors ${
+                            communityStyleFilter === key
+                              ? "border-amber-500 bg-amber-500 text-black"
+                              : "border-neutral-800 bg-neutral-900/80 text-neutral-300 hover:border-neutral-700 hover:text-white"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+
+                      {currentUser && (
+                        <>
+                          <span className="mx-1 h-4 w-px bg-neutral-800" />
+                          {(
+                            [
+                              ["all", "Todas"],
+                              ["mine", "Minhas Listas"],
+                              ["liked", "Curtidas por Mim"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setCommunityScopeFilter(key)}
+                              className={`cursor-pointer rounded-md border px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider transition-colors ${
+                                communityScopeFilter === key
+                                  ? "border-emerald-500/80 bg-emerald-500/20 text-emerald-300"
+                                  : "border-neutral-800 bg-neutral-900/80 text-neutral-400 hover:border-neutral-700 hover:text-white"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+
+                    {hasActiveCommunityFilters && (
+                      <button
+                        type="button"
+                        onClick={resetCommunityFilters}
+                        className="cursor-pointer text-[11px] font-bold text-amber-400 hover:underline"
+                      >
+                        Limpar filtros ({filteredPublishedLists.length} de {publishedLists.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -1457,8 +2099,17 @@ export default function TierMakerClient({
               </button>
             </div>
           ) : filteredPublishedLists.length === 0 ? (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 py-12 text-center text-xs text-neutral-400 italic">
-              Nenhuma tier list encontrada para &quot;{communityQuery}&quot;.
+            <div className="space-y-3 rounded-2xl border border-neutral-800 bg-neutral-900/30 py-12 px-4 text-center">
+              <p className="text-xs text-neutral-400 italic">
+                Nenhuma tier list encontrada com os filtros atuais.
+              </p>
+              <button
+                type="button"
+                onClick={resetCommunityFilters}
+                className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 px-3.5 py-1.5 text-xs font-bold text-amber-400 hover:border-amber-500"
+              >
+                Mostrar todas
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1469,153 +2120,554 @@ export default function TierMakerClient({
                     ? item.quadrant.items.length
                     : item.tiers.reduce((acc, t) => acc + (t.heroes?.length || 0), 0);
                 const dateText = new Date(item.createdAt).toLocaleDateString("pt-BR");
+                const shapeLabel =
+                  isQuadrant && item.quadrant
+                    ? getPolygonShapeName(getQuadrantAxes(item.quadrant).length)
+                    : "Clássica";
+                const isTopHot = topRelevanceId === item.id;
+                const likesCount = item.likesCount ?? 0;
+                const commentsCount = item.commentsCount ?? 0;
+                const viewsCount = item.viewsCount ?? 0;
+                const commentsExpanded = Boolean(openCommentsIds[item.id]);
+                const commentsList = fullCommentsMap[item.id] ?? item.recentComments ?? [];
 
                 return (
-                  <div
+                  <article
                     key={item.id}
-                    className="flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-800/90 bg-neutral-900/50 p-5 shadow-xl backdrop-blur-sm transition-all hover:border-neutral-700 space-y-4"
+                    className={`flex flex-col justify-between rounded-2xl border bg-neutral-900/55 p-5 shadow-xl backdrop-blur-sm transition-all space-y-4 ${
+                      isTopHot
+                        ? "border-amber-500/45 shadow-[0_12px_40px_rgba(245,158,11,0.1)] hover:border-amber-400/70"
+                        : "border-neutral-800/90 hover:border-neutral-700"
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {isTopHot && (
+                              <span className="rounded border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-amber-300">
+                                Em Alta
+                              </span>
+                            )}
+                            <span className="rounded border border-white/10 bg-neutral-950/90 px-1.5 py-0.5 font-deadlock text-[9px] font-black uppercase tracking-wider text-neutral-300">
+                              {shapeLabel}
+                            </span>
+                            <span className="rounded bg-neutral-800/90 px-1.5 py-0.5 text-[10px] font-bold text-neutral-300">
+                              {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
+                            </span>
+                          </div>
+
+                          <h4 className="font-deadlock truncate text-xl font-black text-[#f4efe6]">
+                            <Link
+                              href={`/tier-maker/comunidade/${item.id}`}
+                              className="transition-colors hover:text-amber-400"
+                            >
+                              {item.title}
+                            </Link>
+                          </h4>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={exportingId === item.id}
+                            title="Exportar PNG"
+                            onClick={() => handleExportItemPng(item)}
+                            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-400 transition-colors hover:border-amber-400/70 hover:bg-neutral-900 disabled:opacity-50"
+                          >
+                            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
+                            </svg>
+                            <span>{exportingId === item.id ? "..." : "PNG"}</span>
+                          </button>
+
+                          {item.canEdit && (
+                            <button
+                              type="button"
+                              title="Abrir no editor"
+                              onClick={() => loadPublished(item)}
+                              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950/70 px-2.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-200 transition-colors hover:border-amber-500/70 hover:bg-neutral-900 hover:text-amber-400"
+                            >
+                              <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
+                              </svg>
+                              <span>Editar</span>
+                            </button>
+                          )}
+
                           <Link
                             href={`/tier-maker/comunidade/${item.id}`}
-                            className="transition-colors hover:text-amber-400"
+                            title="Abrir página completa"
+                            aria-label={`Abrir ${item.title}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950/70 text-neutral-400 transition-colors hover:border-amber-500/60 hover:text-amber-400"
                           >
-                            {item.title}
+                            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V10M9 2h5v5M14 2 7 9" />
+                            </svg>
                           </Link>
-                        </h4>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-                          <TierAuthorBadge
-                            name={item.author}
-                            handle={item.authorHandle}
-                            avatarUrl={item.authorAvatarUrl}
-                            size="sm"
-                          />
-                          <span>•</span>
-                          <span>{dateText}</span>
-                          <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-300">
-                            {totalPlaced} {totalPlaced === 1 ? "herói" : "heróis"}
-                          </span>
+
+                          {item.canDelete && (
+                            <button
+                              type="button"
+                              title="Excluir da galeria"
+                              onClick={(e) => deletePublished(item.id, e)}
+                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent text-neutral-500 hover:border-rose-500/40 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
+                            >
+                              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {item.canDelete && (
-                        <button
-                          type="button"
-                          title="Excluir da galeria"
-                          onClick={(e) => deletePublished(item.id, e)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
-                        >
-                          <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M2.5 4.5h11M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5M13 4.5l-.8 9a1.5 1.5 0 0 1-1.5 1.4H5.3a1.5 1.5 0 0 1-1.5-1.4L3 4.5" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-
-                    {isQuadrant && item.quadrant ? (
-                      <TierQuadrantBoard
-                        mode="preview"
-                        quadrant={item.quadrant}
-                        byId={byId}
-                      />
-                    ) : (
-                      <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
-                        {item.tiers.map((t, idx) => {
-                          const tierHeroes = (t.heroes || [])
-                            .map((hId) => byId.get(hId))
-                            .filter((h): h is NonNullable<typeof h> => Boolean(h));
-
-                          const MAX_PREVIEW = 10;
-                          const visibleHeroes = tierHeroes.slice(0, MAX_PREVIEW);
-                          const overflowCount = tierHeroes.length - MAX_PREVIEW;
-
-                          return (
-                            <div key={idx} className="flex min-h-[38px] items-stretch">
-                              <div
-                                style={{ backgroundColor: t.color }}
-                                className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
-                              >
-                                <span
-                                  className="font-deadlock truncate px-1 text-[11px] font-black uppercase text-black leading-tight"
-                                  title={t.label}
-                                >
-                                  {t.label.replace(/\n+/g, " ")}
-                                </span>
-                              </div>
-
-                              <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
-                                {tierHeroes.length === 0 ? (
-                                  <span className="text-[10px] text-neutral-600 italic px-1">—</span>
-                                ) : (
-                                  <>
-                                    {visibleHeroes.map((h) => (
-                                      <div
-                                        key={h.id}
-                                        title={h.name}
-                                        className="relative h-6 w-6 sm:h-7 sm:w-7 shrink-0 overflow-hidden rounded-[4px] border border-neutral-800 bg-neutral-900 shadow-sm"
-                                      >
-                                        <img
-                                          src={h.image}
-                                          alt={h.name}
-                                          className="h-full w-full object-cover"
-                                          loading="lazy"
-                                        />
-                                      </div>
-                                    ))}
-                                    {overflowCount > 0 && (
-                                      <span className="flex h-6 items-center rounded-[4px] border border-neutral-800 bg-neutral-900 px-1.5 text-[9px] font-bold text-neutral-400">
-                                        +{overflowCount}
-                                      </span>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                        <TierAuthorBadge
+                          name={item.author}
+                          handle={item.authorHandle}
+                          avatarUrl={item.authorAvatarUrl}
+                          size="sm"
+                        />
+                        <span>•</span>
+                        <span>{dateText}</span>
                       </div>
-                    )}
 
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={exportingId === item.id}
-                        onClick={() => handleExportItemPng(item)}
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900/90 py-2.5 px-3 font-deadlock text-xs font-black uppercase tracking-wider text-amber-400 transition-all hover:border-amber-400 hover:bg-neutral-800 disabled:opacity-50"
-                      >
-                        <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
-                        </svg>
-                        <span>{exportingId === item.id ? "Gerando..." : "Exportar PNG"}</span>
-                      </button>
-
-                      {item.canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => loadPublished(item)}
-                          className="group inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/80 py-2.5 px-3 font-deadlock text-xs font-black uppercase tracking-wider text-[#f4efe6] transition-all hover:border-amber-500/80 hover:bg-neutral-800 hover:text-amber-400"
-                        >
-                          <svg
-                            aria-hidden
-                            viewBox="0 0 16 16"
-                            className="h-3.5 w-3.5 transition-transform group-hover:scale-110"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L4.5 13.5 2 14l.5-2.5L11.5 2.5z" />
-                          </svg>
-                          <span>Abrir no Editor</span>
-                        </button>
+                      {item.description && (
+                        <p className="line-clamp-2 text-xs leading-relaxed text-neutral-300">
+                          {item.description}
+                        </p>
                       )}
                     </div>
-                  </div>
+
+                    <Link
+                      href={`/tier-maker/comunidade/${item.id}`}
+                      className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/60"
+                    >
+                      {isQuadrant && item.quadrant ? (
+                        <TierQuadrantBoard
+                          mode="preview"
+                          quadrant={item.quadrant}
+                          byId={byId}
+                        />
+                      ) : item.tiers.length === 0 ? (
+                        <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-neutral-800 bg-neutral-950/70 px-4 text-center text-xs italic text-neutral-500">
+                          Prancha sem categorias disponíveis (clique para abrir ou excluir).
+                        </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-950/90 divide-y divide-neutral-900/90 shadow-inner">
+                          {item.tiers.slice(0, 6).map((t, idx) => {
+                            const tierHeroes = (t.heroes || [])
+                              .map((hId) => byId.get(hId))
+                              .filter((h): h is NonNullable<typeof h> => Boolean(h));
+
+                            const MAX_PREVIEW = 10;
+                            const visibleHeroes = tierHeroes.slice(0, MAX_PREVIEW);
+                            const overflowCount = tierHeroes.length - MAX_PREVIEW;
+
+                            return (
+                              <div key={idx} className="flex min-h-[36px] items-stretch">
+                                <div
+                                  style={{ backgroundColor: t.color }}
+                                  className="flex w-16 sm:w-20 shrink-0 items-center justify-center p-1 text-center select-none"
+                                >
+                                  <span
+                                    className="font-deadlock truncate px-1 text-[11px] font-black uppercase text-black leading-tight"
+                                    title={t.label}
+                                  >
+                                    {t.label.replace(/\n+/g, " ")}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-1 flex-wrap items-center gap-1.5 bg-neutral-950/70 p-1.5 sm:px-2.5">
+                                  {tierHeroes.length === 0 ? (
+                                    <span className="text-[10px] text-neutral-600 italic px-1">—</span>
+                                  ) : (
+                                    <>
+                                      {visibleHeroes.map((h) => (
+                                        <div
+                                          key={h.id}
+                                          title={h.name}
+                                          className="relative h-6 w-6 sm:h-7 sm:w-7 shrink-0 overflow-hidden rounded-[4px] border border-neutral-800 bg-neutral-900 shadow-sm"
+                                        >
+                                          <img
+                                            src={h.image}
+                                            alt={h.name}
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                          />
+                                        </div>
+                                      ))}
+                                      {overflowCount > 0 && (
+                                        <span className="flex h-6 items-center rounded-[4px] border border-neutral-800 bg-neutral-900 px-1.5 text-[9px] font-bold text-neutral-400">
+                                          +{overflowCount}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {item.tiers.length > 6 && (
+                            <div className="bg-neutral-950 px-3 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                              +{item.tiers.length - 6} categorias na página completa
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Link>
+
+                    <div className="space-y-3 border-t border-neutral-800/80 pt-3">
+                      <div className="flex items-center justify-between gap-2 pt-0.5 text-neutral-400">
+                        {/* Comentários */}
+                        <button
+                          type="button"
+                          title="Comentários"
+                          aria-label={`Comentários (${commentsCount})`}
+                          onClick={() => void handleToggleComments(item)}
+                          className={`group/act inline-flex cursor-pointer items-center gap-1 text-xs font-medium tabular-nums transition-colors ${
+                            commentsExpanded ? "text-amber-400" : "hover:text-amber-400"
+                          }`}
+                        >
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-amber-500/12">
+                            <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                            </svg>
+                          </span>
+                          <span>{commentsCount}</span>
+                        </button>
+
+                        {/* Postar no Feed (Repost) */}
+                        <button
+                          type="button"
+                          title="Postar no Feed"
+                          aria-label="Postar no Feed"
+                          onClick={() => openFeedShareModal(item)}
+                          className="group/act inline-flex cursor-pointer items-center gap-1 text-xs font-medium transition-colors hover:text-emerald-400"
+                        >
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-emerald-500/12">
+                            <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m17 2 4 4-4 4" />
+                              <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+                              <path d="m7 22-4-4 4-4" />
+                              <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+                            </svg>
+                          </span>
+                        </button>
+
+                        {/* Curtir */}
+                        <button
+                          type="button"
+                          title="Curtir"
+                          aria-label={`Curtir (${likesCount})`}
+                          disabled={likeBusyIds[item.id]}
+                          onClick={() => handleToggleLike(item)}
+                          className={`group/act inline-flex cursor-pointer items-center gap-1 text-xs font-medium tabular-nums transition-colors ${
+                            item.likedByMe ? "text-rose-500" : "hover:text-rose-400"
+                          }`}
+                        >
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-rose-500/12">
+                            <svg
+                              aria-hidden
+                              viewBox="0 0 24 24"
+                              className="h-[18px] w-[18px]"
+                              fill={item.likedByMe ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M19.5 12.572 12 20l-7.5-7.428A5 5 0 1 1 12 6.006a5 5 0 1 1 7.5 6.572z" />
+                            </svg>
+                          </span>
+                          <span>{likesCount}</span>
+                        </button>
+
+                        {/* Visualizações */}
+                        <Link
+                          href={`/tier-maker/comunidade/${item.id}`}
+                          title={`${viewsCount} ${viewsCount === 1 ? "visualização" : "visualizações"}`}
+                          aria-label={`${viewsCount} visualizações`}
+                          className="group/act inline-flex items-center gap-1 text-xs font-medium tabular-nums transition-colors hover:text-sky-400"
+                        >
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-sky-500/12">
+                            <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 20V14M10 20V4M16 20v-9M22 20v-6" />
+                            </svg>
+                          </span>
+                          <span>{viewsCount}</span>
+                        </Link>
+
+                        {/* Compartilhar */}
+                        <div className="relative" data-share-menu>
+                          <button
+                            type="button"
+                            title="Compartilhar"
+                            aria-label="Compartilhar"
+                            onClick={() =>
+                              setOpenShareId((curr) => (curr === item.id ? null : item.id))
+                            }
+                            className="group/act inline-flex cursor-pointer items-center text-neutral-400 transition-colors hover:text-amber-400"
+                          >
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full transition-colors group-hover/act:bg-amber-500/12">
+                              <svg aria-hidden viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                                <path d="m16 6-4-4-4 4" />
+                                <path d="M12 2v13" />
+                              </svg>
+                            </span>
+                          </button>
+
+                          {openShareId === item.id && (
+                            <div className="absolute right-0 bottom-full z-30 mb-2 w-52 rounded-xl border border-neutral-800 bg-neutral-950/98 p-1.5 shadow-2xl backdrop-blur-md space-y-1">
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyShareLink(item, false)}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
+                              >
+                                <span>
+                                  {copiedShareState === `${item.id}:link`
+                                    ? "Link copiado!"
+                                    : "Copiar link"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyShareLink(item, true)}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
+                              >
+                                <span>
+                                  {copiedShareState === `${item.id}:summary`
+                                    ? "Resumo copiado!"
+                                    : "Copiar p/ Discord"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleNativeShare(item)}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-neutral-200 hover:bg-neutral-900 hover:text-amber-300"
+                              >
+                                <span>Compartilhar...</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={exportingId === item.id}
+                                onClick={() => {
+                                  setOpenShareId(null);
+                                  void handleExportItemPng(item);
+                                }}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-amber-400 hover:bg-neutral-900 disabled:opacity-50"
+                              >
+                                <span>
+                                  {exportingId === item.id ? "Gerando PNG..." : "Baixar imagem PNG"}
+                                </span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {!commentsExpanded && (item.recentComments?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleComments(item)}
+                          className="w-full cursor-pointer rounded-lg border border-neutral-800/70 bg-black/30 px-3 py-2 text-left text-xs text-neutral-300 hover:border-neutral-700 transition-colors"
+                        >
+                          {(() => {
+                            const last = item.recentComments![item.recentComments!.length - 1];
+                            return (
+                              <span className="line-clamp-1">
+                                <strong className="text-[#f4efe6]">{last.author.username}:</strong>{" "}
+                                {last.content}
+                              </span>
+                            );
+                          })()}
+                        </button>
+                      )}
+
+                      {commentsExpanded && (
+                        <div className="space-y-2.5 rounded-xl border border-neutral-800/80 bg-black/35 p-3">
+                          {loadingCommentsMap[item.id] ? (
+                            <p className="text-[11px] text-neutral-500">Carregando comentários...</p>
+                          ) : commentsList.length === 0 ? (
+                            <p className="text-[11px] italic text-neutral-500">
+                              Nenhum comentário ainda. Seja o primeiro a opinar!
+                            </p>
+                          ) : (
+                            <div className="max-h-52 space-y-2 overflow-y-auto pr-1 lp-scroll">
+                              {commentsList.map((c) => (
+                                <div
+                                  key={c.id}
+                                  className="flex items-start justify-between gap-2 rounded-lg bg-neutral-900/70 px-2.5 py-2"
+                                >
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                      {c.author.handle ? (
+                                        <Link
+                                          href={`/profile/${encodeURIComponent(c.author.handle)}`}
+                                          className="font-bold text-[#f4efe6] hover:text-amber-400"
+                                        >
+                                          {c.author.username}
+                                        </Link>
+                                      ) : (
+                                        <span className="font-bold text-[#f4efe6]">
+                                          {c.author.username}
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] text-neutral-500">
+                                        {new Date(c.createdAt).toLocaleString("pt-BR", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                    </div>
+                                    <p className="whitespace-pre-wrap break-words text-xs text-neutral-300">
+                                      {c.content}
+                                    </p>
+                                  </div>
+                                  {c.canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteTierComment(item.id, c.id)}
+                                      className="shrink-0 cursor-pointer text-[10px] font-bold uppercase text-rose-400 hover:underline"
+                                    >
+                                      Excluir
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {currentUser ? (
+                            <form
+                              onSubmit={(e) => void handleAddTierComment(item, e)}
+                              className="flex gap-2 pt-1"
+                            >
+                              <input
+                                type="text"
+                                maxLength={300}
+                                value={commentDrafts[item.id] ?? ""}
+                                onChange={(e) =>
+                                  setCommentDrafts((m) => ({
+                                    ...m,
+                                    [item.id]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Comentar nessa tier list..."
+                                className="min-w-0 flex-1 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500/60"
+                              />
+                              <button
+                                type="submit"
+                                disabled={
+                                  commentBusyIds[item.id] ||
+                                  !(commentDrafts[item.id] ?? "").trim()
+                                }
+                                className="cursor-pointer rounded-lg border border-amber-500/60 bg-amber-500/15 px-3 py-1.5 text-xs font-black uppercase text-amber-300 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Enviar
+                              </button>
+                            </form>
+                          ) : (
+                            <p className="text-[11px] text-neutral-400">
+                              <Link href="/login?next=/tier-maker/comunidade" className="font-bold text-amber-400 hover:underline">
+                                Entre na sua conta
+                              </Link>{" "}
+                              para comentar.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </article>
                 );
               })}
+            </div>
+          )}
+
+          {feedModalItem && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Postar tier list no Feed"
+              onClick={() => {
+                if (!postingToFeed) setFeedModalItem(null);
+              }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-950 p-5 shadow-2xl space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-neutral-800 pb-3">
+                  <div>
+                    <h4 className="font-deadlock text-lg font-black uppercase tracking-wider text-[#f4efe6]">
+                      Postar no Feed da Comunidade
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Sua postagem vai incluir um card interativo para esta tier list.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={postingToFeed}
+                    onClick={() => setFeedModalItem(null)}
+                    className="cursor-pointer rounded-lg px-2 py-1 text-sm font-bold text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5">
+                  <p className="font-deadlock text-sm font-black text-[#f4efe6]">
+                    {feedModalItem.title}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-neutral-400">
+                    por {feedModalItem.author} •{" "}
+                    {feedModalItem.style === "quadrant" && feedModalItem.quadrant
+                      ? getPolygonShapeName(getQuadrantAxes(feedModalItem.quadrant).length)
+                      : "Tier List Clássica"}
+                  </p>
+                </div>
+
+                <form onSubmit={(e) => void submitFeedShare(e)} className="space-y-3">
+                  <textarea
+                    rows={3}
+                    maxLength={500}
+                    value={feedPostContent}
+                    onChange={(e) => setFeedPostContent(e.target.value)}
+                    placeholder="Escreva o que achou dessa tier list..."
+                    className="w-full resize-y rounded-lg border border-neutral-800 bg-black/60 p-3 text-sm text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500"
+                  />
+                  {feedModalError && (
+                    <p className="text-xs font-semibold text-rose-400">{feedModalError}</p>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-neutral-500">
+                      {feedPostContent.length}/500 caracteres
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={postingToFeed}
+                        onClick={() => setFeedModalItem(null)}
+                        className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 px-3.5 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-neutral-300 hover:text-white"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={postingToFeed || !feedPostContent.trim()}
+                        className="cursor-pointer rounded-lg border border-emerald-400/80 bg-emerald-500 px-4 py-2 font-deadlock text-xs font-black uppercase tracking-wider text-black hover:bg-emerald-400 disabled:opacity-50"
+                      >
+                        {postingToFeed ? "Publicando..." : "Publicar no Feed"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </div>

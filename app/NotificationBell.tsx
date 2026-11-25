@@ -6,7 +6,12 @@ import type { AuthUser } from "@/lib/backend/types";
 
 interface NotificationItem {
   id: string;
-  type: "friend_request" | "post_like" | "post_comment";
+  type:
+    | "friend_request"
+    | "post_like"
+    | "post_comment"
+    | "tier_list_like"
+    | "tier_list_comment";
   actorName: string;
   actorHandle: string | null;
   message: string;
