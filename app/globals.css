@@ -81,6 +81,31 @@ h1, h2, h3, h4 {
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Valve Oracle";
+  src: url("https://assets-bucket.deadlock-api.com/assets-api-res/fonts/valveoracle-thin.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Valve Oracle";
+  src: url("https://assets-bucket.deadlock-api.com/assets-api-res/fonts/valveoracle-medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Valve Oracle";
+  src: url("https://assets-bucket.deadlock-api.com/assets-api-res/fonts/valveoracle-semibold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+.font-oracle {
+  font-family: "Valve Oracle", "Retail Demo", Arial, Helvetica, sans-serif;
+}
+
 /* Texto das habilidades (descrições vindas da API) */
 .dl-text {
   font-family: "Retail Demo", Arial, Helvetica, sans-serif;
@@ -596,16 +621,164 @@ html {
   animation: cmp-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes lp-mote-float {
+  0% {
+    transform: translate3d(0, 8px, 0) scale(0.85);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.75;
+  }
+  75% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(6px, -28px, 0) scale(1.1);
+    opacity: 0;
+  }
+}
+.lp-mote-float {
+  animation: lp-mote-float 5.5s ease-in-out infinite;
+}
+
+@keyframes lp-tag-jitter {
+  0%   { transform: translate3d(0px, 0px, 0) rotate(0deg); }
+  25%  { transform: translate3d(1px, -1px, 0) rotate(0.7deg); }
+  50%  { transform: translate3d(-1px, 0.5px, 0) rotate(-0.6deg); }
+  75%  { transform: translate3d(0.5px, 1px, 0) rotate(0.4deg); }
+  100% { transform: translate3d(0px, 0px, 0) rotate(0deg); }
+}
+.lp-tag-jitter {
+  animation: lp-tag-jitter 1.35s steps(1, end) infinite;
+}
+
+@keyframes lp-card-sway {
+  0%, 100% {
+    transform: scale(1.15) rotate(-1.5deg);
+  }
+  50% {
+    transform: scale(1.15) rotate(1.5deg);
+  }
+}
+.lp-card-sway {
+  animation: lp-card-sway 2.8s ease-in-out infinite;
+}
+
+@keyframes lp-flame-sway {
+  0%, 100% {
+    transform: rotate(1.2deg) skewX(-1.8deg) scaleY(0.99);
+  }
+  50% {
+    transform: rotate(2.2deg) skewX(-2.8deg) scaleY(1.015);
+  }
+}
+.lp-flame-sway {
+  transform-box: view-box;
+  transform-origin: 48% 85%;
+  animation: lp-flame-sway 2.1s ease-in-out infinite;
+}
+
+@keyframes lp-hero-slide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(84px, 0, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.lp-hero-slide-in {
+  animation: lp-hero-slide-in 0.34s cubic-bezier(0.18, 0.92, 0.28, 1) both;
+}
+
+@keyframes lp-dl-assemble-outer {
+  0% {
+    opacity: 0;
+    transform: scale(1.28) rotate(-75deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes lp-dl-assemble-inner {
+  0% {
+    opacity: 0;
+    transform: scale(0.68) rotate(90deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes lp-dl-assemble-eye {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.lp-dl-assemble-outer {
+  animation: lp-dl-assemble-outer 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.lp-dl-assemble-inner {
+  animation: lp-dl-assemble-inner 0.75s 0.08s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.lp-dl-assemble-eye {
+  animation: lp-dl-assemble-eye 0.55s 0.22s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.hero-select-art-mask {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 62%, transparent 100%);
+}
+@media (min-width: 640px) {
+  .hero-select-art-mask {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.35) 6%, rgba(0, 0, 0, 0.8) 12%, black 17%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.35) 6%, rgba(0, 0, 0, 0.8) 12%, black 17%);
+  }
+}
+@media (min-width: 1024px) and (min-aspect-ratio: 6/5) {
+  .hero-select-art-mask {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lp-load,
+  .lp-hero-slide-in,
+  .lp-dl-assemble-outer,
+  .lp-dl-assemble-inner,
+  .lp-dl-assemble-eye,
   main > :not(.lp-load),
   .lp-logo,
   .lp-spin,
+  .lp-spin-slow,
+  .lp-spin-reverse,
+  .lp-card-sway,
+  .lp-flame-sway,
+  .lp-mote-float,
+  .lp-tag-jitter,
   .lp-card-in,
   .lp-bar,
   .cmp-enter,
   .lp-shimmer::after {
     animation: none;
+  }
+  .lp-card-sway {
+    transform: scale(1.15) rotate(-1.5deg);
+  }
+  .lp-flame-sway {
+    transform: rotate(1.5deg) skewX(-2deg);
   }
   .cmp-theme-scope {
     transition: none;

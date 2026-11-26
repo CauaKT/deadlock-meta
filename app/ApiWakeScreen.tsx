@@ -1,8 +1,8 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import DeadlockLoadingLogo from "@/components/ui/DeadlockLoadingLogo";
 import { waitForApiReady, type ApiWakeStage } from "@/lib/backend/client";
 
 const STAGES: { id: ApiWakeStage; label: string }[] = [
@@ -50,42 +50,8 @@ export function ApiWakePanel({
       {/* Halo de luz arcana */}
       <div className="pointer-events-none absolute -top-6 h-44 w-44 rounded-full bg-amber-500/15 blur-3xl" />
 
-      {/* Selo ritualístico (mesma estética do loading.tsx) */}
-      <div className="relative flex h-32 w-32 items-center justify-center">
-        <svg
-          className="lp-spin-slow pointer-events-none absolute inset-0 h-full w-full"
-          viewBox="0 0 100 100"
-          fill="none"
-        >
-          <circle
-            cx="50"
-            cy="50"
-            r="46"
-            stroke="#f59e0b"
-            strokeWidth="1.2"
-            strokeOpacity="0.45"
-            strokeDasharray="4 6"
-          />
-        </svg>
-
-        <svg
-          className="lp-spin-reverse pointer-events-none absolute inset-2 h-[calc(100%-16px)] w-[calc(100%-16px)]"
-          viewBox="0 0 100 100"
-          fill="none"
-        >
-          <circle cx="50" cy="50" r="44" stroke="#5f7a76" strokeWidth="1" strokeOpacity="0.35" />
-          <polygon
-            points="50,6 94,50 50,94 6,50"
-            stroke="#f59e0b"
-            strokeWidth="0.8"
-            strokeOpacity="0.3"
-          />
-        </svg>
-
-        <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-amber-500/40 bg-[#0c1110] shadow-[0_0_24px_rgba(0,0,0,0.9)]">
-          <img src="/logo.png" alt="" className="lp-logo h-11 w-11 object-contain" />
-        </div>
-      </div>
+      {/* Logo oficial animada (mesmo componente do loading.tsx) */}
+      <DeadlockLoadingLogo size="sm" />
 
       {/* Título e subtítulo */}
       <div className="mt-5 space-y-1.5">

@@ -156,6 +156,8 @@ export interface WikiHeroTheme {
   rgb: [number, number, number];
   tagBg: string;
   tagText: string;
+  titleColor?: string;
+  panelColor?: string;
 }
 
 let wikiColorsCache: { data: Record<string, WikiHeroTheme>; at: number } | null = null;
@@ -182,9 +184,11 @@ export async function fetchWikiColors(): Promise<Record<string, WikiHeroTheme>> 
       const key = b.split(/[\s,{]/)[0];
       if (!key) continue;
 
+      const color1 = b.match(/--th-heroinfobox-color1:\s*([^;]+)/)?.[1]?.trim();
       const color2 = b.match(/--th-heroinfobox-color2:\s*([^;]+)/)?.[1]?.trim();
       const tagB = b.match(/--th-heroinfobox-tags-back:\s*([^;]+)/)?.[1]?.trim();
       const tagT = b.match(/--th-heroinfobox-tags-text:\s*([^;]+)/)?.[1]?.trim();
+      const textTitle = b.match(/--th-heroinfobox-text-title:\s*([^;]+)/)?.[1]?.trim();
 
       const rgbB = hexToRgb(tagB);
       const rgbT = hexToRgb(tagT);
@@ -204,6 +208,8 @@ export async function fetchWikiColors(): Promise<Record<string, WikiHeroTheme>> 
           rgb: chosenRgb,
           tagBg: bg,
           tagText: text,
+          titleColor: textTitle || undefined,
+          panelColor: color1 || undefined,
         };
       }
     }
@@ -326,6 +332,52 @@ export async function fetchHeroBlurbs(): Promise<Record<number, HeroBlurb>> {
   } catch (err) {
     console.error("Falha ao buscar tags dos heróis:", err);
     return blurbsCache?.data ?? {};
+  }
+}
+
+let selectVoicesCache: { data: Record<string, string[]>; at: number } | null = null;
+
+function collectVoiceUrls(node: unknown, out: string[]): void {
+  if (!node || typeof node !== "object") return;
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (typeof v === "string") {
+      if ((/_select_\d+/i.test(k) || /_select_\d+/i.test(v)) && v.startsWith("https://")) {
+        out.push(v);
+      }
+    } else if (v && typeof v === "object") {
+      collectVoiceUrls(v, out);
+    }
+  }
+}
+
+// Payload completo >18 MB: mantém em cache de 24h apenas o mapa leve de falas de seleção por herói
+export async function fetchHeroSelectVoiceLines(): Promise<Record<string, string[]>> {
+  await connection();
+  if (selectVoicesCache && Date.now() - selectVoicesCache.at < ASSETS_TTL) {
+    return selectVoicesCache.data;
+  }
+
+  try {
+    const res = await fetch(`${DEADLOCK_DATA_CONFIG.apiBaseUrl}/v1/assets/sounds`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return selectVoicesCache?.data ?? {};
+
+    const json = (await res.json()) as { vo?: Record<string, unknown> };
+    const map: Record<string, string[]> = {};
+    for (const [heroKey, group] of Object.entries(json?.vo ?? {})) {
+      const urls: string[] = [];
+      collectVoiceUrls(group, urls);
+      if (urls.length > 0) {
+        map[heroKey] = Array.from(new Set(urls)).sort().slice(0, 6);
+      }
+    }
+
+    selectVoicesCache = { data: map, at: Date.now() };
+    return map;
+  } catch {
+    return selectVoicesCache?.data ?? {};
   }
 }
 

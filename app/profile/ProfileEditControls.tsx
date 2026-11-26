@@ -174,7 +174,7 @@ function HeroPicker({
                     }`}
                   >
                     {h.rgb && (
-                      <span aria-hidden className="absolute inset-0 overflow-hidden" style={{ "--hc": h.rgb.join(" ") } as CSSProperties}>
+                      <span aria-hidden className="pf-smoke pointer-events-none absolute inset-0 z-0 overflow-hidden" style={{ "--hc": h.rgb.join(" ") } as CSSProperties}>
                         <i className="absolute hero-tip-puff hero-tip-puff-a" />
                         <i className="absolute hero-tip-puff hero-tip-puff-b" />
                         <i className="absolute hero-tip-puff hero-tip-puff-c" />
@@ -190,10 +190,10 @@ function HeroPicker({
                         img.dataset.fallback = "1";
                         img.src = h.image;
                       }}
-                      className="relative h-full w-full object-cover object-top"
+                      className="relative z-[2] h-full w-full object-cover object-top"
                     />
                     <span
-                      className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-6 text-center font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6]"
+                      className="absolute inset-x-0 bottom-0 z-[3] bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-6 text-center font-deadlock text-[11px] font-black uppercase tracking-wider text-[#f4efe6]"
                       style={active ? { color } : undefined}
                     >
                       {h.name}

@@ -32,6 +32,7 @@ import HeroStats from "./HeroStats";
 import HeroGuide from "./HeroGuide";
 import HeroMatchups from "./HeroMatchups";
 import HeroAtmosphere from "@/components/ui/HeroAtmosphere";
+import HeroGrainFilter from "@/components/ui/HeroGrainFilter";
 import HeroPatchEvolution from "./HeroPatchEvolution";
 import { getServerBuilds } from "@/lib/backend/server";
 import NavButton from "./NavButton";
@@ -211,6 +212,7 @@ export default async function HeroPage({
 
   return (
     <div className="relative max-w-6xl mx-auto p-4 md:p-10 space-y-10">
+      <HeroGrainFilter />
       <HeroAtmosphere rgb={rgb} />
       {/* Botão de Voltar + Filtros */}
       <div className="space-y-3">
@@ -309,6 +311,7 @@ export default async function HeroPage({
             alt={enName}
             className="h-full w-full object-cover object-top"
             style={{
+              filter: "url(#dl-hero-grain)",
               maskImage: "linear-gradient(to right, transparent, #000 40%)",
               WebkitMaskImage: "linear-gradient(to right, transparent, #000 40%)",
             }}

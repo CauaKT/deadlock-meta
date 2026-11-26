@@ -377,8 +377,22 @@ export function resolveHeroMedia(
   const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "");
   const formattedName = name.trim().replace(/ /g, "_");
 
-  const card = images.icon_hero_card || images.icon_image_small || images.minimap_image || "";
-  const icon = images.icon_image_small || images.minimap_image || images.icon_hero_card || null;
+  const card =
+    images.icon_hero_card_webp ||
+    images.icon_hero_card ||
+    images.icon_image_small_webp ||
+    images.icon_image_small ||
+    images.minimap_image_webp ||
+    images.minimap_image ||
+    "";
+  const icon =
+    images.icon_image_small_webp ||
+    images.icon_image_small ||
+    images.minimap_image_webp ||
+    images.minimap_image ||
+    images.icon_hero_card_webp ||
+    images.icon_hero_card ||
+    null;
   const bg = images.background_image_webp || images.background_image || "";
 
   const gloatKey = Object.keys(images).find((k) => k.toLowerCase().includes("gloat"));
@@ -633,3 +647,73 @@ export function computeItemTooltipPosition(
     y: Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - maxHeight)),
   };
 }
+
+export const HERO_TYPE_LABELS: Record<string, string> = {
+  marksman: "Atirador",
+  mystic: "Místico",
+  brawler: "Lutador",
+  assassin: "Assassino",
+  healer: "Suporte",
+};
+
+export const HERO_TYPE_OPTIONS = Object.entries(HERO_TYPE_LABELS).map(([id, label]) => ({
+  id,
+  label,
+}));
+
+export const DEADLOCK_LOGO_ASSETS = {
+  outer: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/deadlock_logo_outer.svg",
+  innerNoEye: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/deadlock_logo_inner_noeye.svg",
+  eye: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/deadlock_logo_eye.svg",
+} as const;
+
+export const PICK_SCREEN_ASSETS = {
+  smokeBg: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/smoke_bg.webp",
+  grain: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/grain.webp",
+  slateTexture: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/slate_texture.webp",
+  playSigil: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/hideout/play_sigil_backer.svg",
+  cardBacker: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/card_backer.webp",
+  cardBorder: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/card_border.webp",
+  playBox: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/temp/play_box.webp",
+  playBoxFill: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/temp/play_box_fill.webp",
+  linebreak: "https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/pick_screen/temp/linebreak.webp",
+  lockIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/upgrades/lock_icon.svg",
+  soundOnIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/icons/icon_sound_on.svg",
+  soundOffIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/icons/icon_sound_off_unfilled.svg",
+  searchIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/control_icons/24px/search.svg",
+  clearIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/control_icons/24px/x_close.svg",
+  filterIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/control_icons/24px/settings_options.svg",
+} as const;
+
+export const DEADLOCK_UI_COLORS = {
+  deadlockGreen: "#69e799",
+  deadlockGreenLight: "#a8ffc9",
+  deadlockGreenDarker: "#2b7047",
+  soulColor: "#70f8c1",
+  offWhite: "#ffefd7",
+  offBlack: "#10130d",
+} as const;
+
+export const PICK_SCREEN_SOUNDS = {
+  enterVariants: [
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_heroselection_enter.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_heroselection_enter_01.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_heroselection_enter_02.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_heroselection_enter_03.mp3",
+  ],
+  select: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/hero_select.mp3",
+  play: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/hero_select_play.mp3",
+  menuActivate: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_menu_activate.mp3",
+  menuBack: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_menu_back_minor.mp3",
+  menuHover: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_menu_hover.mp3",
+  abilityHover: "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ability_hover.mp3",
+  cardHovers: [
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_01.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_02.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_03.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_04.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_05.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_06.mp3",
+    "https://assets-bucket.deadlock-api.com/assets-api-res/sounds/ui/ui_herocard_hover_07.mp3",
+  ],
+} as const;

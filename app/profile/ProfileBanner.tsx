@@ -51,11 +51,11 @@ export default function ProfileBanner({
         } as CSSProperties
       }
     >
-      <div className="hero-glow absolute inset-0" />
-      <i className="absolute hero-tip-puff hero-tip-puff-a" />
-      <i className="absolute hero-tip-puff hero-tip-puff-b" />
-      <i className="absolute hero-tip-puff hero-tip-puff-c" />
-      <div className="absolute inset-y-0 right-0 w-full md:w-1/2">
+      <div className="hero-glow absolute inset-0 z-0" />
+      <i className="absolute z-0 hero-tip-puff hero-tip-puff-a" />
+      <i className="absolute z-0 hero-tip-puff hero-tip-puff-b" />
+      <i className="absolute z-0 hero-tip-puff hero-tip-puff-c" />
+      <div className="absolute inset-y-0 right-0 z-[2] w-full md:w-1/2">
         <img
           src={hero.art}
           alt=""

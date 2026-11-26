@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { SLOT_ACCENTS, computeItemTooltipPosition } from "@/lib/data/config";
+import { HERO_TYPE_LABELS, SLOT_ACCENTS, computeItemTooltipPosition } from "@/lib/data/config";
 import { PATCHES, type HeroBuild, type Patch, type PopularItem, type ShopItem } from "@/lib/deadlock";
 import ItemTooltip, { TIP_WIDTH } from "@/app/items/ItemTooltip";
 import SlantFrame from "@/components/ui/SlantFrame";
@@ -11,14 +11,6 @@ import { TACTICAL_PLATE_CLASS } from "@/components/ui/TacticalPlate";
 
 const PLATE = TACTICAL_PLATE_CLASS;
 const MAX_COMPLEXITY = 4;
-
-// Tradução minha dos valores de hero_type da API
-const HERO_TYPE_LABELS: Record<string, string> = {
-  marksman: "Atirador",
-  mystic: "Místico",
-  brawler: "Lutador",
-  assassin: "Assassino",
-};
 
 // Faixas de minutos definidas por mim; a API não informa os limites de cada fase
 const PHASES: { key: "early" | "mid" | "late"; label: string; minutes: string }[] = [
