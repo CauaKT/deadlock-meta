@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getServerPatchNoteTranslation } from "@/lib/backend/server";
 import {
   calculateTier,
   computeHeroMatchStats,

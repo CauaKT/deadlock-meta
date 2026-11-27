@@ -6,6 +6,7 @@ import type {
   FeedResponse,
   FriendsOverview,
   FullProfile,
+  PatchNoteTranslationResponse,
   PublicFriendsResponse,
   PublicProfile,
   SocialLinks,
@@ -390,6 +391,26 @@ export async function getPublicProfileHandleBySteam(
     if (!text) return null;
     const data = JSON.parse(text) as { handle?: string | null };
     return data?.handle ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getServerPatchNoteTranslation(
+  gid: string,
+  timeoutMs = 800,
+): Promise<PatchNoteTranslationResponse | null> {
+  if (!/^\d{6,30}$/.test(gid)) return null;
+  try {
+    const res = await fetch(
+      apiUrl(`/external-data/patch-notes/${encodeURIComponent(gid)}/pt-br`),
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as PatchNoteTranslationResponse;
   } catch {
     return null;
   }

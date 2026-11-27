@@ -1,7 +1,16 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
+import Image from "next/image";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import DeadlockLoadingLogo from "@/components/ui/DeadlockLoadingLogo";
 import { getPatchNoteTranslation } from "@/lib/backend/client";
 import type { PatchNoteTranslationResponse } from "@/lib/backend/types";
 import { SLOT_META } from "@/lib/data/config";
@@ -17,6 +26,7 @@ export interface PatchHeroRef {
   name: string;
   image: string | null;
   portrait: string | null;
+  bg: string | null;
   rgb: [number, number, number] | null;
   abilities: PatchHeroAbilityRef[];
 }
@@ -113,68 +123,6 @@ const BAND_META: Record<
     ringClass: "border-amber-400/80",
   },
 };
-
-function renderCornerBadges(
-  counters: ImpactCounters,
-  wikiKinds: WikiHeroChangeKind[] = [],
-) {
-  const { buffs, nerfs, adjs, fixes } = counters;
-  if (buffs > 0 && nerfs > 0) {
-    return (
-      <div className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 flex items-center gap-0.5">
-        <span className="rounded-[3px] border border-black/70 bg-emerald-500 px-1 py-[1px] font-mono text-[9px] font-black leading-none text-black shadow">
-          +{buffs}
-        </span>
-        <span className="rounded-[3px] border border-black/70 bg-rose-500 px-1 py-[1px] font-mono text-[9px] font-black leading-none text-white shadow">
-          -{nerfs}
-        </span>
-      </div>
-    );
-  }
-  if (buffs > 0) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-black/70 bg-emerald-500 px-1 py-[1px] font-mono text-[9px] font-black leading-none text-black shadow">
-        +{buffs}
-      </span>
-    );
-  }
-  if (nerfs > 0) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-black/70 bg-rose-500 px-1 py-[1px] font-mono text-[9px] font-black leading-none text-white shadow">
-        -{nerfs}
-      </span>
-    );
-  }
-  if (fixes > 0 && adjs === 0) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-white/20 bg-neutral-700 px-1 py-[1px] font-deadlock text-[8px] font-black uppercase leading-none text-neutral-100 shadow">
-        FIX
-      </span>
-    );
-  }
-  if (adjs > 0) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-black/60 bg-amber-500 px-1 py-[1px] font-deadlock text-[8px] font-black uppercase leading-none text-black shadow">
-        AJUSTE
-      </span>
-    );
-  }
-  if (wikiKinds.includes("new")) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-black/60 bg-amber-400 px-1 py-[1px] font-deadlock text-[8px] font-black uppercase leading-none text-black shadow">
-        NOVO
-      </span>
-    );
-  }
-  if (wikiKinds.includes("fix") && wikiKinds.length === 1) {
-    return (
-      <span className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 rounded-[3px] border border-white/20 bg-neutral-700 px-1 py-[1px] font-deadlock text-[8px] font-black uppercase leading-none text-neutral-100 shadow">
-        FIX
-      </span>
-    );
-  }
-  return null;
-}
 
 function classifyItemBand(counters: ImpactCounters): PatchBandKind {
   if (counters.buffs > 0 && counters.nerfs === 0) return "buff";
@@ -293,6 +241,7 @@ interface Props {
   itemLinks: Record<string, PatchItemRef>;
   wikiByGid: Record<string, WikiPatchClassificationView>;
   initialPatchId?: string;
+  initialTranslations?: Record<string, PatchNoteTranslationResponse>;
 }
 
 type CategoryFilter = "all" | "balance" | "feature";
@@ -654,6 +603,7 @@ export default function PatchNotesClient({
   heroLinks,
   itemLinks,
   initialPatchId,
+  initialTranslations,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string>(() => {
     if (initialPatchId && notes.some((n) => n.id === initialPatchId)) {
@@ -666,10 +616,12 @@ export default function PatchNotesClient({
   const [noteSearch, setNoteSearch] = useState("");
   const [copied, setCopied] = useState(false);
   const [lang, setLang] = useState<LanguageMode>("pt");
+  const [hoveredTip, setHoveredTip] = useState<string | null>(null);
   const [translationsByGid, setTranslationsByGid] = useState<
     Record<string, PatchNoteTranslationResponse>
-  >({});
+  >(() => initialTranslations ?? {});
   const [failedGids, setFailedGids] = useState<Record<string, boolean>>({});
+  const [delayedLoadingGid, setDelayedLoadingGid] = useState<string | null>(null);
 
   const filteredNotes = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -698,9 +650,14 @@ export default function PatchNotesClient({
   useEffect(() => {
     if (!activeGid || activeCached || activeFailed) return;
     let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) setDelayedLoadingGid(activeGid);
+    }, 400);
 
     void getPatchNoteTranslation(activeGid).then((res) => {
       if (cancelled) return;
+      clearTimeout(timer);
+      setDelayedLoadingGid((cur) => (cur === activeGid ? null : cur));
       if (!res || !res.available) {
         setFailedGids((prev) => ({ ...prev, [activeGid]: true }));
         return;
@@ -710,9 +667,13 @@ export default function PatchNotesClient({
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [activeGid, activeCached, activeFailed]);
 
+  const isTranslating = Boolean(activeGid && !activeCached && !activeFailed);
+  const isDelayedTranslating = isTranslating && delayedLoadingGid === activeGid;
+  const isWaitingPt = lang === "pt" && isDelayedTranslating;
   const activeTranslation = lang === "pt" && activeCached?.available ? activeCached : null;
 
   const translateText = (original: string): string | null => {
@@ -881,7 +842,12 @@ export default function PatchNotesClient({
 
     const resolveHero = (rawName: string): PatchHeroRef | null => {
       const k = rawName.trim().toLowerCase();
-      return heroLinks[k] ?? heroLinks[k.replace(/^the\s+/i, "")] ?? null;
+      return (
+        heroLinks[k] ??
+        heroLinks[k.replace(/^the\s+/i, "")] ??
+        heroLinks[`the ${k}`] ??
+        null
+      );
     };
 
     const wikiRow = wikiByGid[activeNote.id];
@@ -980,6 +946,9 @@ export default function PatchNotesClient({
     for (const { band, entry } of heroBandByKey.values()) {
       bandMap[band].heroes.push(entry);
     }
+    for (const band of Object.values(bandMap)) {
+      band.heroes.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    }
 
     const itemBandByClass = new Map<
       string,
@@ -995,8 +964,17 @@ export default function PatchNotesClient({
       bandMap[band].itemsCount += 1;
       itemBandByClass.set(rec.item.className, { band, counters: rec.counters });
     }
+    for (const band of Object.values(bandMap)) {
+      for (const slot of ["weapon", "vitality", "spirit"] as const) {
+        band.itemsBySlot[slot].sort((a, b) => {
+          const nameA = lang === "pt" ? a.item.name : a.item.nameEn;
+          const nameB = lang === "pt" ? b.item.name : b.item.nameEn;
+          return nameA.localeCompare(nameB, "pt-BR");
+        });
+      }
+    }
 
-    const bands = (["nerf", "adj", "buff", "new"] as PatchBandKind[])
+    const bands = (["buff", "nerf", "adj", "new"] as PatchBandKind[])
       .map((k) => bandMap[k])
       .filter((b) => b.heroes.length > 0 || b.itemsCount > 0);
 
@@ -1337,7 +1315,7 @@ export default function PatchNotesClient({
     ? activeTranslation?.titlePt || activeNote.title
     : "";
   const highlight = noteSearch.trim();
-  const showHighlights = !highlight && patchHighlights.bands.length > 0;
+  const showHighlights = !highlight && !isWaitingPt && patchHighlights.bands.length > 0;
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 lg:p-10 space-y-6">
@@ -1452,7 +1430,8 @@ export default function PatchNotesClient({
                 filteredNotes.map((n) => {
                   const isActive = activeNote?.id === n.id;
                   const isLatest = n.id === latestId;
-                  const itemTitle = n.title;
+                  const itemTitle =
+                    lang === "pt" ? translationsByGid[n.id]?.titlePt || n.title : n.title;
                   return (
                     <button
                       key={n.id}
@@ -1530,6 +1509,19 @@ export default function PatchNotesClient({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {isDelayedTranslating && (
+                        <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-amber-500/35 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          <span>
+                            {lang === "pt" ? "Traduzindo..." : "Classificando..."}
+                          </span>
+                        </span>
+                      )}
+                      {lang === "pt" && activeFailed && (
+                        <span className="rounded-[4px] border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300">
+                          Tradução indisponível (EN)
+                        </span>
+                      )}
                       <div className="inline-flex rounded-[4px] border border-neutral-800 bg-[#070807] p-0.5">
                         <button
                           type="button"
@@ -1641,8 +1633,39 @@ export default function PatchNotesClient({
                 </div>
               </div>
 
-              {/* DESTAQUES DO PATCH (FAIXAS NERFS / AJUSTES / BUFFS COM HEROIS + ITENS) */}
-              {showHighlights && (
+              {isWaitingPt ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="dl-noise relative overflow-hidden rounded-[5px] border border-amber-500/25 bg-[#0a0d0c]/95 px-6 py-14 text-center shadow-[0_18px_40px_rgba(0,0,0,0.55)]"
+                >
+                  <div className="pointer-events-none absolute top-0 inset-x-0 h-0.5 overflow-hidden bg-amber-500/10">
+                    <div className="lp-bar h-full w-1/3 bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+                  </div>
+
+                  <div className="relative flex flex-col items-center gap-5">
+                    <DeadlockLoadingLogo size="sm" />
+                    <div className="space-y-1.5">
+                      <p className="font-deadlock text-base sm:text-lg font-black uppercase tracking-[0.2em] text-[#f4efe6]">
+                        Traduzindo <span className="text-amber-500">Patch Notes</span>
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        Traduzindo notas para PT-BR e classificando buffs, nerfs e ajustes…
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLang("en")}
+                      className="rounded-[4px] border border-neutral-700/90 bg-neutral-900/90 px-3 py-1.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
+                    >
+                      Ler em inglês enquanto carrega
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* DESTAQUES DO PATCH (FAIXAS NERFS / AJUSTES / BUFFS COM HEROIS + ITENS) */}
+                  {showHighlights && (
                 <section className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-4 flex-1 min-w-[220px]">
@@ -1656,7 +1679,7 @@ export default function PatchNotesClient({
                     </p>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {patchHighlights.bands.map((band) => {
                       const hasBoth = band.heroes.length > 0 && band.itemsCount > 0;
                       const slotOrder: Array<"weapon" | "vitality" | "spirit"> = [
@@ -1671,7 +1694,7 @@ export default function PatchNotesClient({
                           className={`rounded-[5px] border bg-[#0a0d0c]/95 shadow-[0_14px_34px_rgba(0,0,0,0.48)] ${band.borderClass}`}
                         >
                           <div
-                            className={`flex items-center justify-between gap-2 rounded-t-[4px] border-b px-4 py-2.5 ${band.headerClass}`}
+                            className={`flex items-center justify-between gap-2 rounded-t-[4px] border-b px-3.5 py-2 ${band.headerClass}`}
                           >
                             <div className="flex items-center gap-2">
                               <WikiChangeIcon kind={band.kind} className="h-3.5 w-3.5" />
@@ -1688,51 +1711,85 @@ export default function PatchNotesClient({
 
                           <div
                             className={`grid grid-cols-1 ${
-                              hasBoth ? "xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]" : ""
+                              !hasBoth
+                                ? ""
+                                : band.heroes.length > band.itemsCount * 1.25
+                                  ? "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]"
+                                  : band.itemsCount > band.heroes.length * 1.25
+                                    ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)]"
+                                    : "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
                             }`}
                           >
                             {band.heroes.length > 0 && (
                               <div
-                                className={`p-4 sm:p-5 space-y-3 ${
+                                className={`p-3.5 sm:p-4 ${
                                   hasBoth
                                     ? "border-b border-white/10 xl:border-b-0 xl:border-r xl:border-white/10"
                                     : ""
                                 }`}
                               >
-                                <p className="font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-400">
-                                  Heróis <span className="text-neutral-200">{band.heroes.length}</span>
-                                </p>
-
-                                <div className="flex flex-wrap gap-3.5">
+                                <div
+                                  className={`grid gap-2.5 ${
+                                    hasBoth
+                                      ? "grid-cols-3 sm:grid-cols-5 md:grid-cols-6"
+                                      : "grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-8"
+                                  }`}
+                                >
                                   {band.heroes.map((entry) => {
                                     const imgUrl = entry.hero?.portrait ?? entry.hero?.image ?? null;
+                                    const heroBg = entry.hero?.bg ?? null;
+                                    const hcVar = {
+                                      "--hc": entry.hero?.rgb
+                                        ? entry.hero.rgb.join(" ")
+                                        : "245 158 11",
+                                    } as CSSProperties;
+                                    const tipId = `${band.kind}-h-${entry.key}`;
                                     const tile = (
-                                      <div className="group relative flex w-[68px] flex-col items-center gap-1.5 text-center">
-                                        <div className="relative">
-                                          <div
-                                            className={`h-14 w-14 overflow-hidden rounded-[6px] border-2 bg-black/75 transition-transform duration-150 group-hover:scale-105 ${band.ringClass}`}
-                                          >
+                                      <div
+                                        className="group relative"
+                                        style={hcVar}
+                                        onMouseEnter={() => setHoveredTip(tipId)}
+                                        onMouseLeave={() =>
+                                          setHoveredTip((cur) => (cur === tipId ? null : cur))
+                                        }
+                                      >
+                                        <div
+                                          className={`flex flex-col overflow-hidden rounded-[6px] border bg-[#0c0f0e] transition-transform duration-150 group-hover:scale-[1.03] ${band.ringClass}`}
+                                        >
+                                          <div className="hero-card-art relative aspect-[3/4] w-full overflow-hidden">
+                                            {heroBg && (
+                                              <Image
+                                                src={heroBg}
+                                                alt=""
+                                                fill
+                                                sizes="96px"
+                                                draggable={false}
+                                                className="object-cover opacity-90"
+                                              />
+                                            )}
                                             {imgUrl ? (
                                               <img
                                                 src={imgUrl}
                                                 alt={entry.name}
-                                                className="h-full w-full object-cover object-top"
+                                                loading="lazy"
+                                                decoding="async"
+                                                className="relative z-[1] h-full w-full object-cover object-top"
                                               />
                                             ) : (
-                                              <div className="flex h-full w-full items-center justify-center font-deadlock text-xs font-black text-neutral-400">
+                                              <div className="relative z-[1] flex h-full w-full items-center justify-center font-deadlock text-sm font-black text-neutral-400">
                                                 {entry.name.slice(0, 2).toUpperCase()}
                                               </div>
                                             )}
                                           </div>
-                                          {renderCornerBadges(entry.counters, entry.wikiKinds)}
+                                          <div className="hero-card-name flex h-[36px] items-center justify-center border-t border-white/10 bg-[#080b0a] px-1 py-1 text-center">
+                                            <span className="text-[11px] font-semibold leading-[1.15] text-neutral-100 group-hover:text-amber-300 line-clamp-2">
+                                              {entry.name}
+                                            </span>
+                                          </div>
                                         </div>
 
-                                        <span className="text-[11px] font-bold leading-tight text-neutral-200 group-hover:text-amber-300 line-clamp-2">
-                                          {entry.name}
-                                        </span>
-
-                                        {entry.previews.length > 0 && (
-                                          <div className="pointer-events-none invisible absolute left-1/2 bottom-full z-30 mb-2 w-64 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left opacity-0 shadow-[0_12px_28px_rgba(0,0,0,0.85)] transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
+                                        {hoveredTip === tipId && entry.previews.length > 0 && (
+                                          <div className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-2 w-60 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left shadow-xl">
                                             <p className="mb-1 font-deadlock text-[11px] font-black text-amber-300">
                                               {entry.name}
                                             </p>
@@ -1769,80 +1826,65 @@ export default function PatchNotesClient({
                             )}
 
                             {band.itemsCount > 0 && (
-                              <div className="p-4 sm:p-5 space-y-3 bg-[#070908]/45">
-                                <p className="font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-400">
-                                  Itens <span className="text-neutral-200">{band.itemsCount}</span>
-                                </p>
-
-                                <div className="space-y-4">
-                                  {slotOrder
-                                    .filter((slot) => band.itemsBySlot[slot].length > 0)
-                                    .map((slot) => {
-                                      const slotStyle = SLOT_META[slot];
-                                      const list = band.itemsBySlot[slot];
+                              <div className="p-3.5 sm:p-4 bg-[#070908]/45">
+                                <div className="flex flex-wrap gap-2.5">
+                                  {slotOrder.flatMap((slot) => {
+                                    const slotStyle = SLOT_META[slot];
+                                    return band.itemsBySlot[slot].map(({ item: it, previews }) => {
+                                      const itemLabel = lang === "pt" ? it.name : it.nameEn;
+                                      const itemTipId = `${band.kind}-i-${it.className}`;
                                       return (
-                                        <div key={slot} className="space-y-2">
-                                          <div className="flex items-center gap-1.5 text-xs font-bold">
-                                            <span
-                                              className="h-2 w-2 rounded-full"
-                                              style={{ backgroundColor: slotStyle.accent }}
-                                            />
-                                            <span className={slotStyle.colorClass}>
-                                              {slotStyle.label}
-                                            </span>
-                                            <span className="text-neutral-400">{list.length}</span>
+                                        <a
+                                          key={it.className}
+                                          href={`#item-${it.className}`}
+                                          className="group relative w-[84px]"
+                                          onMouseEnter={() => setHoveredTip(itemTipId)}
+                                          onMouseLeave={() =>
+                                            setHoveredTip((cur) =>
+                                              cur === itemTipId ? null : cur,
+                                            )
+                                          }
+                                        >
+                                          <div
+                                            className="flex flex-col overflow-hidden rounded-[6px] border bg-[#0e1211] transition-transform duration-150 group-hover:scale-[1.03]"
+                                            style={{ borderColor: slotStyle.accent }}
+                                          >
+                                            <div className="aspect-[11/12] w-full overflow-hidden bg-black/75">
+                                              {it.image && (
+                                                <img
+                                                  src={it.image}
+                                                  alt={itemLabel}
+                                                  loading="lazy"
+                                                  decoding="async"
+                                                  className="h-full w-full object-cover"
+                                                />
+                                              )}
+                                            </div>
+                                            <div className="flex h-[38px] items-center justify-center border-t border-white/10 bg-[#080b0a] px-1.5 py-1 text-center">
+                                              <span className="text-[10px] font-semibold leading-[1.15] text-neutral-100 group-hover:text-amber-300 line-clamp-2">
+                                                {itemLabel}
+                                              </span>
+                                            </div>
                                           </div>
 
-                                          <div className="flex flex-wrap gap-3.5">
-                                            {list.map(({ item: it, counters, previews }) => {
-                                              const itemLabel = lang === "pt" ? it.name : it.nameEn;
-                                              return (
-                                                <a
-                                                  key={it.className}
-                                                  href={`#item-${it.className}`}
-                                                  className="group relative flex w-[72px] flex-col items-center gap-1.5 text-center"
-                                                >
-                                                  <div className="relative">
-                                                    <div
-                                                      className="h-14 w-14 overflow-hidden rounded-[6px] border-2 bg-black/75 transition-transform duration-150 group-hover:scale-105"
-                                                      style={{ borderColor: slotStyle.accent }}
-                                                    >
-                                                      {it.image && (
-                                                        <img
-                                                          src={it.image}
-                                                          alt={itemLabel}
-                                                          className="h-full w-full object-cover"
-                                                        />
-                                                      )}
-                                                    </div>
-                                                    {renderCornerBadges(counters)}
-                                                  </div>
-
-                                                  <span className="text-[11px] font-bold leading-tight text-neutral-200 group-hover:text-amber-300 line-clamp-2">
-                                                    {itemLabel}
-                                                  </span>
-
-                                                  {previews.length > 0 && (
-                                                    <div className="pointer-events-none invisible absolute left-1/2 bottom-full z-30 mb-2 w-64 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left opacity-0 shadow-[0_12px_28px_rgba(0,0,0,0.85)] transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
-                                                      <p className={`mb-1 font-deadlock text-[11px] font-black ${slotStyle.colorClass}`}>
-                                                        {itemLabel}
-                                                      </p>
-                                                      <ul className="space-y-1 text-[11px] leading-snug text-neutral-300">
-                                                        {previews.map((line, pIdx) => (
-                                                          <li key={pIdx} className="line-clamp-2">
-                                                            {line}
-                                                          </li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  )}
-                                                </a>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
+                                          {hoveredTip === itemTipId && previews.length > 0 && (
+                                            <div className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-2 w-60 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left shadow-xl">
+                                              <p className={`mb-1 font-deadlock text-[11px] font-black ${slotStyle.colorClass}`}>
+                                                {itemLabel}
+                                              </p>
+                                              <ul className="space-y-1 text-[11px] leading-snug text-neutral-300">
+                                                {previews.map((line, pIdx) => (
+                                                  <li key={pIdx} className="line-clamp-2">
+                                                    {line}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                        </a>
                                       );
-                                    })}
+                                    });
+                                  })}
                                 </div>
                               </div>
                             )}
@@ -2004,7 +2046,7 @@ export default function PatchNotesClient({
                           key={`hero-${hero.id}-${idx}`}
                           id={`hero-${hero.id}`}
                           style={cardBorder}
-                          className="scroll-mt-6 relative overflow-hidden rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_14px_34px_rgba(0,0,0,0.5)]"
+                          className="scroll-mt-6 relative overflow-hidden rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_14px_34px_rgba(0,0,0,0.5)] [content-visibility:auto] [contain-intrinsic-size:auto_240px]"
                         >
                           {cardGlow && (
                             <div
@@ -2019,14 +2061,31 @@ export default function PatchNotesClient({
                             <div className="flex items-center gap-3.5">
                               <Link
                                 href={`/heroes/${hero.id}`}
-                                className="h-14 w-14 shrink-0 overflow-hidden rounded-[5px] border bg-black/65 transition-transform hover:scale-[1.03]"
-                                style={{ borderColor: heroColor }}
+                                className="hero-card-art relative h-16 w-12 shrink-0 overflow-hidden rounded-[5px] border transition-transform hover:scale-[1.03]"
+                                style={
+                                  {
+                                    borderColor: heroColor,
+                                    "--hc": rgb ? rgb.join(" ") : "245 158 11",
+                                  } as CSSProperties
+                                }
                               >
+                                {hero.bg && (
+                                  <Image
+                                    src={hero.bg}
+                                    alt=""
+                                    fill
+                                    sizes="96px"
+                                    draggable={false}
+                                    className="object-cover opacity-90"
+                                  />
+                                )}
                                 {(hero.portrait ?? hero.image) && (
                                   <img
                                     src={(hero.portrait ?? hero.image) as string}
                                     alt={hero.name}
-                                    className="h-full w-full object-cover object-top"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="relative z-[1] h-full w-full object-cover object-top"
                                   />
                                 )}
                               </Link>
@@ -2113,12 +2172,14 @@ export default function PatchNotesClient({
                                 <div key={`${ab.nameEn}-${gIdx}`} className="py-3.5 space-y-2.5">
                                   <div className="flex items-center gap-2.5">
                                     {ab.image && (
-                                      <img
-                                        src={ab.image}
-                                        alt={abTitle}
-                                        className="h-9 w-9 shrink-0 rounded-[4px] border border-white/15 bg-black/75 object-contain p-0.5"
-                                      />
-                                    )}
+                                        <img
+                                          src={ab.image}
+                                          alt={abTitle}
+                                          loading="lazy"
+                                          decoding="async"
+                                          className="h-9 w-9 shrink-0 rounded-[4px] border border-white/15 bg-black/75 object-contain p-0.5"
+                                        />
+                                      )}
                                     <div className="min-w-0">
                                       <h4 className="font-deadlock text-sm sm:text-base font-black tracking-wide text-[#f4efe6]">
                                         {abTitle}
@@ -2171,7 +2232,7 @@ export default function PatchNotesClient({
                         <section
                           key={`item-${item.className}-${idx}`}
                           id={`item-${item.className}`}
-                          className="scroll-mt-6 overflow-hidden rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+                          className="scroll-mt-6 overflow-hidden rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_12px_30px_rgba(0,0,0,0.45)] [content-visibility:auto] [contain-intrinsic-size:auto_180px]"
                           style={{ borderLeftWidth: "3px", borderLeftColor: slotStyle.accent }}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3.5">
@@ -2184,6 +2245,8 @@ export default function PatchNotesClient({
                                   <img
                                     src={item.image}
                                     alt={itemTitle}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="h-full w-full object-cover"
                                   />
                                 )}
@@ -2295,7 +2358,7 @@ export default function PatchNotesClient({
                       return (
                         <section
                           key={`topic-${node.topic}-${idx}`}
-                          className="rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_10px_28px_rgba(0,0,0,0.4)]"
+                          className="rounded-[5px] border border-white/12 bg-[#0a0d0c]/95 shadow-[0_10px_28px_rgba(0,0,0,0.4)] [content-visibility:auto] [contain-intrinsic-size:auto_180px]"
                         >
                           <div className="border-b border-white/10 px-5 py-3">
                             <h4 className="font-deadlock text-sm sm:text-base font-black uppercase tracking-wider text-amber-300">
@@ -2349,7 +2412,7 @@ export default function PatchNotesClient({
                     return (
                       <div
                         key={`bp-${idx}`}
-                        className="rounded-[5px] border border-neutral-800/90 bg-[#0a0d0c]/92 px-5 py-4"
+                        className="rounded-[5px] border border-neutral-800/90 bg-[#0a0d0c]/92 px-5 py-4 [content-visibility:auto] [contain-intrinsic-size:auto_220px]"
                       >
                         <ul className="space-y-2.5">
                           {node.entries.map((entry, eIdx) => {
@@ -2385,6 +2448,8 @@ export default function PatchNotesClient({
                     );
                   })}
                 </div>
+              )}
+                </>
               )}
             </article>
           )}

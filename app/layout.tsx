@@ -30,7 +30,7 @@ export default function RootLayout({
 
         {/* WALLPAPER FIXO DE FUNDO */}
         <div
-          className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center bg-no-repeat opacity-15 blur-[2px] scale-105"
+          className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center bg-no-repeat opacity-[0.12]"
           style={{ backgroundImage: "url('/bg.webp')" }}
         />
         <div className="fixed inset-0 pointer-events-none z-0 bg-gradient-to-b from-[#070807]/80 via-[#070807]/60 to-[#070807]/95" />
@@ -49,7 +49,7 @@ export default function RootLayout({
           </main>
 
           {/* BANNER INFERIOR / FOOTER */}
-          <footer className="w-full relative z-20 border-t border-neutral-800/80 bg-neutral-950/90 backdrop-blur-md py-10 px-4 text-neutral-400">
+          <footer className="w-full relative z-20 border-t border-neutral-800/80 bg-neutral-950/[0.97] py-10 px-4 text-neutral-400">
             <div className="max-w-6xl mx-auto space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="space-y-3 md:col-span-2">

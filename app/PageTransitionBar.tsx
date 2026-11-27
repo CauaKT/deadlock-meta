@@ -44,24 +44,22 @@ export default function PageTransitionBar() {
     return () => document.removeEventListener("click", handleClick, { capture: true });
   }, []);
 
+  if (!loading) return null;
+
   return (
     <>
       {/* Barra néon âmbar correndo no topo da tela */}
       <div
         aria-hidden
-        className={`pointer-events-none fixed top-0 inset-x-0 z-50 h-[3px] overflow-hidden bg-amber-500/20 transition-opacity duration-200 ${
-          loading ? "opacity-100" : "opacity-0"
-        }`}
+        className="pointer-events-none fixed top-0 inset-x-0 z-50 h-[3px] overflow-hidden bg-amber-500/20"
       >
-        <div className="lp-bar h-full w-2/5 bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 shadow-[0_0_16px_rgba(245,158,11,1)]" />
+        <div className="lp-bar h-full w-2/5 bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500" />
       </div>
 
-      {/* Véu de dissolução que faz o fade-out visível da página antiga durante o carregamento */}
+      {/* Véu de dissolução durante o carregamento entre rotas */}
       <div
         aria-hidden
-        className={`pointer-events-none fixed inset-0 z-40 bg-[#070807]/60 backdrop-blur-[3px] transition-all duration-200 ease-out ${
-          loading ? "opacity-100" : "opacity-0"
-        }`}
+        className="pointer-events-none fixed inset-0 z-40 bg-[#070807]/65"
       />
     </>
   );

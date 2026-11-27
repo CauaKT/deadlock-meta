@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getServerPatchNoteTranslation } from "@/lib/backend/server";
 import {
   extractColor,
   fetchHeroesAssets,
@@ -97,15 +98,26 @@ export default async function PatchNotesPage({
   for (const h of Object.values(heroesMap)) {
     if (!h?.name || h.name.startsWith("hero_")) continue;
     const media = resolveHeroMedia(h);
+    const safeBg =
+      media.bg &&
+      media.bg.startsWith(
+        "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/backgrounds/",
+      )
+        ? media.bg
+        : null;
     const ref: PatchHeroRef = {
       id: h.id,
       name: h.name,
       image: media.icon ?? (media.card || null),
       portrait: media.card || media.icon || null,
+      bg: safeBg,
       rgb: extractColor(h, wikiColors),
       abilities: abilitiesByHero[h.id] ?? [],
     };
     heroLinks[h.name.toLowerCase()] = ref;
+    if (/^the\s+/i.test(h.name)) {
+      heroLinks[h.name.replace(/^the\s+/i, "").toLowerCase()] = ref;
+    }
   }
 
   const itemLinks: Record<string, PatchItemRef> = {};
@@ -129,6 +141,16 @@ export default async function PatchNotesPage({
     if (matched) wikiByGid[note.id] = matched;
   }
 
+  const initialActiveId =
+    (patchParam && notes.some((n) => n.id === patchParam)
+      ? patchParam
+      : notes[0]?.id) ?? "";
+  const initialTr = initialActiveId
+    ? await getServerPatchNoteTranslation(initialActiveId)
+    : null;
+  const initialTranslations =
+    initialTr && initialTr.available ? { [initialTr.gid]: initialTr } : undefined;
+
   return (
     <PatchNotesClient
       notes={notes}
@@ -136,6 +158,7 @@ export default async function PatchNotesPage({
       itemLinks={itemLinks}
       wikiByGid={wikiByGid}
       initialPatchId={patchParam}
+      initialTranslations={initialTranslations}
     />
   );
 }

@@ -420,7 +420,7 @@ export default function AppSidebar() {
   return (
     <>
       {/* TOPBAR MOBILE (< lg) */}
-      <header className="lg:hidden sticky top-0 z-40 h-14 w-full border-b border-neutral-800/80 bg-[#0a0d0c]/95 backdrop-blur-md px-4 flex items-center justify-between">
+      <header className="lg:hidden sticky top-0 z-40 h-14 w-full border-b border-neutral-800/80 bg-[#0a0d0c]/[0.97] px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -465,7 +465,7 @@ export default function AppSidebar() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
-            className="fixed inset-0 bg-black/75 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/80"
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative z-10 flex h-full w-64 flex-col border-r border-neutral-800/90 bg-[#070807]/98 shadow-2xl">
@@ -494,7 +494,7 @@ export default function AppSidebar() {
 
       {/* SIDEBAR DESKTOP (lg+) */}
       <aside
-        className={`hidden lg:flex flex-col sticky top-0 h-svh shrink-0 z-30 border-r border-neutral-800/80 bg-[#0a0d0c]/95 backdrop-blur-md transition-[width] duration-200 ${
+        className={`hidden lg:flex flex-col sticky top-0 h-svh shrink-0 z-30 border-r border-neutral-800/80 bg-[#0a0d0c]/[0.98] transition-[width] duration-200 ${
           collapsed ? "w-[68px]" : "w-60"
         }`}
       >
