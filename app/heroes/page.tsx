@@ -11,11 +11,11 @@ import {
   fetchHeroesAnalytics,
   fetchHeroesAssets,
   fetchHeroSelectVoiceLines,
-  fetchPatches,
   fetchWikiColors,
   getDefaultRank,
   isPlayableHero,
   minMatchesForRank,
+  resolveActivePatches,
   resolveHeroMedia,
   resolvePatchWindow,
 } from "@/lib/deadlock";
@@ -29,10 +29,13 @@ export const metadata: Metadata = {
 };
 
 export default async function HeroesPage() {
-  const patches = await fetchPatches();
-  const { selectedPatch, patchUntil } = resolvePatchWindow(patches);
   const defaultRank = getDefaultRank();
   const minMatches = minMatchesForRank(defaultRank.tier);
+  const { allPatches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: defaultRank.tier,
+    minAverageBadge: defaultRank.minBadge,
+  });
+  const { selectedPatch, patchUntil } = resolvePatchWindow(allPatches, undefined, firstReadyIndex);
 
   const [heroesMap, blurbs, wikiColors, stats, selectVoices] = await Promise.all([
     fetchHeroesAssets(),

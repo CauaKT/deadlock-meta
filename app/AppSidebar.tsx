@@ -64,7 +64,10 @@ const NAV_SECTIONS: NavItem[][] = [
     {
       href: "/heroes",
       label: "Heróis & Meta",
-      match: (p) => p.startsWith("/heroes") || p.startsWith("/patches"),
+      match: (p) =>
+        p.startsWith("/heroes") ||
+        p.startsWith("/patch-notes") ||
+        p.startsWith("/patches"),
       icon: (
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2 4 6v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V6l-8-4z" />
@@ -75,6 +78,11 @@ const NAV_SECTIONS: NavItem[][] = [
           href: "/heroes",
           label: "Todos os Heróis",
           match: (p) => p.startsWith("/heroes"),
+        },
+        {
+          href: "/patch-notes",
+          label: "Patch Notes",
+          match: (p) => p.startsWith("/patch-notes"),
         },
         {
           href: "/patches",
@@ -258,6 +266,7 @@ export default function AppSidebar() {
       "/tier-maker",
       "/heroes",
       "/items",
+      "/patch-notes",
       "/patches",
       "/builds",
       "/calculator",

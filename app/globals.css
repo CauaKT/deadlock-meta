@@ -661,6 +661,7 @@ html {
   }
 }
 .lp-card-sway {
+  will-change: transform;
   animation: lp-card-sway 2.8s ease-in-out infinite;
 }
 
@@ -673,7 +674,7 @@ html {
   }
 }
 .lp-flame-sway {
-  transform-box: view-box;
+  will-change: transform;
   transform-origin: 48% 85%;
   animation: lp-flame-sway 2.1s ease-in-out infinite;
 }

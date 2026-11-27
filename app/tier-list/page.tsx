@@ -9,15 +9,16 @@ import {
   fetchHeroBlurbs,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchPatches,
   fetchWikiColors,
   isPlayableHero,
   minMatchesForRank,
   RANK_FILTERS,
+  resolveActivePatches,
   resolveHeroMedia,
   resolvePatchWindow,
   resolveRankFilter,
   resolveTierMetric,
+  SAMPLE_THRESHOLDS,
   TIER_METRIC_OPTIONS,
   type HeroBanAnalytics,
   type MergedHero,
@@ -53,14 +54,15 @@ export default async function Home({
 }: {
   searchParams: Promise<{ patch?: string; rank?: string; metric?: string }>;
 }) {
-  const [{ patch: patchParam, rank: rankParam, metric: metricParam }, patches] = await Promise.all([
-    searchParams,
-    fetchPatches(),
-  ]);
-  const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
+  const { patch: patchParam, rank: rankParam, metric: metricParam } = await searchParams;
   const selectedRank = resolveRankFilter(rankParam);
   const selectedMetric = resolveTierMetric(metricParam);
   const minMatches = minMatchesForRank(selectedRank.tier);
+  const { allPatches, patches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: selectedRank.tier,
+    minAverageBadge: selectedRank.minBadge,
+  });
+  const { selectedPatch, patchUntil } = resolvePatchWindow(allPatches, patchParam, firstReadyIndex);
   const [heroesMap, stats, banStats, blurbs, wikiColors] = await Promise.all([
     fetchHeroesAssets(),
     fetchHeroesAnalytics(selectedPatch.since, patchUntil, selectedRank.minBadge),
@@ -71,8 +73,9 @@ export default async function Home({
     fetchWikiColors(),
   ]);
 
+  const defaultPatch = patches[firstReadyIndex] ?? patches[0];
   const heroLinkParams = new URLSearchParams();
-  if (selectedPatch.id !== patches[0]?.id) heroLinkParams.set("patch", selectedPatch.id);
+  if (selectedPatch.id !== defaultPatch?.id) heroLinkParams.set("patch", selectedPatch.id);
   if (selectedRank.id !== DEFAULT_RANK_ID) heroLinkParams.set("rank", selectedRank.id);
   const heroLinkQs = heroLinkParams.toString();
   const heroHrefSuffix = heroLinkQs ? `?${heroLinkQs}` : "";
@@ -83,7 +86,7 @@ export default async function Home({
   const banSampleMatches = banStats[0]?.matches ?? 0;
   const missingBanData = selectedMetric.id === "banrate" && banStats.length === 0;
 
-  const playableRows = missingBanData
+  const allPlayableRows = missingBanData
     ? []
     : stats
         .map((stat) => {
@@ -134,7 +137,14 @@ export default async function Home({
             scoreInput,
           };
         })
-        .filter((h) => isPlayableHero(heroesMap[h.id]) && h.matches >= minMatches);
+        .filter((h) => isPlayableHero(heroesMap[h.id]) && h.matches > 0);
+
+  const qualifiedRows = allPlayableRows.filter((h) => h.matches >= minMatches);
+  const isPreliminarySample =
+    !missingBanData &&
+    allPlayableRows.length > 0 &&
+    qualifiedRows.length < SAMPLE_THRESHOLDS.patchReadyMinQualifiedHeroes;
+  const playableRows = isPreliminarySample ? allPlayableRows : qualifiedRows;
 
   const metaResults =
     selectedMetric.id === "metascore"

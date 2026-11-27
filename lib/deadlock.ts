@@ -160,6 +160,181 @@ export interface WikiHeroTheme {
   panelColor?: string;
 }
 
+export type WikiHeroChangeKind = "buff" | "nerf" | "adj" | "fix" | "new";
+
+export interface WikiPatchClassification {
+  dateIso: string;
+  undocumented: boolean;
+  buffs: string[];
+  nerfs: string[];
+  adjs: string[];
+  fixes: string[];
+  newHeroes: string[];
+}
+
+const WIKI_MONTHS: Record<string, string> = {
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12",
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+};
+
+function parseWikiHeroList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const cleaned = raw
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\{\{\s*HeroIcon\s*\|\s*([^}|]+)[^}]*\}\}/gi, "$1")
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1");
+  return cleaned
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseWikiUpdateDate(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const m = raw.match(/\b([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})\b/);
+  if (!m) return null;
+  const month = WIKI_MONTHS[m[1].toLowerCase()];
+  if (!month) return null;
+  const day = m[2].padStart(2, "0");
+  return `${m[3]}-${month}-${day}`;
+}
+
+function splitWikiTemplateParams(body: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const parts: string[] = [];
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let start = 0;
+
+  for (let i = 0; i < body.length; i += 1) {
+    if (body.startsWith("{{", i)) {
+      braceDepth += 1;
+      i += 1;
+      continue;
+    }
+    if (body.startsWith("}}", i)) {
+      braceDepth = Math.max(0, braceDepth - 1);
+      i += 1;
+      continue;
+    }
+    if (body.startsWith("[[", i)) {
+      bracketDepth += 1;
+      i += 1;
+      continue;
+    }
+    if (body.startsWith("]]", i)) {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      i += 1;
+      continue;
+    }
+    if (braceDepth === 0 && bracketDepth === 0 && body[i] === "|") {
+      parts.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(body.slice(start));
+
+  for (const part of parts) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx <= 0) continue;
+    const key = part.slice(0, eqIdx).trim().toLowerCase();
+    const val = part.slice(eqIdx + 1).trim();
+    if (key) params[key] = val;
+  }
+  return params;
+}
+
+let wikiUpdatesCache: { data: WikiPatchClassification[]; at: number } | null = null;
+const WIKI_UPDATES_TTL = 3_600_000;
+
+export async function fetchWikiPatchUpdates(): Promise<WikiPatchClassification[]> {
+  await connection();
+  if (wikiUpdatesCache && Date.now() - wikiUpdatesCache.at < WIKI_UPDATES_TTL) {
+    return wikiUpdatesCache.data;
+  }
+
+  try {
+    const res = await fetch(
+      "https://deadlock.wiki/api.php?action=parse&page=Updates&prop=wikitext&format=json",
+      { headers: { Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!res.ok) return wikiUpdatesCache?.data ?? [];
+
+    const data = await res.json();
+    const wt: string = data?.parse?.wikitext?.["*"] || "";
+    const rows: WikiPatchClassification[] = [];
+    const opener = /\{\{Update[_ ]row\b/gi;
+    let match = opener.exec(wt);
+
+    while (match !== null) {
+      let depth = 1;
+      let cursor = match.index + 2;
+      while (cursor < wt.length && depth > 0) {
+        if (wt.startsWith("{{", cursor)) {
+          depth += 1;
+          cursor += 2;
+        } else if (wt.startsWith("}}", cursor)) {
+          depth -= 1;
+          cursor += 2;
+        } else {
+          cursor += 1;
+        }
+      }
+
+      const rawTemplate = wt.slice(match.index + match[0].length, Math.max(match.index + match[0].length, cursor - 2));
+      const params = splitWikiTemplateParams(rawTemplate);
+      const dateIso = parseWikiUpdateDate(params.date);
+      if (dateIso) {
+        const buffs = parseWikiHeroList(params.buffs);
+        const nerfs = parseWikiHeroList(params.nerfs);
+        const adjs = parseWikiHeroList(params.adjs);
+        const fixes = parseWikiHeroList(params.fixes);
+        const newHeroes = parseWikiHeroList(params.new);
+        const undocumented = /\{\{\s*Undocumented\s*\}\}/i.test(params.summary ?? "");
+
+        rows.push({
+          dateIso,
+          undocumented,
+          buffs,
+          nerfs,
+          adjs,
+          fixes,
+          newHeroes,
+        });
+      }
+
+      opener.lastIndex = cursor;
+      match = opener.exec(wt);
+    }
+
+    wikiUpdatesCache = { data: rows, at: Date.now() };
+    return rows;
+  } catch {
+    return wikiUpdatesCache?.data ?? [];
+  }
+}
+
 let wikiColorsCache: { data: Record<string, WikiHeroTheme>; at: number } | null = null;
 
 export async function fetchWikiColors(): Promise<Record<string, WikiHeroTheme>> {
@@ -489,6 +664,53 @@ export async function fetchPatches(): Promise<Patch[]> {
   }
 }
 
+export async function resolveActivePatches(options?: {
+  rankTier?: number;
+  minAverageBadge?: number;
+}): Promise<{
+  allPatches: Patch[];
+  patches: Patch[];
+  readyPatches: Patch[];
+  firstReadyIndex: number;
+}> {
+  const allPatches = await fetchPatches();
+  if (allPatches.length <= 1) {
+    return { allPatches, patches: allPatches, readyPatches: allPatches, firstReadyIndex: 0 };
+  }
+
+  const defaultRank = getDefaultRank();
+  const rankTier = options?.rankTier ?? defaultRank.tier;
+  const minBadge = options?.rankTier !== undefined ? options.minAverageBadge : defaultRank.minBadge;
+  const minHeroMatches = minMatchesForRank(rankTier);
+  const minTotalGames =
+    rankTier >= SAMPLE_THRESHOLDS.heroHighRankTier
+      ? SAMPLE_THRESHOLDS.patchReadyHighRankMinGames
+      : SAMPLE_THRESHOLDS.patchReadyMinGames;
+  const maxProbe = Math.min(allPatches.length - 1, SAMPLE_THRESHOLDS.patchReadyMaxProbeCount);
+
+  for (let i = 0; i < maxProbe; i++) {
+    const candidate = allPatches[i];
+    const until = i > 0 ? allPatches[i - 1].since : undefined;
+    const stats = await fetchHeroesAnalytics(candidate.since, until, minBadge);
+    const totalGames = stats.reduce((sum, s) => sum + (s.matches || 0), 0) / 12;
+    const qualifiedHeroes = stats.filter((s) => (s.matches || 0) >= minHeroMatches).length;
+
+    if (
+      totalGames >= minTotalGames &&
+      qualifiedHeroes >= SAMPLE_THRESHOLDS.patchReadyMinQualifiedHeroes
+    ) {
+      return {
+        allPatches,
+        patches: allPatches,
+        readyPatches: allPatches.slice(i),
+        firstReadyIndex: i,
+      };
+    }
+  }
+
+  return { allPatches, patches: allPatches, readyPatches: allPatches, firstReadyIndex: 0 };
+}
+
 export interface OfficialPatchNote {
   title: string;
   pub_date: string;
@@ -503,6 +725,349 @@ export async function fetchOfficialPatchNotes(limit = 4): Promise<OfficialPatchN
     if (!res.ok) return [];
     const data = (await res.json()) as OfficialPatchNote[];
     return Array.isArray(data) ? data.slice(0, limit) : [];
+  } catch {
+    return [];
+  }
+}
+
+export type PatchNoteInline =
+  | { type: "text"; text: string; bold?: boolean; italic?: boolean; underline?: boolean }
+  | { type: "link"; text: string; href: string; bold?: boolean; italic?: boolean };
+
+export type PatchNoteBlock =
+  | { type: "section"; id: string; title: string }
+  | { type: "heading"; text: string }
+  | { type: "divider" }
+  | { type: "image"; src: string; alt: string; href?: string }
+  | { type: "bullet"; runs: PatchNoteInline[]; nested?: boolean }
+  | { type: "paragraph"; runs: PatchNoteInline[] };
+
+export interface SteamPatchNote {
+  id: string;
+  title: string;
+  author: string;
+  publishedAt: string;
+  unixTimestamp: number;
+  url: string;
+  category: "balance" | "feature";
+  heroImage: string | null;
+  blocks: PatchNoteBlock[];
+  plainText: string;
+}
+
+const ALLOWED_IMG_PREFIX = "https://assets-bucket.deadlock-api.com/";
+const STEAM_CLAN_IMAGE_BASE = "https://clan.fastly.steamstatic.com/images";
+const ALLOWED_PATCH_IMG_PREFIXES = [
+  "https://clan.fastly.steamstatic.com/images/",
+  "https://clan.akamai.steamstatic.com/images/",
+  "https://shared.fastly.steamstatic.com/",
+  ALLOWED_IMG_PREFIX,
+];
+
+function sanitizeExternalHref(raw: string): string | null {
+  let cleaned = raw.trim().replace(/^["']|["']$/g, "");
+  if (cleaned.startsWith("https://steamcommunity.com/linkfilter/")) {
+    try {
+      const target = new URL(cleaned).searchParams.get("u");
+      if (target) cleaned = target;
+    } catch {
+      return null;
+    }
+  }
+  return /^https?:\/\/[^\s<>"']+$/i.test(cleaned) ? cleaned : null;
+}
+
+function sanitizePatchImageUrl(raw: string): string | null {
+  const expanded = raw
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\{STEAM_CLAN_LOC_IMAGE\}|\{STEAM_CLAN_IMAGE\}/g, STEAM_CLAN_IMAGE_BASE);
+  if (/["<>\s]/.test(expanded)) return null;
+  return ALLOWED_PATCH_IMG_PREFIXES.some((prefix) => expanded.startsWith(prefix))
+    ? expanded
+    : null;
+}
+
+function decodePatchEntities(text: string): string {
+  return text
+    .replace(/\u00a0/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/\\\[/g, "[")
+    .replace(/\\\]/g, "]");
+}
+
+function stripInlineTags(raw: string): string {
+  return decodePatchEntities(raw.replace(/\[\/?[a-z0-9*]+(?:=[^\]]*|\s+[^\]]*)?\]/gi, "")).trim();
+}
+
+function parseInlineBbcode(raw: string): PatchNoteInline[] {
+  const runs: PatchNoteInline[] = [];
+  let bold = false;
+  let italic = false;
+  let underline = false;
+  let href: string | null = null;
+
+  const pushText = (chunk: string) => {
+    const text = decodePatchEntities(chunk);
+    if (!text) return;
+    if (href) {
+      const prev = runs[runs.length - 1];
+      if (prev && prev.type === "link" && prev.href === href && !!prev.bold === bold && !!prev.italic === italic) {
+        prev.text += text;
+      } else {
+        runs.push({ type: "link", text, href, ...(bold ? { bold: true } : {}), ...(italic ? { italic: true } : {}) });
+      }
+      return;
+    }
+    const prev = runs[runs.length - 1];
+    if (
+      prev &&
+      prev.type === "text" &&
+      !!prev.bold === bold &&
+      !!prev.italic === italic &&
+      !!prev.underline === underline
+    ) {
+      prev.text += text;
+    } else {
+      runs.push({
+        type: "text",
+        text,
+        ...(bold ? { bold: true } : {}),
+        ...(italic ? { italic: true } : {}),
+        ...(underline ? { underline: true } : {}),
+      });
+    }
+  };
+
+  const parts = raw.split(/(\[\/?(?:b|i|u|url)(?:=[^\]]*)?\])/gi);
+  for (const part of parts) {
+    if (!part) continue;
+    const tag = part.match(/^\[(\/?)(b|i|u|url)(?:=([^\]]*))?\]$/i);
+    if (!tag) {
+      pushText(part);
+      continue;
+    }
+    const closing = tag[1] === "/";
+    const name = tag[2].toLowerCase();
+    if (name === "b") bold = !closing;
+    else if (name === "i") italic = !closing;
+    else if (name === "u") underline = !closing;
+    else if (name === "url") href = closing ? null : sanitizeExternalHref(tag[3] ?? "");
+  }
+
+  return runs;
+}
+
+function slugifySection(title: string): string {
+  const base = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "secao";
+}
+
+function parseSteamBbcodeBlocks(rawContent: string): {
+  blocks: PatchNoteBlock[];
+  heroImage: string | null;
+  plainText: string;
+} {
+  let normalized = rawContent
+    .replace(/\r\n/g, "\n")
+    .replace(/\\\[/g, "[")
+    .replace(/\\\]/g, "]");
+
+  // Converte imagens (com ou sem [url]) em marcadores de linha isolados antes de quebrar parágrafos
+  normalized = normalized.replace(
+    /\[url=([^\]]+)\]\s*\[img(?:\s+src="([^"]*)")?\]([\s\S]*?)\[\/img\]\s*\[\/url\]/gi,
+    (_m, urlRaw, srcAttr, inner) => {
+      const src = sanitizePatchImageUrl(srcAttr || inner);
+      const href = sanitizeExternalHref(urlRaw);
+      return src ? `\n@@IMG@@${src}@@HREF@@${href ?? ""}@@\n` : "\n";
+    },
+  );
+
+  normalized = normalized.replace(
+    /\[img(?:\s+src="([^"]*)")?\]([\s\S]*?)\[\/img\]/gi,
+    (_m, srcAttr, inner) => {
+      const src = sanitizePatchImageUrl(srcAttr || inner);
+      return src ? `\n@@IMG@@${src}@@HREF@@@@\n` : "\n";
+    },
+  );
+
+  normalized = normalized
+    .replace(/\[h3\]([\s\S]*?)\[\/h3\]/gi, (_m, inner) => `\n@@H3@@${stripInlineTags(inner)}\n`)
+    .replace(/\[list\]/gi, "\n")
+    .replace(/\[\/list\]/gi, "\n")
+    .replace(/\[\*\]/gi, "\n@@LI@@")
+    .replace(/\[\/?p\]/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+
+  const blocks: PatchNoteBlock[] = [];
+  const sectionCounts = new Map<string, number>();
+  let heroImage: string | null = null;
+  const plainParts: string[] = [];
+
+  for (const rawLine of normalized.split("\n")) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+
+    const imgMatch = trimmed.match(/^@@IMG@@([^@]+)@@HREF@@(.*)@@$/);
+    if (imgMatch) {
+      const src = imgMatch[1];
+      const href = imgMatch[2] || undefined;
+      if (!heroImage) heroImage = src;
+      blocks.push({ type: "image", src, alt: "", ...(href ? { href } : {}) });
+      continue;
+    }
+
+    if (trimmed.startsWith("@@H3@@")) {
+      const text = trimmed.slice(6).trim();
+      if (text) {
+        blocks.push({ type: "heading", text });
+        plainParts.push(text);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("@@LI@@")) {
+      const body = trimmed.slice(6).trim();
+      const runs = parseInlineBbcode(body);
+      if (runs.length > 0) {
+        blocks.push({ type: "bullet", runs });
+        plainParts.push(runs.map((r) => r.text).join(""));
+      }
+      continue;
+    }
+
+    const plainLine = stripInlineTags(trimmed);
+    if (!plainLine) continue;
+
+    if (/^-{5,}$/.test(plainLine)) {
+      blocks.push({ type: "divider" });
+      continue;
+    }
+
+    const secMatch = plainLine.match(/^\[([^\]]{2,60})\]$/);
+    const boldSecMatch = !secMatch
+      ? trimmed.match(
+          /^\[b\]\s*(General|Items|Heroes|Bug\s*Fixes|Gameplay|Map|Misc|Miscellaneous|UI|Audio|Visuals)\s*:?\s*\[\/b\]$/i,
+        )
+      : null;
+    if (secMatch || boldSecMatch) {
+      const title = decodePatchEntities((secMatch?.[1] ?? boldSecMatch?.[1] ?? "").trim());
+      const baseId = slugifySection(title);
+      const count = (sectionCounts.get(baseId) ?? 0) + 1;
+      sectionCounts.set(baseId, count);
+      const id = count === 1 ? baseId : `${baseId}-${count}`;
+      blocks.push({ type: "section", id, title });
+      plainParts.push(title);
+      continue;
+    }
+
+    if (/^--\s+/.test(trimmed) || /^--\s+/.test(plainLine)) {
+      const withoutDash = trimmed.replace(/^(\[(?:b|i|u)\])*\s*--\s+/i, "$1");
+      const runs = parseInlineBbcode(withoutDash);
+      if (runs.length > 0) {
+        blocks.push({ type: "bullet", runs, nested: true });
+        plainParts.push(runs.map((r) => r.text).join(""));
+      }
+      continue;
+    }
+
+    if (/^[-•]\s+/.test(trimmed) || /^[-•]\s+/.test(plainLine)) {
+      const withoutDash = trimmed.replace(/^(\[(?:b|i|u)\])*\s*[-•]\s+/i, "$1");
+      const runs = parseInlineBbcode(withoutDash);
+      if (runs.length > 0) {
+        blocks.push({ type: "bullet", runs });
+        plainParts.push(runs.map((r) => r.text).join(""));
+      }
+      continue;
+    }
+
+    const runs = parseInlineBbcode(trimmed);
+    if (runs.length > 0) {
+      blocks.push({ type: "paragraph", runs });
+      plainParts.push(runs.map((r) => r.text).join(""));
+    }
+  }
+
+  return {
+    blocks,
+    heroImage,
+    plainText: plainParts.join("\n"),
+  };
+}
+
+export async function fetchSteamPatchNotes(): Promise<SteamPatchNote[]> {
+  try {
+    const [steamRes, officialNotes] = await Promise.all([
+      fetch(DEADLOCK_DATA_CONFIG.steamNewsUrl, {
+        next: { revalidate: DEADLOCK_DATA_CONFIG.revalidate.patchesSeconds },
+      }),
+      fetchOfficialPatchNotes(30),
+    ]);
+    if (!steamRes.ok) return [];
+
+    const json = (await steamRes.json()) as {
+      appnews?: {
+        newsitems?: Array<{
+          gid?: string;
+          title?: string;
+          url?: string;
+          author?: string;
+          contents?: string;
+          date?: number;
+        }>;
+      };
+    };
+
+    const officialByTitle = new Map<string, string>();
+    for (const o of officialNotes) {
+      const key = o.title?.trim().toLowerCase();
+      if (key && o.link) officialByTitle.set(key, o.link);
+    }
+
+    const items = json?.appnews?.newsitems ?? [];
+    return items
+      .filter((item) => item.gid && item.title && item.contents)
+      .map((item) => {
+        const title = item.title!.trim();
+        const unixTimestamp = Number(item.date ?? 0);
+        const publishedAt =
+          unixTimestamp > 0
+            ? new Date(unixTimestamp * 1000).toISOString()
+            : new Date().toISOString();
+        const parsed = parseSteamBbcodeBlocks(item.contents!);
+        const hasSectionOrBullets = parsed.blocks.some(
+          (b) => b.type === "section" || b.type === "bullet",
+        );
+        const category: SteamPatchNote["category"] =
+          PATCH_TITLE_REGEX.test(title) || hasSectionOrBullets ? "balance" : "feature";
+        const url =
+          officialByTitle.get(title.toLowerCase()) ??
+          sanitizeExternalHref(item.url ?? "") ??
+          `https://store.steampowered.com/news/app/1422450`;
+
+        return {
+          id: String(item.gid),
+          title,
+          author: item.author?.trim() || "Valve",
+          publishedAt,
+          unixTimestamp,
+          url,
+          category,
+          heroImage: parsed.heroImage,
+          blocks: parsed.blocks,
+          plainText: parsed.plainText,
+        };
+      });
   } catch {
     return [];
   }
@@ -674,7 +1239,6 @@ function stripHtml(text: unknown): string {
     .trim();
 }
 
-const ALLOWED_IMG_PREFIX = "https://assets-bucket.deadlock-api.com/";
 const SVG_FILL = /^(#[0-9a-fA-F]{3,8}|white|none|currentColor)$/i;
 
 function sanitizeHtml(html: unknown): string {
@@ -1283,6 +1847,96 @@ export async function fetchShopItemByClassName(className: string): Promise<ShopI
   return items.find((item) => item.className === className) ?? null;
 }
 
+export interface PatchHeroAbilityRef {
+  nameEn: string;
+  namePt: string;
+  image: string;
+  slotType: string;
+}
+
+let patchHeroAbilitiesCache: { data: Record<number, PatchHeroAbilityRef[]>; at: number } | null = null;
+
+// Resposta grande (>3 MB): fica fora do cache de fetch do Next, com cache próprio de 24h
+export async function fetchPatchHeroAbilities(): Promise<Record<number, PatchHeroAbilityRef[]>> {
+  await connection();
+  if (patchHeroAbilitiesCache && Date.now() - patchHeroAbilitiesCache.at < ASSETS_TTL) {
+    return patchHeroAbilitiesCache.data;
+  }
+
+  try {
+    const [resEn, resPt] = await Promise.all([
+      fetch("https://api.deadlock-api.com/v1/assets/items/by-type/ability", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }),
+      fetch("https://api.deadlock-api.com/v1/assets/items/by-type/ability?language=brazilian", {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }).catch(() => null),
+    ]);
+
+    if (!resEn.ok) return patchHeroAbilitiesCache?.data ?? {};
+    const rawEn: any[] = await resEn.json();
+    const rawPt: any[] = resPt?.ok ? await resPt.json() : [];
+
+    const ptNameById = new Map<number, string>();
+    for (const item of rawPt) {
+      if (typeof item?.id === "number" && typeof item?.name === "string") {
+        ptNameById.set(item.id, item.name.trim());
+      }
+    }
+
+    const byHero: Record<number, PatchHeroAbilityRef[]> = {};
+    const seen = new Set<string>();
+
+    for (const item of rawEn) {
+      const slotType = typeof item?.ability_type === "string" ? item.ability_type : "";
+      if (slotType === "weapon") continue;
+
+      const nameEn = typeof item?.name === "string" ? item.name.trim() : "";
+      const className = typeof item?.class_name === "string" ? item.class_name.trim() : "";
+      if (!nameEn || nameEn === className || nameEn.includes("_")) continue;
+
+      const rawImg =
+        typeof item?.image_webp === "string"
+          ? item.image_webp
+          : typeof item?.image === "string"
+            ? item.image
+            : "";
+      if (!rawImg || !rawImg.startsWith(ALLOWED_IMG_PREFIX)) continue;
+
+      const heroIds = new Set<number>();
+      if (typeof item?.hero === "number") heroIds.add(item.hero);
+      if (Array.isArray(item?.heroes)) {
+        for (const hid of item.heroes) {
+          if (typeof hid === "number") heroIds.add(hid);
+        }
+      }
+      if (heroIds.size === 0) continue;
+
+      const namePt = (typeof item?.id === "number" ? ptNameById.get(item.id) : undefined) || nameEn;
+
+      for (const hid of heroIds) {
+        const dedupeKey = `${hid}:${nameEn.toLowerCase()}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        (byHero[hid] ??= []).push({
+          nameEn,
+          namePt,
+          image: rawImg,
+          slotType,
+        });
+      }
+    }
+
+    patchHeroAbilitiesCache = { data: byHero, at: Date.now() };
+    return byHero;
+  } catch (err) {
+    console.error("❌ Falha ao buscar habilidades para patch notes:", err);
+    return patchHeroAbilitiesCache?.data ?? {};
+  }
+}
+
 export interface PatchWinRatePoint {
   patchId: string;
   label: string;
@@ -1295,11 +1949,15 @@ export interface PatchWinRatePoint {
 // Coleta o desempenho do herói ao longo dos patches cronológicos (controlado por PATCH_HISTORY_LIMIT)
 export async function fetchHeroPatchHistory(
   heroId: number,
-  options?: { count?: number | null; minAverageBadge?: number },
+  options?: { count?: number | null; minAverageBadge?: number; rankTier?: number },
 ): Promise<PatchWinRatePoint[]> {
-  const allPatches = await fetchPatches();
+  const { allPatches, readyPatches } = await resolveActivePatches({
+    rankTier: options?.rankTier,
+    minAverageBadge: options?.minAverageBadge,
+  });
   const limit = options?.count !== undefined ? options.count : PATCH_HISTORY_LIMIT;
-  const dated = allPatches.filter((p) => typeof p.since === "number");
+  const allDated = allPatches.filter((p) => typeof p.since === "number");
+  const dated = readyPatches.filter((p) => typeof p.since === "number");
   const patchesWithSince = typeof limit === "number" ? dated.slice(0, limit) : dated;
   if (patchesWithSince.length === 0) return [];
 
@@ -1309,9 +1967,9 @@ export async function fetchHeroPatchHistory(
   for (let start = 0; start < patchesWithSince.length; start += batchSize) {
     const batch = patchesWithSince.slice(start, start + batchSize);
     const batchResults = await Promise.all(
-      batch.map(async (patch, offset) => {
-        const idx = start + offset;
-        const until = idx > 0 ? patchesWithSince[idx - 1].since : undefined;
+      batch.map(async (patch) => {
+        const idxInAll = allDated.findIndex((p) => p.id === patch.id);
+        const until = idxInAll > 0 ? allDated[idxInAll - 1].since : undefined;
         const stats = await fetchHeroesAnalytics(patch.since, until, options?.minAverageBadge);
         const stat = stats.find((s) => s.hero_id === heroId);
         const { matches, winRate } = computeHeroMatchStats(stat);

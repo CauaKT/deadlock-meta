@@ -15,9 +15,9 @@ import {
   fetchHeroWeapon,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchPatches,
   fetchWikiColors,
   RANK_FILTERS,
+  resolveActivePatches,
   resolveHeroMedia,
   resolvePatchWindow,
   resolveRankFilter,
@@ -138,9 +138,12 @@ export default async function HeroPage({
   const { patch: patchParam, rank: rankParam } = await searchParams;
   const heroId = parseInt(id);
 
-  const patches = await fetchPatches();
-  const { selectedPatch, patchUntil } = resolvePatchWindow(patches, patchParam);
   const selectedRank = resolveRankFilter(rankParam);
+  const { allPatches, patches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: selectedRank.tier,
+    minAverageBadge: selectedRank.minBadge,
+  });
+  const { selectedPatch, patchUntil } = resolvePatchWindow(allPatches, patchParam, firstReadyIndex);
 
   const [heroDetails, heroesMap, stats, wikiColors, synergyStats, counterStats] = await Promise.all([
     fetchHeroDetails(heroId),
@@ -196,11 +199,15 @@ export default async function HeroPage({
     fetchHeroAbilitiesFull(heroId, hero.items),
     fetchHeroWeapon(hero.items?.weapon_primary),
     fetchHeroBuild(heroesMap[heroId]?.popular_items),
-    fetchHeroPatchHistory(heroId, { minAverageBadge: selectedRank.minBadge }),
+    fetchHeroPatchHistory(heroId, {
+      rankTier: selectedRank.tier,
+      minAverageBadge: selectedRank.minBadge,
+    }),
   ]);
 
+  const defaultPatch = patches[firstReadyIndex] ?? patches[0];
   const backParams = new URLSearchParams();
-  if (selectedPatch.id !== patches[0]?.id) backParams.set("patch", selectedPatch.id);
+  if (selectedPatch.id !== defaultPatch?.id) backParams.set("patch", selectedPatch.id);
   if (selectedRank.id !== DEFAULT_RANK_ID) backParams.set("rank", selectedRank.id);
   const backQs = backParams.toString();
 

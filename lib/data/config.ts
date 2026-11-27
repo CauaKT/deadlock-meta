@@ -136,6 +136,10 @@ export const SAMPLE_THRESHOLDS = {
   heroHighRankMinMatches: 100,
   heroMidRankTier: 1,
   heroMidRankMinMatches: 300,
+  patchReadyMinGames: 3000,
+  patchReadyHighRankMinGames: 500,
+  patchReadyMinQualifiedHeroes: 15,
+  patchReadyMaxProbeCount: 4,
   patchTrackerHero: 300,
   patchTrackerItem: 500,
   patchHistoryHero: 1,
@@ -340,8 +344,12 @@ export function resolveRankFilter(rankId?: string): RankFilterOption {
 export function resolvePatchWindow(
   patches: Patch[],
   patchId?: string,
+  firstReadyIndex = 0,
 ): { selectedPatch: Patch; patchUntil: number | undefined } {
-  const selectedPatch = patches.find((p) => p.id === patchId) ?? patches[0];
+  const selectedPatch =
+    (patchId ? patches.find((p) => p.id === patchId) : undefined) ??
+    patches[firstReadyIndex] ??
+    patches[0];
   const selectedIndex = patches.findIndex((p) => p.id === selectedPatch.id);
   const patchUntil =
     selectedPatch.since && selectedIndex > 0 ? patches[selectedIndex - 1].since : undefined;

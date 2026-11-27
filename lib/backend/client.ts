@@ -10,6 +10,7 @@ import type {
   FeedResponse,
   FriendsOverview,
   OnboardingProfile,
+  PatchNoteTranslationResponse,
   ProfileSummary,
   SavedAccount,
   SaveTierListInput,
@@ -1334,4 +1335,21 @@ export async function deleteBuild(
     return { ok: false, message: extractError(data, "Erro ao remover build.") };
   }
   return { ok: true };
+}
+
+export async function getPatchNoteTranslation(
+  gid: string,
+): Promise<PatchNoteTranslationResponse | null> {
+  try {
+    const res = await fetch(
+      apiUrl(`/external-data/patch-notes/${encodeURIComponent(gid)}/pt-br`),
+      { credentials: "include" },
+    );
+    if (!res.ok) return null;
+    const data = await parseJsonSafe(res);
+    if (!data || typeof data.gid !== "string") return null;
+    return data as unknown as PatchNoteTranslationResponse;
+  } catch {
+    return null;
+  }
 }

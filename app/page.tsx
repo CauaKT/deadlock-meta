@@ -4,12 +4,12 @@ import {
   computeHeroMatchStats,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchPatches,
   fetchShopItems,
   getDefaultRank,
   getPlayableHeroes,
   isPlayableHero,
   minMatchesForRank,
+  resolveActivePatches,
   resolvePatchWindow,
   SAMPLE_THRESHOLDS,
 } from "@/lib/deadlock";
@@ -29,13 +29,16 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  const patches = await fetchPatches();
-  const datedPatches = patches.filter((p) => typeof p.since === "number");
-  const currentPatch = datedPatches[0];
-  const prevPatch = datedPatches[1];
-  const { patchUntil } = resolvePatchWindow(patches, currentPatch?.id);
   const defaultRank = getDefaultRank();
   const minMetaMatches = minMatchesForRank(defaultRank.tier);
+  const { allPatches, readyPatches } = await resolveActivePatches({
+    rankTier: defaultRank.tier,
+    minAverageBadge: defaultRank.minBadge,
+  });
+  const datedPatches = readyPatches.filter((p) => typeof p.since === "number");
+  const currentPatch = datedPatches[0];
+  const prevPatch = datedPatches[1];
+  const { patchUntil } = resolvePatchWindow(allPatches, currentPatch?.id);
 
   const [heroesMap, shopItems, statsNow, statsPrev] = await Promise.all([
     fetchHeroesAssets(),

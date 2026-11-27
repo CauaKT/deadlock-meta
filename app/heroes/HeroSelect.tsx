@@ -7,12 +7,15 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
 } from "react";
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import type { TierKey } from "@/app/tiers";
 import HeroGrainFilter from "@/components/ui/HeroGrainFilter";
 import {
@@ -200,7 +203,7 @@ function CardSoulFlame() {
       <svg
         viewBox="0 0 200 300"
         preserveAspectRatio="none"
-        className="absolute inset-0 h-full w-full overflow-visible"
+        className="lp-flame-sway absolute inset-0 h-full w-full overflow-visible"
       >
         <defs>
           <linearGradient id={fillId} x1="0.35" y1="1" x2="0.72" y2="0">
@@ -212,16 +215,16 @@ function CardSoulFlame() {
 
           <filter
             id={fxId}
-            x="-55%"
-            y="-45%"
-            width="210%"
-            height="190%"
+            x="-20%"
+            y="-16%"
+            width="140%"
+            height="132%"
             colorInterpolationFilters="sRGB"
           >
             <feTurbulence
               type="fractalNoise"
               baseFrequency="0.023 0.015"
-              numOctaves="2"
+              numOctaves="1"
               seed="11"
               result="warpRaw"
             />
@@ -246,28 +249,19 @@ function CardSoulFlame() {
             <feDisplacementMap
               in="SourceGraphic"
               in2="warp"
-              scale="28"
+              scale="26"
               xChannelSelector="R"
               yChannelSelector="G"
               result="displaced"
-            >
-              {!reducedMotion && (
-                <animate
-                  attributeName="scale"
-                  values="24;34;21;31;24"
-                  dur="3.3s"
-                  repeatCount="indefinite"
-                />
-              )}
-            </feDisplacementMap>
-            <feGaussianBlur in="displaced" stdDeviation="16" result="outerBlur" />
+            />
+            <feGaussianBlur in="displaced" stdDeviation="7" result="outerBlur" />
             <feColorMatrix
               in="outerBlur"
               type="matrix"
               values="0 0 0 0 0.06  0 0 0 0 0.94  0 0 0 0 0.62  0 0 0 1.05 0"
               result="smokeGlow"
             />
-            <feGaussianBlur in="displaced" stdDeviation="5.5" result="innerBlur" />
+            <feGaussianBlur in="displaced" stdDeviation="3" result="innerBlur" />
             <feColorMatrix
               in="innerBlur"
               type="matrix"
@@ -433,7 +427,7 @@ function CardSoulFlame() {
         </defs>
 
         <g filter={`url(#${fxId})`}>
-          <g className="lp-flame-sway" mask={`url(#${maskId})`}>
+          <g mask={`url(#${maskId})`}>
             <rect x="-40" y="-30" width="280" height="350" fill={`url(#${fillId})`} />
           </g>
         </g>
@@ -503,6 +497,8 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
   const sectionRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const flameWrapRef = useRef<HTMLDivElement>(null);
   const heroImgRef = useRef<HTMLImageElement>(null);
   const parallaxRef = useRef<HTMLDivElement>(null);
   const parallaxTargetRef = useRef(0);
@@ -823,13 +819,41 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
   }, [visible, normalizedQuery]);
 
   const active = visible.find((h) => h.id === activeId) ?? visible[0];
+  const flameHeroId = active ? (hoveredId ?? active.id) : null;
+  const isFlameVisible =
+    flameHeroId !== null && (matchedIds === null || matchedIds.has(flameHeroId));
+
+  // Mantém um único SVG de foguinho montado na grade para não recompilar o filtro a cada hover
+  useIsomorphicLayoutEffect(() => {
+    const wrap = flameWrapRef.current;
+    const grid = gridRef.current;
+    if (!wrap || !grid) return;
+
+    const syncPosition = () => {
+      const card = flameHeroId !== null ? cardRefs.current.get(flameHeroId) : undefined;
+      if (!card || !isFlameVisible) {
+        wrap.style.opacity = "0";
+        return;
+      }
+      wrap.style.transform = `translate3d(${card.offsetLeft}px, ${card.offsetTop}px, 0)`;
+      wrap.style.width = `${card.offsetWidth}px`;
+      wrap.style.height = `${card.offsetHeight}px`;
+      wrap.style.opacity = "1";
+    };
+
+    syncPosition();
+
+    const ro = new ResizeObserver(syncPosition);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [flameHeroId, isFlameVisible, visible]);
+
   if (!active) return null;
 
   const color = `rgb(${active.rgb.join(", ")})`;
   const circleBg = color;
   const iconColor = "#070908";
   const nameFail = nameFails[active.id] ?? 0;
-  const flameHeroId = hoveredId ?? active.id;
   const showCardWinRate = sort === "winrate-desc" || sort === "winrate-asc";
   const showCardMatches = sort === "matches";
   const hasActiveFilters = showUnreleased || sort !== "name" || heroTypeFilter !== "all";
@@ -1249,8 +1273,16 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
           <div
             ref={gridRef}
             onMouseLeave={() => setHoveredId(null)}
-            className="grid grid-cols-5 gap-1.5 px-5 pt-16 pb-5 sm:grid-cols-7 sm:gap-2 md:grid-cols-9 lg:grid-cols-11 wide:grid-cols-8 lg:gap-2 lg:px-6 lg:pt-20 lg:pb-6 min-[2100px]:grid-cols-9 min-[2100px]:gap-2.5 min-[2100px]:pt-22"
+            className="relative grid grid-cols-5 gap-1.5 px-5 pt-16 pb-5 sm:grid-cols-7 sm:gap-2 md:grid-cols-9 lg:grid-cols-11 wide:grid-cols-8 lg:gap-2 lg:px-6 lg:pt-20 lg:pb-6 min-[2100px]:grid-cols-9 min-[2100px]:gap-2.5 min-[2100px]:pt-22"
           >
+            <div
+              ref={flameWrapRef}
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 z-[25] overflow-visible will-change-transform"
+              style={{ opacity: 0 }}
+            >
+              <CardSoulFlame />
+            </div>
             {visible.map((hero) => {
               const isActive = hero.id === active.id;
               const isHovered = hero.id === hoveredId;
@@ -1262,15 +1294,18 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
               return (
                 <div
                   key={hero.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(hero.id, el);
+                    else cardRefs.current.delete(hero.id);
+                  }}
                   className={`relative aspect-[2/3] transition-opacity duration-150 ${
-                    isHovered ? "z-30" : isActive ? "z-20" : "z-0"
+                    showFlame && !isSearchDimmed ? "z-30" : isActive ? "z-20" : "z-0"
                   } ${isSearchDimmed ? "opacity-20 saturate-0 brightness-50" : "opacity-100"}`}
                 >
                   <span
                     aria-hidden
                     className="pointer-events-none absolute -inset-4 -z-10 bg-[radial-gradient(closest-side,rgba(7,8,7,0.75)_0%,rgba(7,8,7,0.45)_65%,transparent_100%)]"
                   />
-                  {showFlame && !isSearchDimmed && <CardSoulFlame />}
                   <div
                     className={`absolute inset-0 ${showFlame && !isSearchDimmed ? "lp-card-sway z-20" : "z-0"}`}
                     style={
@@ -1293,7 +1328,7 @@ export default function HeroSelect({ heroes }: { heroes: SelectHero[] }) {
                       }}
                       aria-label={hero.name}
                       aria-pressed={isActive}
-                      className={`relative block h-full w-full cursor-pointer overflow-hidden bg-[#0c0f0e] outline-none transition-all duration-150 focus-visible:ring-2 focus-visible:ring-white/70 ${
+                      className={`relative block h-full w-full cursor-pointer overflow-hidden bg-[#0c0f0e] outline-none transition-[filter,opacity,border-color] duration-150 focus-visible:ring-2 focus-visible:ring-white/70 ${
                         showFlame && !isSearchDimmed
                           ? "z-20"
                           : isActive

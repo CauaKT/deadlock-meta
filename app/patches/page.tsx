@@ -7,11 +7,12 @@ import {
   fetchHeroesAssets,
   fetchItemsAnalytics,
   fetchOfficialPatchNotes,
-  fetchPatches,
   fetchShopItems,
   fetchWikiColors,
   isPlayableHero,
   RANK_FILTERS,
+  resolveActivePatches,
+  resolvePatchWindow,
   resolveRankFilter,
   SAMPLE_THRESHOLDS,
 } from "@/lib/deadlock";
@@ -32,21 +33,23 @@ export default async function PatchesPage({
 }: {
   searchParams: Promise<{ patch?: string; rank?: string }>;
 }) {
-  const [{ patch: patchParam, rank: rankParam }, patches] = await Promise.all([
-    searchParams,
-    fetchPatches(),
-  ]);
+  const { patch: patchParam, rank: rankParam } = await searchParams;
   const selectedRank = resolveRankFilter(rankParam);
+  const { allPatches, patches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: selectedRank.tier,
+    minAverageBadge: selectedRank.minBadge,
+  });
   const datedPatches = patches.filter((p) => typeof p.since === "number");
   const selectablePatches = datedPatches.slice(0, -1); // precisa de um patch anterior para comparar
+  const targetPatchId = patchParam ?? patches[firstReadyIndex]?.id;
 
   const selectedIdx = Math.max(
     0,
-    selectablePatches.findIndex((p) => p.id === patchParam),
+    selectablePatches.findIndex((p) => p.id === targetPatchId),
   );
   const currentPatch = selectablePatches[selectedIdx];
   const prevPatch = datedPatches[selectedIdx + 1];
-  const currentUntil = selectedIdx > 0 ? datedPatches[selectedIdx - 1].since : undefined;
+  const { patchUntil: currentUntil } = resolvePatchWindow(allPatches, currentPatch.id);
 
   const [
     heroesMap,

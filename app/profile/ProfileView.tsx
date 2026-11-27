@@ -16,10 +16,10 @@ import {
   fetchHeroBlurbs,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchPatches,
   fetchWikiColors,
   getDefaultRank,
   isPlayableHero,
+  resolveActivePatches,
   resolveHeroMedia,
   resolvePatchWindow,
 } from "@/lib/deadlock";
@@ -46,9 +46,12 @@ export default async function ProfileView({ handle }: { handle?: string }) {
   // Sem @handle confirmado o onboarding em /welcome é obrigatório (mesma regra do NavUserButton, agora também no servidor)
   if (!user.profile?.handle || !user.profile?.handle_confirmed) redirect("/welcome");
 
-  const patches = await fetchPatches();
-  const { selectedPatch, patchUntil } = resolvePatchWindow(patches);
   const defaultRank = getDefaultRank();
+  const { allPatches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: defaultRank.tier,
+    minAverageBadge: defaultRank.minBadge,
+  });
+  const { selectedPatch, patchUntil } = resolvePatchWindow(allPatches, undefined, firstReadyIndex);
 
   const [profile, heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     getOwnFullProfile(user.id),

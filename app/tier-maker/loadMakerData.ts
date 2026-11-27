@@ -5,11 +5,11 @@ import {
   fetchHeroBlurbs,
   fetchHeroesAnalytics,
   fetchHeroesAssets,
-  fetchPatches,
   fetchWikiColors,
   getDefaultRank,
   isPlayableHero,
   minMatchesForRank,
+  resolveActivePatches,
   resolveHeroMedia,
   resolvePatchWindow,
 } from "@/lib/deadlock";
@@ -19,10 +19,13 @@ export async function loadMakerData(): Promise<{
   makerHeroes: MakerHero[];
   metaTiers: Record<string, number[]>;
 }> {
-  const patches = await fetchPatches();
-  const { selectedPatch, patchUntil } = resolvePatchWindow(patches);
   const defaultRank = getDefaultRank();
   const minMatches = minMatchesForRank(defaultRank.tier);
+  const { allPatches, firstReadyIndex } = await resolveActivePatches({
+    rankTier: defaultRank.tier,
+    minAverageBadge: defaultRank.minBadge,
+  });
+  const { selectedPatch, patchUntil } = resolvePatchWindow(allPatches, undefined, firstReadyIndex);
 
   const [heroesMap, wikiColors, stats, blurbs] = await Promise.all([
     fetchHeroesAssets(),
