@@ -693,6 +693,41 @@ export const PICK_SCREEN_ASSETS = {
   filterIcon: "https://assets-bucket.deadlock-api.com/assets-api-res/icons/control_icons/24px/settings_options.svg",
 } as const;
 
+const PATCH_TEX_ROOT =
+  "https://assets-bucket.deadlock-api.com/assets-api-res/images/shop";
+
+export const PATCH_TEXTURES = {
+  panel: `${PATCH_TEX_ROOT}/dmg_report_texture.webp`,
+  bandHeader: `${PATCH_TEX_ROOT}/images/shop/catalog/catalog_shop_builds_header_bg.webp`,
+  cardFrame: PICK_SCREEN_ASSETS.cardBorder,
+  cardBacker: "https://assets-bucket.deadlock-api.com/assets-api-res/images/shop/images/shop/catalog/cards/card_backer_spirit_t4.webp",
+  smoke: "https://assets-bucket.deadlock-api.com/assets-api-res/images/shop/images/textures/bg_smoke.webp",
+};
+
+const STAT_ICON_ROOT =
+  "https://assets-bucket.deadlock-api.com/assets-api-res/icons";
+
+const PATCH_STAT_ICON_RULES: Array<{ test: RegExp; file: string }> = [
+  { test: /muni[çc][ãa]o|\bammo\b|clip size/i, file: "hud/reticle_ammo_icon.svg" },
+  {
+    test: /velocidade de (movimento|corrida)|(move(ment)?|sprint) speed/i,
+    file: "hud/icons/icon_speed.svg",
+  },
+  { test: /cooldown|tempo de recarga/i, file: "icons/properties/cooldown.svg" },
+  { test: /dura[çc][ãa]o|\bduration\b/i, file: "icons/properties/duration.svg" },
+  { test: /alcance|\brange\b/i, file: "upgrades/property_range.svg" },
+  {
+    test: /dano de (arma|bala)|(bullet|weapon) damage/i,
+    file: "upgrades/property_bullet_dmg.svg",
+  },
+  { test: /\bvida\b|\bhealth\b/i, file: "post_game/attributes/icon_heart.svg" },
+];
+
+export function getPatchStatIcon(text: string): string | null {
+  const rule = PATCH_STAT_ICON_RULES.find((r) => r.test.test(text));
+  return rule ? `${STAT_ICON_ROOT}/${rule.file}` : null;
+}
+
 export const DEADLOCK_UI_COLORS = {
   deadlockGreen: "#69e799",
   deadlockGreenLight: "#a8ffc9",

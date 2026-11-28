@@ -13,7 +13,7 @@ import {
 import DeadlockLoadingLogo from "@/components/ui/DeadlockLoadingLogo";
 import { getPatchNoteTranslation } from "@/lib/backend/client";
 import type { PatchNoteTranslationResponse } from "@/lib/backend/types";
-import { SLOT_META } from "@/lib/data/config";
+import { getPatchStatIcon, PATCH_TEXTURES, SLOT_META } from "@/lib/data/config";
 import type {
   PatchHeroAbilityRef,
   PatchNoteBlock,
@@ -26,6 +26,8 @@ export interface PatchHeroRef {
   name: string;
   image: string | null;
   portrait: string | null;
+  gloatImage: string | null;
+  critImage: string | null;
   bg: string | null;
   rgb: [number, number, number] | null;
   abilities: PatchHeroAbilityRef[];
@@ -62,6 +64,12 @@ interface ImpactCounters {
   fixes: number;
 }
 
+interface HighlightPreview {
+  text: string;
+  impact: "buff" | "nerf" | "adj" | "fix" | undefined;
+  ability?: PatchHeroAbilityRef | null;
+}
+
 interface HighlightHeroEntry {
   key: string;
   name: string;
@@ -69,13 +77,13 @@ interface HighlightHeroEntry {
   inPatchBody: boolean;
   wikiKinds: WikiHeroChangeKind[];
   counters: ImpactCounters;
-  previews: string[];
+  previews: HighlightPreview[];
 }
 
 interface HighlightItemEntry {
   item: PatchItemRef;
   counters: ImpactCounters;
-  previews: string[];
+  previews: HighlightPreview[];
 }
 
 interface PatchImpactBand {
@@ -597,6 +605,149 @@ function renderRuns(
   });
 }
 
+function HighlightTip({
+  title,
+  titleClass = "",
+  titleStyle,
+  subtitle,
+  thumb,
+  accent,
+  counters,
+  previews,
+}: {
+  title: string;
+  titleClass?: string;
+  titleStyle?: CSSProperties;
+  subtitle?: string;
+  thumb: string | null;
+  accent: string;
+  counters: ImpactCounters;
+  previews: HighlightPreview[];
+}) {
+  const total = counters.buffs + counters.nerfs + counters.adjs + counters.fixes;
+  const hidden = total - previews.length;
+
+  return (
+    <div
+      className="pointer-events-none absolute bottom-full left-1/2 isolate z-30 mb-2 w-80 -translate-x-1/2 overflow-hidden rounded-[6px] border border-white/15 bg-[#0b0e0d] text-left shadow-[0_18px_40px_rgba(0,0,0,0.7)]"
+      style={
+        {
+          borderTopColor: accent,
+          borderLeftColor: accent,
+          borderRightColor: accent,
+          borderTopWidth: "2px",
+          borderLeftWidth: "2px",
+          borderRightWidth: "2px",
+          "--tip-accent": accent,
+          animation:
+            "tip-open 380ms cubic-bezier(0.16, 1, 0.3, 1) backwards",
+        } as CSSProperties
+      }
+    >
+      <style>{`
+        @keyframes tip-open {
+          from { opacity: 0; translate: -50% 14px; clip-path: inset(100% -80px -80px -80px); }
+          to { clip-path: inset(-80px); }
+        }
+        @keyframes tip-border {
+          0% { border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; box-shadow: 0 18px 40px rgba(0,0,0,0.7); }
+          45% { box-shadow: 0 18px 40px rgba(0,0,0,0.7), 0 0 22px var(--tip-accent); }
+          100% { border-top-color: var(--tip-accent); border-left-color: var(--tip-accent); border-right-color: var(--tip-accent); box-shadow: 0 18px 40px rgba(0,0,0,0.7); }
+        }
+      `}</style>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-15"
+        style={{
+          backgroundImage: `url(${PATCH_TEXTURES.cardBacker})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
+      {subtitle && (
+        <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-2.5">
+          {thumb && (
+            <img
+              src={thumb}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-[4px] border object-cover object-top"
+              style={{ borderColor: accent }}
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <p
+              className={`truncate font-deadlock text-sm font-black leading-tight ${titleClass}`}
+              style={titleStyle}
+            >
+              {title}
+            </p>
+            <p className="truncate text-[10px] font-medium text-neutral-400">{subtitle}</p>
+          </div>
+        </div>
+      )}
+
+      <ul className="space-y-3 px-3.5 py-3">
+        {previews.map((p, i) => (
+          <li
+            key={i}
+            className="flex items-start gap-2.5 text-xs leading-snug text-neutral-200"
+          >
+            {(() => {
+              const icon = p.ability?.image ?? getPatchStatIcon(p.text);
+              if (!icon) return null;
+              const prev = previews[i - 1];
+              if (p.ability?.image && prev?.ability?.image === p.ability.image) {
+                return <div aria-hidden className="h-0 w-10 shrink-0" />;
+              }
+              return (
+                <img
+                  src={icon}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  className={
+                    p.ability?.image
+                      ? "h-10 w-10 shrink-0 rounded-[4px] border border-white/25 bg-black/80 object-contain p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+                      : "h-6 w-10 shrink-0 object-contain p-1"
+                  }
+                />
+              );
+            })()}
+            <div
+              className={`min-w-0 flex-1 line-clamp-3 border-x-2 px-2.5 ${
+                p.impact ? WIKI_BADGE_META[p.impact].ringClass : "border-white/15"
+              }`}
+            >
+              {p.impact && (
+                <WikiChangeIcon
+                  kind={p.impact}
+                  className={`mr-1 inline h-2 w-2 ${WIKI_BADGE_META[p.impact].titleClass}`}
+                />
+              )}
+              {renderStatTransitions(p.text.replace(/^T[123](?:\b|:|\s*-)\s*/, ""), "")}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {hidden > 0 && (
+        <div className="flex items-center gap-3 border-t border-white/10 bg-black/50 px-4 py-3">
+          <span
+            className="rounded-[4px] border px-2 py-1 text-[11px] font-black leading-none"
+            style={{ borderColor: accent, color: accent }}
+          >
+            +{hidden}
+          </span>
+          <span className="text-[11px] font-semibold uppercase leading-none tracking-[0.12em] text-neutral-400">
+            {hidden === 1 ? "alteração" : "alterações"} no card
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PatchNotesClient({
   wikiByGid,
   notes,
@@ -774,11 +925,11 @@ export default function PatchNotesClient({
 
     const heroSteamData = new Map<
       number,
-      { hero: PatchHeroRef; counters: ImpactCounters; previews: string[] }
+      { hero: PatchHeroRef; counters: ImpactCounters; previews: HighlightPreview[] }
     >();
     const itemSteamData = new Map<
       string,
-      { item: PatchItemRef; counters: ImpactCounters; previews: string[] }
+      { item: PatchItemRef; counters: ImpactCounters; previews: HighlightPreview[] }
     >();
 
     let activeItemKey: string | null = null;
@@ -809,7 +960,20 @@ export default function PatchNotesClient({
         lang === "pt" && activeCached?.available
           ? activeCached.translations[full.trim()] ?? full
           : full;
-      const previewLine = stripLeadingPrefix(translatedFull);
+      const heroForLine = heroLinks[key];
+      const restOfLine = full.slice(colonIdx + 1).trim();
+      const lineDashIdx = restOfLine.indexOf(" - ");
+      const lineAbility =
+        heroForLine && lineDashIdx > 0 && lineDashIdx <= 44
+          ? matchHeroAbility(heroForLine.abilities, restOfLine.slice(0, lineDashIdx).trim())
+          : null;
+      const previewLine: HighlightPreview = {
+        text: lineAbility
+          ? stripAbilityDashPrefix(stripLeadingPrefix(translatedFull))
+          : stripLeadingPrefix(translatedFull),
+        impact: imp,
+        ability: lineAbility,
+      };
 
       const hero = heroLinks[key];
       if (hero) {
@@ -820,7 +984,7 @@ export default function PatchNotesClient({
           heroSteamData.set(hero.id, rec);
         }
         bump(rec.counters, imp);
-        if (rec.previews.length < 3) rec.previews.push(previewLine);
+        if (rec.previews.length < 5) rec.previews.push(previewLine);
         continue;
       }
 
@@ -833,7 +997,7 @@ export default function PatchNotesClient({
           itemSteamData.set(item.className, rec);
         }
         bump(rec.counters, imp);
-        if (rec.previews.length < 3) rec.previews.push(previewLine);
+        if (rec.previews.length < 5) rec.previews.push(previewLine);
         continue;
       }
 
@@ -1486,16 +1650,20 @@ export default function PatchNotesClient({
                   </div>
                 )}
 
-                <div className={`relative p-5 sm:p-7 space-y-4 ${activeNote.heroImage ? "-mt-10 sm:-mt-14" : ""}`}>
+                <div className={`dl-noise dl-halftone relative p-5 sm:p-7 space-y-5 ${activeNote.heroImage ? "-mt-10 sm:-mt-14" : ""}`}>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/60 to-transparent"
+                  />
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2 text-[11px]">
                       {activeNote.id === latestId && (
-                        <span className="rounded-[4px] border border-amber-400/50 bg-amber-500/20 px-2 py-0.5 font-deadlock text-[10px] font-black uppercase tracking-wider text-amber-200">
+                        <span className="rounded-[4px] border border-amber-400/60 bg-amber-500/20 px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
                           Mais recente
                         </span>
                       )}
                       <span
-                        className={`rounded-[4px] border px-2 py-0.5 font-deadlock text-[10px] font-black uppercase tracking-wider ${
+                        className={`rounded-[4px] border px-2.5 py-1 font-deadlock text-[11px] font-black uppercase tracking-wider ${
                           activeNote.category === "balance"
                             ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                             : "border-sky-500/40 bg-sky-500/10 text-sky-300"
@@ -1504,7 +1672,7 @@ export default function PatchNotesClient({
                         {activeNote.category === "balance" ? "Atualização / Balance" : "Anúncio Oficial"}
                       </span>
                       <span className="font-mono text-neutral-400">
-                        {formatFullDate(activeNote.publishedAt)} • por {activeNote.author}
+                        {formatFullDate(activeNote.publishedAt)}
                       </span>
                     </div>
 
@@ -1522,67 +1690,16 @@ export default function PatchNotesClient({
                           Tradução indisponível (EN)
                         </span>
                       )}
-                      <div className="inline-flex rounded-[4px] border border-neutral-800 bg-[#070807] p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setLang("pt")}
-                          className={`rounded-[3px] px-2 py-1 font-deadlock text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer ${
-                            lang === "pt"
-                              ? "bg-amber-500 text-black"
-                              : "text-neutral-400 hover:text-[#f4efe6]"
-                          }`}
-                        >
-                          PT-BR
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLang("en")}
-                          className={`rounded-[3px] px-2 py-1 font-deadlock text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer ${
-                            lang === "en"
-                              ? "bg-amber-500 text-black"
-                              : "text-neutral-400 hover:text-[#f4efe6]"
-                          }`}
-                        >
-                          EN
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={copyShareLink}
-                        className="rounded-[4px] border border-neutral-700/90 bg-neutral-900/90 px-2.5 py-1.5 text-[11px] font-bold text-neutral-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
-                      >
-                        {copied ? "Link copiado!" : "Copiar link"}
-                      </button>
-                      <a
-                        href={activeNote.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-[4px] border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-300 transition-colors hover:bg-amber-500/20"
-                      >
-                        <span>Abrir na Steam</span>
-                        <svg
-                          aria-hidden
-                          viewBox="0 0 16 16"
-                          className="h-3 w-3"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V10" />
-                          <path d="M9.5 2H14v4.5" />
-                          <path d="M14 2 7.5 8.5" />
-                        </svg>
-                      </a>
                     </div>
                   </div>
 
-                  <h2 className="font-deadlock text-2xl sm:text-4xl font-black uppercase italic tracking-tight text-[#f4efe6]">
-                    {activeDisplayTitle}
+                  <h2 className="font-deadlock text-3xl sm:text-5xl font-black uppercase italic leading-[1.05] tracking-tight text-[#f4efe6] drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
+                    {activeDisplayTitle.replace(/\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s*$/, "")}
                   </h2>
+                  <div className="h-px w-full bg-gradient-to-r from-amber-500/70 via-amber-500/20 to-transparent" />
 
-                  <div className="relative">
+                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative min-w-[240px] flex-1">
                     <svg
                       aria-hidden
                       viewBox="0 0 24 24"
@@ -1601,7 +1718,7 @@ export default function PatchNotesClient({
                       value={noteSearch}
                       onChange={(e) => setNoteSearch(e.target.value)}
                       placeholder="Filtrar linhas, heróis ou itens nesta atualização..."
-                      className="w-full rounded-[5px] border border-neutral-800 bg-[#070807]/90 py-2 pl-8 pr-8 text-xs text-[#f4efe6] placeholder:text-neutral-500 outline-none focus:border-amber-500/70"
+                      className="w-full rounded-[5px] border border-neutral-700/80 bg-[#070807]/90 py-2.5 pl-9 pr-8 text-sm text-[#f4efe6] placeholder:text-neutral-500 outline-none transition-shadow focus:border-amber-500/70 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.12)]"
                     />
                     {noteSearch && (
                       <button
@@ -1616,6 +1733,30 @@ export default function PatchNotesClient({
                       </button>
                     )}
                   </div>
+                  </div>
+
+                  {showHighlights && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {patchHighlights.bands.map((band) => (
+                        <a
+                          key={band.kind}
+                          href={`#band-${band.kind}`}
+                          className={`inline-flex items-center gap-2 rounded-[4px] border px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-[transform,filter] duration-150 hover:-translate-y-px hover:brightness-125 ${band.headerClass}`}
+                        >
+                          <WikiChangeIcon kind={band.kind} className="h-2.5 w-2.5" />
+                          <span>{band.title}</span>
+                          <span className="opacity-80">
+                            {[
+                              band.heroes.length > 0 ? `${band.heroes.length} heróis` : "",
+                              band.itemsCount > 0 ? `${band.itemsCount} itens` : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
 
                   {sections.length > 0 && !highlight && (
                     <div className="flex flex-wrap gap-1.5">
@@ -1623,7 +1764,7 @@ export default function PatchNotesClient({
                         <a
                           key={sec.id}
                           href={`#${sec.id}`}
-                          className="rounded-[4px] border border-neutral-800 bg-[#070807] px-2.5 py-1 font-deadlock text-[10px] font-black uppercase tracking-wider text-neutral-300 transition-colors hover:border-amber-500/50 hover:text-amber-300"
+                          className="rounded-[4px] border border-neutral-700/80 bg-[#070807] px-3 py-1.5 font-deadlock text-[11px] font-black uppercase tracking-wider text-neutral-300 shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-[color,border-color,transform] duration-150 hover:-translate-y-px hover:border-amber-500/60 hover:text-amber-300"
                         >
                           {translateText(sec.title) ?? sec.title}
                         </a>
@@ -1691,12 +1832,39 @@ export default function PatchNotesClient({
                       return (
                         <div
                           key={band.kind}
-                          className={`rounded-[5px] border bg-[#0a0d0c]/95 shadow-[0_14px_34px_rgba(0,0,0,0.48)] ${band.borderClass}`}
+                          id={`band-${band.kind}`}
+                          className={`dl-noise dl-halftone relative isolate scroll-mt-6 rounded-[5px] border bg-[#0a0d0c]/95 ${band.borderClass} ${
+                            hoveredTip?.startsWith(`${band.kind}-`) ? "z-20" : ""
+                          }`}
                         >
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 -z-10 rounded-[5px] shadow-[0_14px_34px_rgba(0,0,0,0.48)]"
+                            style={{ clipPath: "inset(-40px -40px -12px -40px)" }}
+                          />
                           <div
-                            className={`flex items-center justify-between gap-2 rounded-t-[4px] border-b px-3.5 py-2 ${band.headerClass}`}
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 -z-10 rounded-[5px] opacity-[0.22] mix-blend-screen"
+                            style={{
+                              backgroundImage: `url(${PATCH_TEXTURES.panel})`,
+                              backgroundSize: "cover",
+                              filter: "invert(1)",
+                            }}
+                          />
+                          <div
+                            className={`relative isolate flex items-center justify-between gap-2 rounded-t-[4px] border-b px-3.5 py-2 ${band.headerClass}`}
                           >
                             <div className="flex items-center gap-2">
+                              <span
+                                aria-hidden
+                                className="pointer-events-none absolute inset-0 -z-10 rounded-t-[4px] bg-current opacity-20"
+                                style={{
+                                  WebkitMaskImage: `url(${PATCH_TEXTURES.bandHeader})`,
+                                  maskImage: `url(${PATCH_TEXTURES.bandHeader})`,
+                                  WebkitMaskSize: "100% 100%",
+                                  maskSize: "100% 100%",
+                                }}
+                              />
                               <WikiChangeIcon kind={band.kind} className="h-3.5 w-3.5" />
                               <h4 className="font-deadlock text-sm font-black uppercase italic tracking-wider">
                                 {band.title}
@@ -1728,15 +1896,20 @@ export default function PatchNotesClient({
                                     : ""
                                 }`}
                               >
-                                <div
-                                  className={`grid gap-2.5 ${
-                                    hasBoth
-                                      ? "grid-cols-3 sm:grid-cols-5 md:grid-cols-6"
-                                      : "grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-8"
-                                  }`}
-                                >
+                                <div className="flex flex-wrap gap-2.5">
                                   {band.heroes.map((entry) => {
-                                    const imgUrl = entry.hero?.portrait ?? entry.hero?.image ?? null;
+                                    const imgUrl =
+                                      band.kind === "buff"
+                                        ? (entry.hero?.gloatImage ??
+                                          entry.hero?.portrait ??
+                                          entry.hero?.image ??
+                                          null)
+                                        : band.kind === "nerf"
+                                          ? (entry.hero?.critImage ??
+                                            entry.hero?.portrait ??
+                                            entry.hero?.image ??
+                                            null)
+                                          : (entry.hero?.portrait ?? entry.hero?.image ?? null);
                                     const heroBg = entry.hero?.bg ?? null;
                                     const hcVar = {
                                       "--hc": entry.hero?.rgb
@@ -1746,7 +1919,7 @@ export default function PatchNotesClient({
                                     const tipId = `${band.kind}-h-${entry.key}`;
                                     const tile = (
                                       <div
-                                        className="group relative"
+                                        className="group relative w-[84px]"
                                         style={hcVar}
                                         onMouseEnter={() => setHoveredTip(tipId)}
                                         onMouseLeave={() =>
@@ -1754,9 +1927,16 @@ export default function PatchNotesClient({
                                         }
                                       >
                                         <div
-                                          className={`flex flex-col overflow-hidden rounded-[6px] border bg-[#0c0f0e] transition-transform duration-150 group-hover:scale-[1.03] ${band.ringClass}`}
+                                          className={`flex flex-col overflow-hidden rounded-[6px] border bg-[#0c0f0e] transition-[transform,box-shadow] duration-150 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-[color:color-mix(in_srgb,rgb(var(--hc))_65%,white)] group-hover:shadow-[0_0_16px_0_rgb(var(--hc)_/_0.6)] ${
+                                            entry.hero?.rgb ? "" : band.ringClass
+                                          }`}
+                                          style={
+                                            entry.hero?.rgb
+                                              ? { borderColor: "rgb(var(--hc))" }
+                                              : undefined
+                                          }
                                         >
-                                          <div className="hero-card-art relative aspect-[3/4] w-full overflow-hidden">
+                                          <div className="hero-card-art relative aspect-square w-full overflow-hidden">
                                             {heroBg && (
                                               <Image
                                                 src={heroBg}
@@ -1773,7 +1953,7 @@ export default function PatchNotesClient({
                                                 alt={entry.name}
                                                 loading="lazy"
                                                 decoding="async"
-                                                className="relative z-[1] h-full w-full object-cover object-top"
+                                                className="relative z-[1] h-full w-full object-cover object-center"
                                               />
                                             ) : (
                                               <div className="relative z-[1] flex h-full w-full items-center justify-center font-deadlock text-sm font-black text-neutral-400">
@@ -1781,26 +1961,21 @@ export default function PatchNotesClient({
                                               </div>
                                             )}
                                           </div>
-                                          <div className="hero-card-name flex h-[36px] items-center justify-center border-t border-white/10 bg-[#080b0a] px-1 py-1 text-center">
-                                            <span className="text-[11px] font-semibold leading-[1.15] text-neutral-100 group-hover:text-amber-300 line-clamp-2">
-                                              {entry.name}
-                                            </span>
-                                          </div>
                                         </div>
 
+                                        <p className="mt-1.5 min-h-[2.3em] px-0.5 text-center text-[11px] font-semibold leading-[1.15] text-neutral-100 transition-colors group-hover:text-amber-300 line-clamp-2">
+                                          {entry.name}
+                                        </p>
+
                                         {hoveredTip === tipId && entry.previews.length > 0 && (
-                                          <div className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-2 w-60 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left shadow-xl">
-                                            <p className="mb-1 font-deadlock text-[11px] font-black text-amber-300">
-                                              {entry.name}
-                                            </p>
-                                            <ul className="space-y-1 text-[11px] leading-snug text-neutral-300">
-                                              {entry.previews.map((line, pIdx) => (
-                                                <li key={pIdx} className="line-clamp-2">
-                                                  {line}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
+                                          <HighlightTip
+                                            title={entry.name}
+                                            titleStyle={{ color: "rgb(var(--hc))" }}
+                                            thumb={imgUrl}
+                                            accent="rgb(var(--hc))"
+                                            counters={entry.counters}
+                                            previews={entry.previews}
+                                          />
                                         )}
                                       </div>
                                     );
@@ -1830,7 +2005,7 @@ export default function PatchNotesClient({
                                 <div className="flex flex-wrap gap-2.5">
                                   {slotOrder.flatMap((slot) => {
                                     const slotStyle = SLOT_META[slot];
-                                    return band.itemsBySlot[slot].map(({ item: it, previews }) => {
+                                    return band.itemsBySlot[slot].map(({ item: it, previews, counters }) => {
                                       const itemLabel = lang === "pt" ? it.name : it.nameEn;
                                       const itemTipId = `${band.kind}-i-${it.className}`;
                                       return (
@@ -1846,10 +2021,15 @@ export default function PatchNotesClient({
                                           }
                                         >
                                           <div
-                                            className="flex flex-col overflow-hidden rounded-[6px] border bg-[#0e1211] transition-transform duration-150 group-hover:scale-[1.03]"
-                                            style={{ borderColor: slotStyle.accent }}
+                                            className="flex flex-col overflow-hidden rounded-[6px] border bg-[#0e1211] transition-[transform,box-shadow] duration-150 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-[color:color-mix(in_srgb,var(--glow)_65%,white)] group-hover:shadow-[0_0_16px_0_color-mix(in_srgb,var(--glow)_60%,transparent)]"
+                                            style={
+                                              {
+                                                borderColor: slotStyle.accent,
+                                                "--glow": slotStyle.accent,
+                                              } as CSSProperties
+                                            }
                                           >
-                                            <div className="aspect-[11/12] w-full overflow-hidden bg-black/75">
+                                            <div className="aspect-square w-full overflow-hidden bg-black/75">
                                               {it.image && (
                                                 <img
                                                   src={it.image}
@@ -1860,26 +2040,21 @@ export default function PatchNotesClient({
                                                 />
                                               )}
                                             </div>
-                                            <div className="flex h-[38px] items-center justify-center border-t border-white/10 bg-[#080b0a] px-1.5 py-1 text-center">
-                                              <span className="text-[10px] font-semibold leading-[1.15] text-neutral-100 group-hover:text-amber-300 line-clamp-2">
-                                                {itemLabel}
-                                              </span>
-                                            </div>
                                           </div>
 
+                                          <p className="mt-1.5 min-h-[2.3em] px-0.5 text-center text-[11px] font-semibold leading-[1.15] text-neutral-100 origin-top transition-[transform,color,filter] duration-150 group-hover:scale-110 group-hover:text-amber-300 group-hover:[filter:drop-shadow(0_0_6px_currentColor)] line-clamp-2">
+                                            {itemLabel}
+                                          </p>
+
                                           {hoveredTip === itemTipId && previews.length > 0 && (
-                                            <div className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-2 w-60 -translate-x-1/2 rounded-[5px] border border-white/15 bg-[#0e1211] p-2.5 text-left shadow-xl">
-                                              <p className={`mb-1 font-deadlock text-[11px] font-black ${slotStyle.colorClass}`}>
-                                                {itemLabel}
-                                              </p>
-                                              <ul className="space-y-1 text-[11px] leading-snug text-neutral-300">
-                                                {previews.map((line, pIdx) => (
-                                                  <li key={pIdx} className="line-clamp-2">
-                                                    {line}
-                                                  </li>
-                                                ))}
-                                              </ul>
-                                            </div>
+                                            <HighlightTip
+                                              title={itemLabel}
+                                              titleClass={slotStyle.colorClass}
+                                              thumb={it.image}
+                                              accent={slotStyle.accent}
+                                              counters={counters}
+                                              previews={previews}
+                                            />
                                           )}
                                         </a>
                                       );
@@ -2032,6 +2207,13 @@ export default function PatchNotesClient({
                       const { hero, baseEntries, abilityGroups, totalCount } = node;
                       const rgb = hero.rgb;
                       const heroColor = rgb ? `rgb(${rgb.join(", ")})` : "#f59e0b";
+                      const heroKinds = patchHighlights.heroWikiKinds.get(hero.id) ?? [];
+                      const headerArt =
+                        heroKinds.includes("buff") && !heroKinds.includes("nerf")
+                          ? (hero.gloatImage ?? hero.portrait ?? hero.image)
+                          : heroKinds.includes("nerf") && !heroKinds.includes("buff")
+                            ? (hero.critImage ?? hero.portrait ?? hero.image)
+                            : (hero.portrait ?? hero.image);
                       const cardBorder = rgb
                         ? { borderColor: `rgba(${rgb.join(", ")}, 0.32)` }
                         : undefined;
@@ -2054,6 +2236,22 @@ export default function PatchNotesClient({
                               className="pointer-events-none absolute inset-0"
                               style={cardGlow}
                             />
+                          )}
+
+                          {hero.bg && (
+                            <div
+                              aria-hidden
+                              className="pointer-events-none absolute right-0 top-0 h-24 w-2/5 overflow-hidden opacity-40 [mask-image:linear-gradient(to_left,black,transparent)] [-webkit-mask-image:linear-gradient(to_left,black,transparent)]"
+                            >
+                              <Image
+                                src={hero.bg}
+                                alt=""
+                                fill
+                                sizes="360px"
+                                draggable={false}
+                                className="object-cover object-top"
+                              />
+                            </div>
                           )}
 
                           {/* Cabeçalho do Card do Herói */}
@@ -2079,9 +2277,9 @@ export default function PatchNotesClient({
                                     className="object-cover opacity-90"
                                   />
                                 )}
-                                {(hero.portrait ?? hero.image) && (
+                                {headerArt && (
                                   <img
-                                    src={(hero.portrait ?? hero.image) as string}
+                                    src={headerArt}
                                     alt={hero.name}
                                     loading="lazy"
                                     decoding="async"

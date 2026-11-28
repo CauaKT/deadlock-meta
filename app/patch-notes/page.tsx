@@ -105,11 +105,17 @@ export default async function PatchNotesPage({
       )
         ? media.bg
         : null;
+    const heroImgs = ((h as { images?: Record<string, unknown> }).images ?? {}) as Record<
+      string,
+      string | undefined
+    >;
     const ref: PatchHeroRef = {
       id: h.id,
       name: h.name,
       image: media.icon ?? (media.card || null),
       portrait: media.card || media.icon || null,
+      gloatImage: heroImgs.hero_card_gloat_webp || heroImgs.hero_card_gloat || null,
+      critImage: heroImgs.hero_card_critical_webp || heroImgs.hero_card_critical || null,
       bg: safeBg,
       rgb: extractColor(h, wikiColors),
       abilities: abilitiesByHero[h.id] ?? [],
